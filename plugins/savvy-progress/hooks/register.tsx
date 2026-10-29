@@ -988,22 +988,28 @@ export const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
     f(9, 12, 2, 2, '#7FE0FF', 'gl'); f(19, 12, 2, 2, '#7FE0FF', 'gl')
     stamp(f, 24, 0, ['...yy', '..yy.', '.yyyy', '..yy.', '.yy..', 'yy...'], { y: '#FFE04A' }, 'gl')
   },
-  // Fire ninja (hotfix, urgent, incident, burn): yellow mask, flames over the head, a kunai.
+  // Fire ninja (hotfix, urgent, incident, burn): all-yellow suit, black face mask, bone-white eyes, a skull on the belt, a flaming claw, a kunai on a rope.
   fireninja: f => {
     crabBody(f, -4, 'it')
-    f(7, 10, 16, 7, '#F2C230'); f(8, 12, 14, 2, '#1B1B1B')
-    f(9, 12, 2, 2, '#F4F1EA'); f(19, 12, 2, 2, '#F4F1EA'); f(10, 13, 1, 1, INK); f(20, 13, 1, 1, INK)
-    for (const x of [9, 14, 19]) stamp(f, x, 4, ['.o.', 'ooo', 'oro', 'ooo', '.o.'], { o: '#FF8A1E', r: '#E5484D' }, 'gl')
-    stamp(f, 25, 1, ['.g.', 'ggg', '.g.', '.k.', '.k.', '.k.', '.k.', '.k.'], { g: '#C9CCD2', k: '#7A4A26' }, 'it')
+    f(7, 10, 16, 12, '#F2C230'); f(3, 14, 4, 4, '#F2C230'); f(23, 10, 4, 4, '#F2C230', 'it')
+    f(3, 14, 4, 1, '#1B1B1B'); f(23, 10, 4, 1, '#1B1B1B', 'it')
+    f(7, 22, 2, 4, '#F2C230', 'la'); f(17, 22, 2, 4, '#F2C230', 'la'); f(11, 22, 2, 4, '#F2C230', 'lb'); f(21, 22, 2, 4, '#F2C230', 'lb')
+    f(8, 14, 14, 3, '#1B1B1B')
+    f(9, 12, 2, 2, '#F4F1EA'); f(19, 12, 2, 2, '#F4F1EA'); f(10, 13, 1, 1, '#1B1B1B'); f(20, 13, 1, 1, '#1B1B1B')
+    f(7, 18, 16, 1, '#1B1B1B'); stamp(f, 13, 17, ['wwww', 'wkkw', '.ww.'], { w: '#F4F1EA', k: '#1B1B1B' })
+    stamp(f, 2, 8, ['..o..', '.oro.', 'ooroo', 'ooooo', '.ooo.', '..o..'], { o: '#FF8A1E', r: '#E5484D' }, 'gl')
+    stamp(f, 25, 0, ['.g.', 'ggg', '.g.', '.k.'], { g: '#C9CCD2', k: '#7A4A26' }, 'it'); f(24, 4, 1, 6, '#7A4A26', 'it')
   },
-  // Ice ninja (freeze, cache, cold, archive, snapshot): blue mask, ice crystals that twinkle, frosty headband tails.
+  // Ice ninja (freeze, cache, cold, archive, snapshot): blue suit, dark-blue face mask, pale eyes, a silver belt, ice bracers, a crystal blast.
   iceninja: f => {
     crabBody(f)
-    f(7, 10, 16, 7, '#2F6FDB'); f(8, 12, 14, 2, '#10234F')
-    f(9, 12, 2, 2, '#BFEFFF'); f(19, 12, 2, 2, '#BFEFFF'); f(10, 13, 1, 1, '#10234F'); f(20, 13, 1, 1, '#10234F')
-    f(23, 10, 5, 2, '#8FD3FF', 'it'); f(26, 12, 3, 2, '#8FD3FF', 'it')
-    stamp(f, 3, 2, ['.w.w.', '..w..', 'wwwww', '..w..', '.w.w.'], { w: '#BFEFFF' }, 'star')
-    stamp(f, 21, 3, ['.w.', 'www', '.w.'], { w: '#BFEFFF' }, 'star')
+    f(7, 10, 16, 12, '#2F6FDB'); f(3, 14, 4, 4, '#8FD3FF'); f(23, 14, 4, 4, '#8FD3FF')
+    f(8, 14, 14, 3, '#1F4FA8')
+    f(7, 22, 2, 4, '#2F6FDB', 'la'); f(17, 22, 2, 4, '#2F6FDB', 'la'); f(11, 22, 2, 4, '#2F6FDB', 'lb'); f(21, 22, 2, 4, '#2F6FDB', 'lb')
+    f(9, 12, 2, 2, '#E6F7FF'); f(19, 12, 2, 2, '#E6F7FF'); f(10, 13, 1, 1, '#10234F'); f(20, 13, 1, 1, '#10234F')
+    f(7, 18, 16, 1, '#C9CCD2'); f(14, 17, 2, 3, '#8FD3FF')
+    stamp(f, 24, 6, ['..w..', '.www.', 'wwwww', '.www.', '..w..'], { w: '#BFEFFF' }, 'star')
+    stamp(f, 3, 2, ['.w.w.', '..w..', 'wwwww', '..w..', '.w.w.'], { w: '#BFEFFF' }, 'star'); f(20, 3, 1, 1, '#E6F7FF', 'star')
   },
   other: f => crabBody(f),
 }
