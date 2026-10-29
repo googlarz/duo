@@ -2,9 +2,9 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-const PLUGIN = 'savvy-progress'
-const STEP = 'mcp__savvy-progress__step'
-const PROGRESS = 'mcp__savvy-progress__progress'
+const PLUGIN = 'duo-progress'
+const STEP = 'mcp__duo-progress__step'
+const PROGRESS = 'mcp__duo-progress__progress'
 const pane = { title: '', isFocused: false, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} } as const
 
 const spawn = async ($: Engine, on: On, subagentType: string, model = 'claude-sonnet-5-5') => {
@@ -14,7 +14,7 @@ const spawn = async ($: Engine, on: On, subagentType: string, model = 'claude-so
   await $.agent.spawn({ tool_use_id: 't1', prompt: 'p', description: 'Do the thing', subagentType, provider: 'engine', parentModel: model, background: false, fork: false } as never)
 }
 
-const mount = ($: Engine) => $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: pane })
+const mount = ($: Engine) => $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: 'duo-agents', props: pane })
 
 // The row's dim line reads "<tier word or raw type> · <model>".
 const TIERS: readonly [type: string, shown: RegExp][] = [
@@ -92,7 +92,7 @@ test('steps: a flood of calls and a huge plan stay bounded and drawable', async 
 test('desktop: a row toggles its details and the Svg rows still draw', async ($, on) => {
   await spawn($, on, 'duo:duo-max')
   await $.tool.call({ tool: STEP, agentId: 'a1', done: 0, plan: ['One', 'Two'] } as never)
-  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', component: 'Pane', requestId: 'savvy-agents', props: pane })
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
   await ui.press({ key: 'open-a1' })
   expect(await ui.find({ type: 'Text', text: /○ 2\. Two|▸ 1\. One/ })).toBeDefined()
   const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')

@@ -21,7 +21,7 @@ If the task above is empty, reply in 2-3 lines with one example (for example `/d
 
 ## Progress bar
 
-If `mcp__savvy-progress__progress` is among your tools (including deferred; load with ToolSearch `select:mcp__savvy-progress__progress`), keep it current: after the plan `title`, `total`, `tasks` (`[{ title, tier, after }]`, tier = the agent name, e.g. `duo-high`, `duo-opus`, `duo-reviewer`), `phase: "delegate"`; `done` as tasks are accepted, `phase: "review"` while reviewing; `finished: true` at close. Pass each task's `title` verbatim as the Agent `description`. If the tool is absent, carry on, and say once in the plan and once in the final report that the live panel is not available here.
+If `mcp__duo-progress__progress` is among your tools (including deferred; load with ToolSearch `select:mcp__duo-progress__progress`), keep it current: after the plan `title`, `total`, `tasks` (`[{ title, tier, after }]`, tier = the agent name, e.g. `duo-high`, `duo-opus`, `duo-reviewer`), `phase: "delegate"`; `done` as tasks are accepted, `phase: "review"` while reviewing; `finished: true` at close. Pass each task's `title` verbatim as the Agent `description`. If the tool is absent, carry on, and say once in the plan and once in the final report that the live panel is not available here.
 
 ## User rules
 
@@ -29,9 +29,9 @@ Rules in the user's `CLAUDE.md` (global or project) and instructions in the task
 
 ## Usage limits
 
-- Baseline: before the first dispatch, and again whenever the user resumes after a stop, read `at` from `~/.claude/savvy-limit-hit.json` if it exists (otherwise 0).
-- Before choosing tiers, and again before each dispatch, read `~/.claude/savvy-usage.json` if it exists and `updated_at` (epoch s) is within 15 minutes: `{"updated_at", "five_hour": {"used_percentage", "resets_at"}, "seven_day": {...}}`, either window may be missing. Any window >= 80% (the cap): skip the plan gate and the early reviewer, cap workers at `medium`, keep the verifier and the single final reviewer. >= 95%: start no new tasks at all, report state. Missing or stale file: proceed, but say once in the plan and once in the final report that the usage guard is off (see docs/usage-limits.md).
-- Limit marker: `~/.claude/savvy-limit-hit.json` (`{"at": epoch s, "session_id"}`) is a hint, written when a turn dies from a rate limit. Check it between dispatches. It counts only if its `at` is greater than the baseline, and is ignored when `five_hour.resets_at` from the usage file is already in the past. If it counts, stop dispatching and report: accepted tasks, finished-but-unreviewed tasks, pending tasks, so the user can resume. If your own turn died, the user simply says continue and the flow resumes from the report. Switching model does not help for session/weekly limits (shared across models); only for a model-specific Opus or Sonnet limit message.
+- Baseline: before the first dispatch, and again whenever the user resumes after a stop, read `at` from `~/.claude/duo-limit-hit.json` if it exists (otherwise 0).
+- Before choosing tiers, and again before each dispatch, read `~/.claude/duo-usage.json` if it exists and `updated_at` (epoch s) is within 15 minutes: `{"updated_at", "five_hour": {"used_percentage", "resets_at"}, "seven_day": {...}}`, either window may be missing. Any window >= 80% (the cap): skip the plan gate and the early reviewer, cap workers at `medium`, keep the verifier and the single final reviewer. >= 95%: start no new tasks at all, report state. Missing or stale file: proceed, but say once in the plan and once in the final report that the usage guard is off (see docs/usage-limits.md).
+- Limit marker: `~/.claude/duo-limit-hit.json` (`{"at": epoch s, "session_id"}`) is a hint, written when a turn dies from a rate limit. Check it between dispatches. It counts only if its `at` is greater than the baseline, and is ignored when `five_hour.resets_at` from the usage file is already in the past. If it counts, stop dispatching and report: accepted tasks, finished-but-unreviewed tasks, pending tasks, so the user can resume. If your own turn died, the user simply says continue and the flow resumes from the report. Switching model does not help for session/weekly limits (shared across models); only for a model-specific Opus or Sonnet limit message.
 
 ## Opus budget
 

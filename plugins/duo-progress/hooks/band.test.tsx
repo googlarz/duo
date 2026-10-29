@@ -10,11 +10,11 @@ async function session($: Engine, on: On) {
   on('settings.read', async () => ({ value: {} }) as never)
   on('session.start', async () => ({ cwd: '/repo' }) as never)
   await $.session.start({ source: 'startup', cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
-  await $.tool.call({ tool: 'mcp__savvy-progress__progress', title: 'Ship it', total: 4, done: 1, phase: 'delegate' } as never)
+  await $.tool.call({ tool: 'mcp__duo-progress__progress', title: 'Ship it', total: 4, done: 1, phase: 'delegate' } as never)
 }
 
 async function band($: Engine, surface: 'terminal' | 'desktop') {
-  const ui = await $.ui.mount({ plugin: 'savvy-progress', surface, ...BAND })
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface, ...BAND })
   const svg = await ui.findAll({ type: 'Svg' })
   const title = await ui.findAll({ type: 'Text', text: /^Ship it$/ })
   const label = await ui.findAll({ type: 'Text', text: /^Tasks 1\/4$/ })

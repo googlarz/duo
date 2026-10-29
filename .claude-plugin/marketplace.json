@@ -23,10 +23,10 @@
       "category": "skill"
     },
     {
-      "name": "savvy-progress",
-      "source": "./plugins/savvy-progress",
-      "description": "Mod: progress bar above the prompt and a live agents panel; made for savvy-flow, shows any subagents.",
-      "version": "1.6.1",
+      "name": "duo-progress",
+      "source": "./plugins/duo-progress",
+      "description": "Mod: live agents panel with animated costume crabs; groups big fan-outs by stage, shows the model behind every agent; made for duo, shows any subagents.",
+      "version": "1.7.0",
       "category": "mod"
     },
     {

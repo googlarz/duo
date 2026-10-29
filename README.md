@@ -63,7 +63,7 @@ Install duo and the panel:
 ```
 /plugin marketplace add googlarz/duo
 /plugin install duo@duo
-/plugin install savvy-progress@duo
+/plugin install duo-progress@duo
 ```
 
 Restart Claude Code, then give it a task:
@@ -72,7 +72,7 @@ Restart Claude Code, then give it a task:
 /duo:duo add rate limiting to the upload endpoint and cover it with tests
 ```
 
-duo plans, the AI spawns the agents and runs them, and at the end you get a report: what changed, what was verified, what was left out, and which models did the work. If the panel doesn't appear, load it by hand: `claude --plugin-dir ~/duo/plugins/savvy-progress`.
+duo plans, the AI spawns the agents and runs them, and at the end you get a report: what changed, what was verified, what was left out, and which models did the work. If the panel doesn't appear, load it by hand: `claude --plugin-dir ~/duo/plugins/duo-progress`.
 
 > Shorter command: try plain `/duo <task>`. If your version doesn't accept it, copy the skill once:
 > `git clone https://github.com/googlarz/duo.git ~/duo && cp -R ~/duo/plugins/duo/skills/duo ~/.claude/skills/`
@@ -147,11 +147,11 @@ Not yet verified, because it needs a live session: the statusline helper in dail
 | Plugin | What it is |
 | --- | --- |
 | [duo](plugins/duo) | The rules and the agents: model per stage, effort per task, Opus budget, limit awareness |
-| [savvy-progress](plugins/savvy-progress) | The panel: every agent with its model, steps, cost; understands the duo tiers |
+| [duo-progress](plugins/duo-progress) | The panel: every agent with its model, steps, cost; understands the duo tiers |
 | [savvy-flow](plugins/savvy-flow) | The original flow by JohnnyVizz (tiered Opus/Fable workers), for API-style budgets |
 | [session-band](plugins/session-band) | Band above the prompt: turn, speed, cost, cache countdown, context |
 
-Develop: `claude plugin validate .` · `cd plugins/savvy-progress && claude plugin test .` · `plugins/duo/scripts/gen-agents.sh` (regenerates duo's six worker agents from one shared body).
+Develop: `claude plugin validate .` · `cd plugins/duo-progress && claude plugin test .` · `plugins/duo/scripts/gen-agents.sh` (regenerates duo's six worker agents from one shared body).
 
 </details>
 
@@ -159,6 +159,6 @@ Develop: `claude plugin validate .` · `cd plugins/savvy-progress && claude plug
 
 ## Credits
 
-`duo` stands on the work of **[JohnnyVizz](https://github.com/JohnnyVizz)**. The savvy-flow orchestration pattern, the tiered-worker idea, the savvy-progress panel and session-band all come from [JohnnyVizz/claude-kit](https://github.com/JohnnyVizz/claude-kit). This repo started as a fork of it, keeps that code and its licence, and adapts the idea to subscription budgets. Thank you.
+`duo` stands on the work of **[JohnnyVizz](https://github.com/JohnnyVizz)**. The savvy-flow orchestration pattern, the tiered-worker idea, the savvy-progress panel (now `duo-progress`) and session-band all come from [JohnnyVizz/claude-kit](https://github.com/JohnnyVizz/claude-kit). This repo started as a fork of it, keeps that code and its licence, and adapts the idea to subscription budgets. Thank you.
 
 MIT licence, see [LICENSE](LICENSE). Original work © 2026 johnnyvizz; duo additions © 2026 googlarz.

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Statusline helper: caches subscription rate-limit usage to ~/.claude/savvy-usage.json.
+# Statusline helper: caches subscription rate-limit usage to ~/.claude/duo-usage.json.
 # Usage: usage-cache.sh [next-statusline-command ...]   (reads Claude Code statusline JSON on stdin)
 # Never fails the statusline: always exits 0, errors silent.
 input=$(cat 2>/dev/null) || input=""
-out="${HOME}/.claude/savvy-usage.json"
+out="${HOME}/.claude/duo-usage.json"
 now=$(date +%s)
 text=""
 

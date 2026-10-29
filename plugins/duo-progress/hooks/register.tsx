@@ -3,26 +3,26 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { AgentRun, Flow, Panel, Phase, PlannedTask } from '../types'
 
-const flow = atom({ plugin: 'savvy-progress', key: 'flow' } as const, null)
-const agents = atom({ plugin: 'savvy-progress', key: 'agents' } as const, [])
-const panel = atom({ plugin: 'savvy-progress', key: 'panel' } as const, {
+const flow = atom({ plugin: 'duo-progress', key: 'flow' } as const, null)
+const agents = atom({ plugin: 'duo-progress', key: 'agents' } as const, [])
+const panel = atom({ plugin: 'duo-progress', key: 'panel' } as const, {
   isCompact: false,
   isDoneCollapsed: false,
   isFinishedOpen: false,
   autoOpenedFor: '',
   openIds: [] as string[],
 })
-const now = atom({ plugin: 'savvy-progress', key: 'now' } as const, 0)
+const now = atom({ plugin: 'duo-progress', key: 'now' } as const, 0)
 
-const TOOL = 'mcp__savvy-progress__progress'
-const STEP_TOOL = 'mcp__savvy-progress__step'
+const TOOL = 'mcp__duo-progress__progress'
+const STEP_TOOL = 'mcp__duo-progress__step'
 // Added to the end of each savvy worker's brief. Their system prompt words step
 // reporting as a condition ("if the step tool appears among your tools") and they
 // skip it even with the tool listed; the same request in the brief is followed.
 const STEP_BRIEF = `
 
 Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps), optionally \`plan\` (an array of their titles, a few words each) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
-const PANE = 'savvy-agents'
+const PANE = 'duo-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
 const DUO_TIERS = ['duo-low', 'duo-medium', 'duo-high', 'duo-xhigh', 'duo-max', 'duo-opus', 'duo-advisor', 'duo-reviewer', 'duo-verifier'] as const
 const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light', ...DUO_TIERS]
@@ -2039,7 +2039,7 @@ export const register: Register = (on, options) => {
     const crew = list.length + plannedOf(f, list).length
     const isWorking = list.some(a => a.status === 'running')
     const crewButton = (
-      <Button key="savvy-agents" label={`×${crew}`} plain onPress={() => void togglePane($)} />
+      <Button key="duo-agents" label={`×${crew}`} plain onPress={() => void togglePane($)} />
     )
     const percent = `${Math.round(ratio(f) * 100)}%`
     const dismiss = (

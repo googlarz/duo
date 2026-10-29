@@ -19,8 +19,8 @@ An orchestrated delivery flow for Claude Code. Run `/savvy-flow <task>` (`/savvy
 
 On a Claude subscription? See [duo](../duo): Sonnet works, Opus checks.
 
-## With savvy-progress
+## With duo-progress
 
-The skill and the agents run fine alone. With the [savvy-progress](../savvy-progress) mod installed, the orchestrator reports the plan and accepted tasks to a progress bar above the prompt, and each worker reports its own steps to the agents panel. Without the mod those calls are skipped.
+The skill and the agents run fine alone. With the [duo-progress](../duo-progress) mod installed, the orchestrator reports the plan and accepted tasks to a progress bar above the prompt, and each worker reports its own steps to the agents panel. Without the mod those calls are skipped.
 
 Install instructions are in the [repository README](../../README.md).

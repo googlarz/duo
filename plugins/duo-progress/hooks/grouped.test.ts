@@ -101,7 +101,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
   for (const [n, grouped] of [[GROUP_THRESHOLD, false], [GROUP_THRESHOLD + 1, true]] as const) {
     test(`${surface}: ${n} agents draw the ${grouped ? 'grouped' : 'detailed'} view`, async ($, on) => {
       await spawnMany($, on, n)
-      const ui = await $.ui.mount({ plugin: 'savvy-progress', surface, component: 'Pane', requestId: 'savvy-agents', props: pane })
+      const ui = await $.ui.mount({ plugin: 'duo-progress', surface, component: 'Pane', requestId: 'duo-agents', props: pane })
       expect((await ui.find({ key: 'open-t0' })) !== undefined).toBe(!grouped)
       if (surface === 'desktop') {
         const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
@@ -113,7 +113,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
 
 test('terminal: grouped lines never exceed the columns', async ($, on) => {
   await spawnMany($, on, 12)
-  const ui = await $.ui.mount({ plugin: 'savvy-progress', surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: { ...pane, bodyColumns: 30 } })
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'terminal', component: 'Pane', requestId: 'duo-agents', props: { ...pane, bodyColumns: 30 } })
   const texts = await ui.findAll({ type: 'Text' })
   expect(texts.length).toBeGreaterThan(5)
   for (const t of texts) for (const line of String(t.props.children ?? '').split('\n')) expect([...line].length).toBeLessThanOrEqual(30)
@@ -123,7 +123,7 @@ test('grouped: the Finished list starts closed, shows the count, and opens with 
   on('turn.complete', () => ({ text: 'ok' }) as never)
   await spawnMany($, on, 10)
   for (let i = 0; i < 3; i++) await $.turn.complete({ agentId: `t${i}`, reason: 'answer', answer: 'ok' } as never)
-  const ui = await $.ui.mount({ plugin: 'savvy-progress', surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: pane })
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'terminal', component: 'Pane', requestId: 'duo-agents', props: pane })
   const toggle = await ui.find({ key: 'done' })
   expect(String(toggle?.props.label)).toMatch(/^▸ Finished · 3/)
   await ui.press({ key: 'done' })
@@ -156,10 +156,10 @@ test('grouped: planned tasks show as a Planned line, and a long finished list en
   mock.clock(on)
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('agent.spawn', (_$, e) => ({ model: 'claude-sonnet-5-5', agentId: e.tool_use_id }))
-  await $.tool.call({ tool: 'mcp__savvy-progress__progress', title: 'F', phase: 'delegate', tasks: [{ title: 'Later one', tier: 'light' }, { title: 'Later two', tier: 'light' }] } as never)
+  await $.tool.call({ tool: 'mcp__duo-progress__progress', title: 'F', phase: 'delegate', tasks: [{ title: 'Later one', tier: 'light' }, { title: 'Later two', tier: 'light' }] } as never)
   await spawnMany($, on, 70, true)
   for (let i = 0; i < 70; i++) await $.turn.complete({ agentId: `t${i}`, reason: 'answer', answer: 'ok' } as never)
-  const ui = await $.ui.mount({ plugin: 'savvy-progress', surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: pane })
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'terminal', component: 'Pane', requestId: 'duo-agents', props: pane })
   expect(await ui.find({ type: 'Text', text: /Planned · 2/ })).toBeDefined()
   await ui.press({ key: 'done' })
   expect(await ui.find({ type: 'Text', text: /\+10/ })).toBeDefined()

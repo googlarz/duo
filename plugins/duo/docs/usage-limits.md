@@ -4,8 +4,8 @@ duo can check how much of your subscription window is used before spawning expen
 
 ## Files (contract)
 
-- `~/.claude/savvy-usage.json`: `{"updated_at": <epoch s>, "five_hour": {"used_percentage": n, "resets_at": <epoch s>}, "seven_day": {...}}`. A window is omitted if absent.
-- `~/.claude/savvy-limit-hit.json`: `{"at": <epoch s>, "session_id": "..."}`. A hint, written by the `StopFailure` hook when a turn dies from a rate limit.
+- `~/.claude/duo-usage.json`: `{"updated_at": <epoch s>, "five_hour": {"used_percentage": n, "resets_at": <epoch s>}, "seven_day": {...}}`. A window is omitted if absent.
+- `~/.claude/duo-limit-hit.json`: `{"at": <epoch s>, "session_id": "..."}`. A hint, written by the `StopFailure` hook when a turn dies from a rate limit.
 
 ## Wire up the statusline helper
 
@@ -27,7 +27,7 @@ The StopFailure hook (`hooks/hooks.json`, matcher `rate_limit`) is loaded automa
 
 ## How the skill uses them
 
-- It reads `savvy-usage.json` before choosing tiers and again before each dispatch, to decide whether to downshift or pause. Files with `updated_at` older than 15 minutes are stale and ignored.
+- It reads `duo-usage.json` before choosing tiers and again before each dispatch, to decide whether to downshift or pause. Files with `updated_at` older than 15 minutes are stale and ignored.
 - The orchestrator reads the marker's `at` as a baseline before the first dispatch (0 if there is no marker) and again when the user resumes after a stop. The limit marker counts only if its `at` is greater than that baseline, and is ignored when `five_hour.resets_at` from the usage file is already in the past.
 - The marker is a hint written when a turn dies from a rate limit. If the orchestrator's own turn died, the user simply says continue and the flow resumes from the report.
 - At >= 80% (the cap) workers are capped at medium and escalation also stops at medium (it reports instead); at >= 95% no new tasks start.

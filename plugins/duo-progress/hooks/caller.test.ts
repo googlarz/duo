@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-const PLUGIN = 'savvy-progress'
-const PROGRESS = 'mcp__savvy-progress__progress'
+const PLUGIN = 'duo-progress'
+const PROGRESS = 'mcp__duo-progress__progress'
 const band = { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100, scroll: { offset: 0, bodyRows: 4 }, view: {} }
 
 // The flow is the main session's to report: a worker that calls `progress` could

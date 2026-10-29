@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# StopFailure(rate_limit) hook: records that a usage limit was hit in ~/.claude/savvy-limit-hit.json.
+# StopFailure(rate_limit) hook: records that a usage limit was hit in ~/.claude/duo-limit-hit.json.
 # Never fails: always exits 0.
 input=$(cat 2>/dev/null) || input=""
-out="${HOME}/.claude/savvy-limit-hit.json"
+out="${HOME}/.claude/duo-limit-hit.json"
 now=$(date +%s)
 {
   if command -v jq >/dev/null 2>&1; then
