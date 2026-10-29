@@ -9,10 +9,10 @@
   },
   "plugins": [
     {
-      "name": "savvy-flow",
-      "source": "./plugins/savvy-flow",
-      "description": "Skill: plan, delegate to tiered worker subagents, review.",
-      "version": "1.2.0",
+      "name": "duo-flow",
+      "source": "./plugins/duo-flow",
+      "description": "Skill: the original orchestrated flow (formerly savvy-flow by JohnnyVizz): plan, delegate to tiered Opus/Fable workers, review. For API-style budgets.",
+      "version": "2.0.0",
       "category": "skill"
     },
     {
@@ -26,7 +26,7 @@
       "name": "duo-progress",
       "source": "./plugins/duo-progress",
       "description": "Mod: live agents panel with animated costume crabs; groups big fan-outs by stage, shows the model behind every agent; made for duo, shows any subagents.",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "category": "mod"
     },
     {

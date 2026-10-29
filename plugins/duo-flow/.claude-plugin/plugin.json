@@ -1,0 +1,17 @@
+{
+  "name": "duo-flow",
+  "version": "2.0.0",
+  "description": "Orchestrated delivery flow: the session model plans, owns design and reviews; five tiered worker subagents implement. Pairs with the duo-progress mod for a live progress bar and agents panel.",
+  "author": {
+    "name": "johnnyvizz",
+    "url": "https://github.com/johnnyvizz"
+  },
+  "homepage": "https://github.com/googlarz/duo/tree/main/plugins/duo-flow",
+  "repository": "https://github.com/googlarz/duo",
+  "license": "MIT",
+  "keywords": [
+    "skill",
+    "orchestration",
+    "subagents"
+  ]
+}

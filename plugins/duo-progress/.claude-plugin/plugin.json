@@ -1,7 +1,7 @@
 {
   "name": "duo-progress",
-  "version": "1.7.0",
-  "description": "Progress bar above the prompt for /savvy-flow, plus an agents panel (/agents-info): running, finished and planned subagents with model, task progress, context, cost and time.",
+  "version": "1.8.0",
+  "description": "Progress bar above the prompt for /duo-flow, plus an agents panel (/agents-info): running, finished and planned subagents with model, task progress, context, cost and time.",
   "author": {
     "name": "johnnyvizz",
     "url": "https://github.com/johnnyvizz"
@@ -23,10 +23,10 @@
     "autoOpen": {
       "type": "string",
       "title": "Open the agents panel",
-      "description": "savvy: when a savvy-flow worker starts or a plan is reported; any: also when any other subagent starts",
-      "default": "savvy",
+      "description": "flow: when a duo-flow or duo worker starts or a plan is reported; any: also when any other subagent starts",
+      "default": "flow",
       "options": [
-        "savvy",
+        "flow",
         "any"
       ]
     }

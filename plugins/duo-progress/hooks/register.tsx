@@ -16,7 +16,7 @@ const now = atom({ plugin: 'duo-progress', key: 'now' } as const, 0)
 
 const TOOL = 'mcp__duo-progress__progress'
 const STEP_TOOL = 'mcp__duo-progress__step'
-// Added to the end of each savvy worker's brief. Their system prompt words step
+// Added to the end of each duo-flow or duo worker's brief. Their system prompt words step
 // reporting as a condition ("if the step tool appears among your tools") and they
 // skip it even with the tool listed; the same request in the brief is followed.
 const STEP_BRIEF = `
@@ -248,7 +248,7 @@ async function detectLang($: EngineInterface, option: unknown): Promise<Lang> {
 }
 
 const blank = (): Flow => ({
-  title: 'savvy-flow',
+  title: 'duo-flow',
   total: 0,
   done: 0,
   running: 0,
@@ -262,7 +262,7 @@ const isNewFlow = (prev: Flow | null, input: ProgressInput): boolean =>
 
 // Only a known tier is kept: the name is later a key into the tier tables.
 const tierName = (v: string): string => {
-  const t = v.trim().toLowerCase().replace(/^[^:]*:/, '').replace(/^savvy-(?!duo-)/, '')
+  const t = v.trim().toLowerCase().replace(/^[^:]*:/, '').replace(/^(?:savvy|duo-flow)-(?!duo-)/, '')
   return TIERS.includes(t) ? t : ''
 }
 
@@ -461,7 +461,7 @@ const TIER_COLOR: Record<string, string> = {
   other: '#888780',
 }
 
-// What each savvy tier runs on, for planned tasks that have no run yet.
+// What each duo-flow tier runs on, for planned tasks that have no run yet.
 const colorOf = (tier: string): string => TIER_COLOR[tier] ?? '#888780'
 
 const TIER_MODEL: Record<string, [model: string, effort: string]> = {
@@ -544,13 +544,16 @@ const costOf = (model: string, u: Usage, isRequest: boolean): number => {
 // Haiku 4.5 and the Claude 3 models have a 200K window; the rest, Haiku 5.5 included, 1M.
 const windowOf = (model: string): number => (/haiku-4|claude-3/i.test(model) ? 200_000 : 1_000_000)
 
-// `savvy-careful`, `savvy-flow:savvy-careful`, `duo-high` or `duo:duo-high` (plugin-prefixed when the agents ship in a plugin).
+// `duo-flow-careful`, `duo-flow:duo-flow-careful` (or the legacy `savvy-careful`), `duo-high` or `duo:duo-high` (plugin-prefixed when the agents ship in a plugin).
 const bareType = (type: string): string => type.replace(/^[^:]*:/, '')
 const isPipelineAgent = (type: string): boolean => /^(?:savvy|duo)-/.test(bareType(type))
+// The original flow's workers are `duo-flow-<tier>` (formerly `savvy-<tier>`); duo's own are `duo-<tier>`.
+const flowTier = (bare: string): string | null => (bare.startsWith('duo-flow-') ? bare.slice(9) : bare.startsWith('savvy-') ? bare.slice(6) : null)
 const tierOf = (type: string): string => {
   const bare = bareType(type)
-  const t = bare.startsWith('savvy-') ? bare.slice(6).toLowerCase() : bare.toLowerCase()
-  return Object.hasOwn(TIER_COLOR, t) && isPipelineAgent(bare) && (bare.startsWith('duo-') === t.startsWith('duo-')) ? t : 'other'
+  const flow = flowTier(bare.toLowerCase())
+  const t = flow ?? bare.toLowerCase()
+  return Object.hasOwn(TIER_COLOR, t) && isPipelineAgent(bare) && (flow !== null ? !t.startsWith('duo-') : t.startsWith('duo-')) ? t : 'other'
 }
 
 const modelName = (id: string): string => {
@@ -1498,7 +1501,7 @@ export const register: Register = (on, options) => {
     await $.tool.register({
       name: 'progress',
       description:
-        'Report /savvy-flow progress to the progress bar above the prompt and the agents panel. ' +
+        'Report /duo-flow progress to the progress bar above the prompt and the agents panel. ' +
         'Call it after presenting the plan (title, total, tasks, phase "delegate"), each time a task is accepted (done), ' +
         'when switching phase or re-planning (tasks), and once at the end with finished: true. Fields left out keep their previous value. ' +
         'For the main session only: a call from a subagent is ignored (workers report with `step`).',
@@ -1530,7 +1533,7 @@ export const register: Register = (on, options) => {
     await $.tool.register({
       name: 'step',
       description:
-        'For savvy-flow workers: report progress on your own task to the agents panel. ' +
+        'For duo-flow workers: report progress on your own task to the agents panel. ' +
         'Right after reading the brief, call it with `total` (your plan in 3-8 steps), `plan` (their titles) and `done: 0`; ' +
         'call it again as each step finishes. Cheap and silent: it only draws a bar.',
       inputSchema: {
@@ -1659,7 +1662,7 @@ export const register: Register = (on, options) => {
     await update($, now, () => at)
     if (isPipelineAgent(e.subagentType)) {
       const f = await read($, flow)
-      await autoOpen($, f && !f.isFinished ? f.title : 'savvy-flow')
+      await autoOpen($, f && !f.isFinished ? f.title : 'duo-flow')
     } else if (options.autoOpen === 'any') {
       await autoOpen($, 'any-agent')
     }

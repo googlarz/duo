@@ -148,7 +148,7 @@ Not yet verified, because it needs a live session: the statusline helper in dail
 | --- | --- |
 | [duo](plugins/duo) | The rules and the agents: model per stage, effort per task, Opus budget, limit awareness |
 | [duo-progress](plugins/duo-progress) | The panel: every agent with its model, steps, cost; understands the duo tiers |
-| [savvy-flow](plugins/savvy-flow) | The original flow by JohnnyVizz (tiered Opus/Fable workers), for API-style budgets |
+| [duo-flow](plugins/duo-flow) | The original flow by JohnnyVizz (tiered Opus/Fable workers), for API-style budgets |
 | [session-band](plugins/session-band) | Band above the prompt: turn, speed, cost, cache countdown, context |
 
 Develop: `claude plugin validate .` · `cd plugins/duo-progress && claude plugin test .` · `plugins/duo/scripts/gen-agents.sh` (regenerates duo's six worker agents from one shared body).
@@ -159,6 +159,6 @@ Develop: `claude plugin validate .` · `cd plugins/duo-progress && claude plugin
 
 ## Credits
 
-`duo` stands on the work of **[JohnnyVizz](https://github.com/JohnnyVizz)**. The savvy-flow orchestration pattern, the tiered-worker idea, the savvy-progress panel (now `duo-progress`) and session-band all come from [JohnnyVizz/claude-kit](https://github.com/JohnnyVizz/claude-kit). This repo started as a fork of it, keeps that code and its licence, and adapts the idea to subscription budgets. Thank you.
+`duo` stands on the work of **[JohnnyVizz](https://github.com/JohnnyVizz)**. The savvy-flow orchestration pattern (now `duo-flow`), the tiered-worker idea, the savvy-progress panel (now `duo-progress`) and session-band all come from [JohnnyVizz/claude-kit](https://github.com/JohnnyVizz/claude-kit). This repo started as a fork of it, keeps that code and its licence, and adapts the idea to subscription budgets. Thank you.
 
 MIT licence, see [LICENSE](LICENSE). Original work © 2026 johnnyvizz; duo additions © 2026 googlarz.

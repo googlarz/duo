@@ -21,7 +21,9 @@ const TIERS: readonly [type: string, shown: RegExp][] = [
   ['duo:duo-high', /duo-high · /],
   ['duo-opus', /duo-opus · /],
   ['duo:duo-reviewer', /duo-reviewer · /],
-  ['savvy-flow:savvy-careful', /careful · /], // existing tiers unchanged
+  ['savvy-flow:savvy-careful', /careful · /], // legacy names still recognised
+  ['duo-flow:duo-flow-careful', /careful · /],
+  ['duo-flow-light', /light · /],
   ['savvy-light', /light · /],
   ['duo-high', /duo-high · /], // bare, without the plugin prefix
 ]
