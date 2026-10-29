@@ -9,6 +9,7 @@ const panel = atom({ plugin: 'savvy-progress', key: 'panel' } as const, {
   isCompact: false,
   isDoneCollapsed: false,
   autoOpenedFor: '',
+  openIds: [] as string[],
 })
 const now = atom({ plugin: 'savvy-progress', key: 'now' } as const, 0)
 
@@ -19,15 +20,20 @@ const STEP_TOOL = 'mcp__savvy-progress__step'
 // skip it even with the tool listed; the same request in the brief is followed.
 const STEP_BRIEF = `
 
-Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
+Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps), optionally \`plan\` (an array of their titles, a few words each) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
 const PANE = 'savvy-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
-const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light']
+const DUO_TIERS = ['duo-low', 'duo-medium', 'duo-high', 'duo-xhigh', 'duo-max', 'duo-opus', 'duo-advisor', 'duo-reviewer', 'duo-verifier'] as const
+const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light', ...DUO_TIERS]
 // The tools' schemas are advice to the model, not a check: what a call may ask
 // the band and the panel to draw is bounded here.
 const MAX_TASKS = 200
 const MAX_AFTER = 20
 const MAX_TITLE = 120
+const MAX_STEPLOG = 40
+const MAX_PLAN = 30
+const MAX_NOTE = 80
+const MAX_OPEN = 200
 const ACCENT = '#8f8cf4'
 const DONE = '#5fbf8f'
 
@@ -75,7 +81,14 @@ const STRINGS = {
     review: 'Review',
     busy: 'running',
     ctx: 'ctx',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', other: 'other' },
+    details: 'Details',
+    model: 'Model',
+    agentType: 'Agent',
+    task: 'Task',
+    status: 'Status',
+    timeWord: 'Time',
+    stepsWord: 'Steps',
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   ru: {
@@ -106,7 +119,14 @@ const STRINGS = {
     review: 'Ревью',
     busy: 'в работе',
     ctx: 'ctx',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', other: 'other' },
+    details: 'Детали',
+    model: 'Модель',
+    agentType: 'Агент',
+    task: 'Задача',
+    status: 'Статус',
+    timeWord: 'Время',
+    stepsWord: 'Шаги',
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   he: {
@@ -137,7 +157,14 @@ const STRINGS = {
     review: 'בדיקה',
     busy: 'בעבודה',
     ctx: 'הקשר',
-    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', other: 'אחר' },
+    details: 'פרטים',
+    model: 'מודל',
+    agentType: 'סוכן',
+    task: 'משימה',
+    status: 'סטטוס',
+    timeWord: 'זמן',
+    stepsWord: 'שלבים',
+    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'אחר' },
     effort: { low: 'נמוך', medium: 'בינוני', high: 'גבוה', xhigh: 'גבוה מאוד', max: 'מקסימלי' },
   },
 } as const
@@ -184,8 +211,18 @@ const isNewFlow = (prev: Flow | null, input: ProgressInput): boolean =>
 
 // Only a known tier is kept: the name is later a key into the tier tables.
 const tierName = (v: string): string => {
-  const t = v.replace(/^savvy-/, '').trim().toLowerCase()
+  const t = v.trim().toLowerCase().replace(/^[^:]*:/, '').replace(/^savvy-(?!duo-)/, '')
   return TIERS.includes(t) ? t : ''
+}
+
+// The schema's `plan` is advice: keep only non-empty strings, clipped and capped.
+const cleanPlan = (v: unknown): string[] | undefined => {
+  if (!Array.isArray(v)) return undefined
+  const out = v
+    .filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+    .slice(0, MAX_PLAN)
+    .map(x => clip(x.trim(), MAX_NOTE))
+  return out.length ? out : undefined
 }
 
 const cleanTasks = (tasks: ProgressInput['tasks']): PlannedTask[] | undefined =>
@@ -361,6 +398,15 @@ const TIER_COLOR: Record<string, string> = {
   careful: '#BA7517',
   medium: '#378ADD',
   light: '#1D9E75',
+  'duo-low': '#5DCAA5',
+  'duo-medium': '#6AAAE8',
+  'duo-high': '#D4A24C',
+  'duo-xhigh': '#E8825A',
+  'duo-max': '#9D96E8',
+  'duo-opus': '#B54FD6',
+  'duo-advisor': '#E05297',
+  'duo-reviewer': '#C9444A',
+  'duo-verifier': '#3FA6A0',
   other: '#888780',
 }
 
@@ -373,6 +419,15 @@ const TIER_MODEL: Record<string, [model: string, effort: string]> = {
   careful: ['Opus', 'high'],
   medium: ['Opus', 'medium'],
   light: ['Opus', 'low'],
+  'duo-low': ['Sonnet', 'low'],
+  'duo-medium': ['Sonnet', 'medium'],
+  'duo-high': ['Sonnet', 'high'],
+  'duo-xhigh': ['Sonnet', 'xhigh'],
+  'duo-max': ['Sonnet', 'max'],
+  'duo-opus': ['Opus', 'xhigh'],
+  'duo-advisor': ['Opus', 'high'],
+  'duo-reviewer': ['Opus', 'high'],
+  'duo-verifier': ['Sonnet', 'medium'],
 }
 
 // "Opus · xhigh", with the effort word in the panel's language; '' for an unknown tier.
@@ -438,11 +493,13 @@ const costOf = (model: string, u: Usage, isRequest: boolean): number => {
 // Haiku 4.5 and the Claude 3 models have a 200K window; the rest, Haiku 5.5 included, 1M.
 const windowOf = (model: string): number => (/haiku-4|claude-3/i.test(model) ? 200_000 : 1_000_000)
 
-// `savvy-careful`, or `savvy-flow:savvy-careful` when the agents ship in a plugin.
+// `savvy-careful`, `savvy-flow:savvy-careful`, `duo-high` or `duo:duo-high` (plugin-prefixed when the agents ship in a plugin).
+const bareType = (type: string): string => type.replace(/^[^:]*:/, '')
+const isPipelineAgent = (type: string): boolean => /^(?:savvy|duo)-/.test(bareType(type))
 const tierOf = (type: string): string => {
-  const bare = type.replace(/^[^:]*:/, '')
-  const t = bare.replace(/^savvy-/, '').toLowerCase()
-  return Object.hasOwn(TIER_COLOR, t) && bare.startsWith('savvy-') ? t : 'other'
+  const bare = bareType(type)
+  const t = bare.startsWith('savvy-') ? bare.slice(6).toLowerCase() : bare.toLowerCase()
+  return Object.hasOwn(TIER_COLOR, t) && isPipelineAgent(bare) && (bare.startsWith('duo-') === t.startsWith('duo-')) ? t : 'other'
 }
 
 const modelName = (id: string): string => {
@@ -610,6 +667,18 @@ const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
   other: f => crabBody(f),
 }
 
+// The duo tiers reuse an existing crab; their own colour still tints it.
+const COSTUME_ALIAS: Record<string, string> = {
+  'duo-low': 'light',
+  'duo-medium': 'medium',
+  'duo-high': 'careful',
+  'duo-xhigh': 'heavy',
+  'duo-max': 'fable',
+  'duo-opus': 'fable',
+  'duo-advisor': 'heavy',
+  'duo-reviewer': 'careful',
+  'duo-verifier': 'light',
+}
 const costumeOf = (type: string): string => (type === 'Explore' ? 'explore' : tierOf(type))
 
 const CRAB_SCALE = 1.1
@@ -623,13 +692,14 @@ const crab = (x: number, y: number, costume: string, dim = false, isWalking = fa
     if (!groups.has(cls)) groups.set(cls, [])
     groups.get(cls)?.push(`<rect x="${cx}" y="${cy}" width="${w}" height="${h}" fill="${c}"/>`)
   }
-  const draw = COSTUMES[costume] ?? ((g: Fill) => crabBody(g))
+  const look = COSTUME_ALIAS[costume] ?? costume
+  const draw = COSTUMES[look] ?? ((g: Fill) => crabBody(g))
   draw(f, colorOf(costume))
   const group = (cls: string) => `<g class="${cls}">${(groups.get(cls) ?? []).join('')}</g>`
   const props = [...groups.keys()].filter(k => k !== 'bd' && k !== 'la' && k !== 'lb')
   const body = `<g class="bd">${(groups.get('bd') ?? []).join('')}${props.map(group).join('')}</g>`
   const place = mirror ? `translate(${x + CRAB_BOX * scale},${y}) scale(${-scale},${scale})` : `translate(${x},${y}) scale(${scale})`
-  return `<g transform="${place}" opacity="${dim ? 0.45 : 1}" shape-rendering="crispEdges"><g class="c-${costume}${isWalking ? ' run' : ''}">${body}${group('la')}${group('lb')}</g></g>`
+  return `<g transform="${place}" opacity="${dim ? 0.45 : 1}" shape-rendering="crispEdges"><g class="c-${look}${isWalking ? ' run' : ''}">${body}${group('la')}${group('lb')}</g></g>`
 }
 
 const statusMark = (x: number, y: number, status: string, color: string): string => {
@@ -692,6 +762,48 @@ const progressOf = (a: AgentRun): number | null => {
 }
 
 const ctxOf = (a: AgentRun): number => (a.contextMax ? Math.min(100, Math.round((a.contextTokens / a.contextMax) * 100)) : 0)
+
+const clock = (ms: number): string => new Date(ms).toTimeString().slice(0, 8)
+
+// The expanded rows' text, from data the run already holds. First line: which model ran it.
+const detailLines = (a: AgentRun, at: number): string[] => {
+  const s = tr()
+  const tier = tierOf(a.type)
+  const state = a.status === 'running' ? s.isRunning : a.status === 'failed' ? s.failed : s.isFinished
+  const lines = [
+    `${s.model}: ${runModel(a)}${a.model ? ` (${a.model})` : ''}`,
+    `${s.agentType}: ${a.type}${tier === 'other' ? '' : ` · ${tierWord(tier)}`}`,
+    `${s.task}: ${a.description || a.type}`,
+    `${s.status}: ${state}${a.round > 1 ? ` · ${s.round} ${a.round}` : ''}`,
+    `${s.ctx} ${ctxOf(a)}% · ${fmtTokens(a.contextTokens)} · ${fmtTokens(a.tokens)} ${s.tokensWord} · ≈${fmtCost(a.costUsd)}`,
+    `${s.timeWord}: ${clock(a.startedAt)}${a.endedAt ? ` – ${clock(a.endedAt)}` : ''} · ${fmtTime(elapsed(a, at))}`,
+  ]
+  const done = a.stepDone ?? 0
+  const log = a.stepLog ?? []
+  if (a.stepTotal || log.length) lines.push(`${s.stepsWord}: ${done}/${a.stepTotal || '?'}${a.stepNote ? ` · ${a.stepNote}` : ''}`)
+  // With a plan the checklist is its titles; without one, the notes the worker logged, in order.
+  if (a.stepPlan?.length) {
+    a.stepPlan.forEach((title, i) => {
+      const mark = i < done ? '✓' : i === done && a.status === 'running' ? '▸' : '○'
+      lines.push(`  ${mark} ${i + 1}. ${title}`)
+    })
+  } else {
+    const noted = log.filter(l => l.note)
+    noted.forEach((l, i) => {
+      const mark = i < noted.length - 1 || a.status !== 'running' ? '✓' : '▸'
+      lines.push(`  ${mark} ${l.n + 1}. ${l.note}`)
+    })
+  }
+  return lines
+}
+
+const openOf = (p: Panel): string[] => (Array.isArray(p.openIds) ? p.openIds : [])
+const isOpen = (p: Panel, a: AgentRun): boolean => openOf(p).includes(a.id)
+// Not known whether an Svg takes a press, so a plain Button (proven pressable here) under each row toggles the details.
+// Wide (CJK) characters take two columns.
+const wideLen = (t: string): number => [...t].reduce((n, c) => n + ((c.codePointAt(0) ?? 0) >= 0x2e80 ? 2 : 1), 0)
+const detailLineCount = (a: AgentRun, at: number, cols: number): number =>
+  detailLines(a, at).reduce((n, l) => n + Math.max(1, Math.ceil(wideLen(l) / Math.max(20, cols))), 0)
 
 const agentSvg = (W: number, a: AgentRun, at: number): string => {
   const s = tr()
@@ -830,7 +942,7 @@ export const register: Register = (on, options) => {
       name: 'step',
       description:
         'For savvy-flow workers: report progress on your own task to the agents panel. ' +
-        'Right after reading the brief, call it with `total` (your plan in 3-8 steps) and `done: 0`; ' +
+        'Right after reading the brief, call it with `total` (your plan in 3-8 steps), `plan` (their titles) and `done: 0`; ' +
         'call it again as each step finishes. Cheap and silent: it only draws a bar.',
       inputSchema: {
         type: 'object',
@@ -838,6 +950,7 @@ export const register: Register = (on, options) => {
           done: { type: 'integer', minimum: 0, description: 'Steps finished so far.' },
           total: { type: 'integer', minimum: 1, description: 'Steps planned; may change if the plan changes.' },
           note: { type: 'string', description: 'The step in progress, a few words.' },
+          plan: { type: 'array', items: { type: 'string' }, description: 'Optional, on the first call: the titles of your planned steps, a few words each.' },
         },
         required: ['done'],
       },
@@ -890,9 +1003,10 @@ export const register: Register = (on, options) => {
 
   // A worker's own progress: the call runs in the worker's loop, so agentId names it.
   on('tool.call', { tool: STEP_TOOL }, async ($, e) => {
-    const input = e as unknown as { done?: number; total?: number; note?: string }
+    const input = e as unknown as { done?: number; total?: number; note?: string; plan?: unknown }
     const agentId = e.agentId
     if (!agentId) return { result: 'ignored: only subagents report steps' }
+    const at = await $.clock.now()
     let matched = false
     await update($, agents, list =>
       list.map(a => {
@@ -900,7 +1014,11 @@ export const register: Register = (on, options) => {
         matched = true
         const total = Math.max(0, Math.round(input.total ?? a.stepTotal ?? 0))
         const done = Math.max(0, Math.round(input.done ?? a.stepDone ?? 0))
-        return { ...a, stepTotal: total, stepDone: total ? Math.min(total, done) : done, stepNote: input.note?.trim() || undefined }
+        const plan = cleanPlan(input.plan)
+        const stepDone = total ? Math.min(total, done) : done
+        const note = typeof input.note === 'string' && input.note.trim() ? clip(input.note.trim(), MAX_NOTE) : ''
+        const stepLog = [...(a.stepLog ?? []), { n: stepDone, note, at }].slice(-MAX_STEPLOG)
+        return { ...a, stepTotal: plan && !input.total && !a.stepTotal ? plan.length : total, stepDone, stepNote: note || undefined, stepPlan: plan ?? a.stepPlan, stepLog }
       }),
     )
     return { result: matched ? 'ok' : `ignored: no panel row for agent ${agentId}` }
@@ -909,7 +1027,7 @@ export const register: Register = (on, options) => {
   // Safety net: worker launches move the faint layer even if the orchestrator forgets to report.
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
     const type = String(e.subagent_type ?? '')
-    if (!type.startsWith('savvy-')) return next(e)
+    if (!isPipelineAgent(type)) return next(e)
 
     await update($, flow, prev => {
       const base = prev && !prev.isFinished ? { ...blank(), ...prev } : blank()
@@ -923,7 +1041,9 @@ export const register: Register = (on, options) => {
   })
 
   on('agent.spawn', async ($, e, next) => {
-    const isUnbriefed = e.subagentType.startsWith('savvy-') && !e.prompt.includes(STEP_TOOL)
+    // The read-only agents (advisor, reviewer, verifier) have a restricted tool list without `step`.
+    const isGate = /^(?:[^:]*:)?duo-(?:advisor|reviewer|verifier)$/.test(e.subagentType)
+    const isUnbriefed = isPipelineAgent(e.subagentType) && !isGate && !e.prompt.includes(STEP_TOOL)
     const started = await next(isUnbriefed ? { ...e, prompt: e.prompt + STEP_BRIEF } : e)
     if (started.deny !== undefined) return started
 
@@ -948,7 +1068,7 @@ export const register: Register = (on, options) => {
       return [...list.filter(a => a.id !== run.id), run].slice(-200)
     })
     await update($, now, () => at)
-    if (e.subagentType.startsWith('savvy-')) {
+    if (isPipelineAgent(e.subagentType)) {
       const f = await read($, flow)
       await autoOpen($, f && !f.isFinished ? f.title : 'savvy-flow')
     } else if (options.autoOpen === 'any') {
@@ -1059,6 +1179,29 @@ export const register: Register = (on, options) => {
         onPress={() => update($, panel, prev => ({ ...prev, isDoneCollapsed: !prev.isDoneCollapsed }))}
       />
     )
+    const toggleRow = (a: AgentRun) => (
+      <Button
+        key={`open-${a.id}`}
+        label={`${isOpen(p, a) ? '▾' : (isRtl() ? '◂' : '▸')} ${s.details} · ${runModel(a)}`}
+        plain
+        onPress={() =>
+          update($, panel, prev => {
+            const ids = openOf(prev)
+            return { ...prev, openIds: (ids.includes(a.id) ? ids.filter(x => x !== a.id) : [...ids, a.id]).slice(-MAX_OPEN) }
+          })
+        }
+      />
+    )
+    const detailsBlock = (a: AgentRun) =>
+      isOpen(p, a) ? (
+        <Box key={`det-${a.id}`} flexDirection="column" paddingLeft={isRtl() ? 0 : 2} paddingRight={isRtl() ? 2 : 0} alignItems={isRtl() ? 'flex-end' : undefined}>
+          {detailLines(a, at).map((l, i) => (
+            <Text key={i} dimColor={i > 0} bold={i === 0} color={i === 0 ? colorOf(tierOf(a.type)) : undefined}>
+              {l}
+            </Text>
+          ))}
+        </Box>
+      ) : null
     const isEmpty = list.length === 0 && planned.length === 0
     const summary = `≈${fmtCost(t.cost)}, ${fmtTokens(t.tokens)} ${s.tokensWord}, ${fmtTime(t.time)}`
 
@@ -1083,7 +1226,8 @@ export const register: Register = (on, options) => {
       }
       const shownDone = p.isDoneCollapsed ? 0 : finished.length
       const lines = 1 + (isEmpty ? 1 : 0) + (running.length > 0 ? 1 : 0) + (finished.length > 0 ? 1 : 0) + (planned.length > 0 ? 1 : 0)
-      const gridH = headerHeight(title) + lines * LINE_H + (running.length + shownDone) * 66 + planned.length * 46
+      const gridH = headerHeight(title) + lines * LINE_H + (running.length + shownDone) * (66 + LINE_H) + planned.length * 46 +
+        [...running, ...(p.isDoneCollapsed ? [] : finished)].filter(a => isOpen(p, a)).reduce((n, a) => n + detailLineCount(a, at, (e.props.bodyColumns || 40) - 4) * LINE_H, 0)
       return (
         <Box flexDirection="column">
           {/* The grid sizes the pane; the content is placed over it, as an
@@ -1097,12 +1241,20 @@ export const register: Register = (on, options) => {
             {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && section('h-run', `${s.running} · ${running.length}`)}
             {running.map(a => (
-              <Svg key={a.id} source={agentSvg(W, a, at)} alt={`${a.description}: ${modelName(a.model)}, ${s.isRunning}`} width={W} height={66} />
+              <Box key={a.id} flexDirection="column" alignItems={align}>
+                <Svg source={agentSvg(W, a, at)} alt={`${a.description}: ${modelName(a.model)}, ${s.isRunning}`} width={W} height={66} />
+                {toggleRow(a)}
+                {detailsBlock(a)}
+              </Box>
             ))}
             {finished.length > 0 && toggleDone}
             {!p.isDoneCollapsed &&
               finished.map(a => (
-                <Svg key={a.id} source={agentSvg(W, a, at)} alt={`${a.description}: ${modelName(a.model)}, ${s.isFinished}`} width={W} height={66} />
+                <Box key={a.id} flexDirection="column" alignItems={align}>
+                  <Svg source={agentSvg(W, a, at)} alt={`${a.description}: ${modelName(a.model)}, ${s.isFinished}`} width={W} height={66} />
+                  {toggleRow(a)}
+                  {detailsBlock(a)}
+                </Box>
               ))}
             {planned.length > 0 && section('h-plan', `${s.planned} · ${planned.length}`)}
             {planned.map(pl => (
@@ -1145,6 +1297,8 @@ export const register: Register = (on, options) => {
               {steps}{s.ctx} {ctx}% · {fmtTokens(a.contextTokens)} ≈{fmtCost(a.costUsd)} {fmtTime(elapsed(a, at))}
             </Text>
           </Text>
+          {toggleRow(a)}
+          {detailsBlock(a)}
         </Box>
       )
     }

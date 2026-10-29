@@ -1,0 +1,17 @@
+{
+  "description": "Record usage-limit hits so duo can pause or downshift",
+  "hooks": {
+    "StopFailure": [
+      {
+        "matcher": "rate_limit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/limit-hit.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

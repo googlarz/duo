@@ -17,6 +17,8 @@ An orchestrated delivery flow for Claude Code. Run `/savvy-flow <task>` (`/savvy
 
   `savvy-fable` runs on the Fable model; without access to it, change `model:` in `agents/savvy-fable.md` (say, to `opus`).
 
+On a Claude subscription? See [duo](../duo): Sonnet works, Opus checks.
+
 ## With savvy-progress
 
 The skill and the agents run fine alone. With the [savvy-progress](../savvy-progress) mod installed, the orchestrator reports the plan and accepted tasks to a progress bar above the prompt, and each worker reports its own steps to the agents panel. Without the mod those calls are skipped.

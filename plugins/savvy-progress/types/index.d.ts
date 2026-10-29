@@ -38,12 +38,18 @@ export type AgentRun = {
   stepDone?: number
   stepTotal?: number
   stepNote?: string
+  /** Titles of the planned steps, if the worker gave them. */
+  stepPlan?: string[]
+  /** One entry per `step` call: `n` steps were done at time `at`, `note` is the step then in progress. */
+  stepLog?: { n: number; note: string; at: number }[]
 }
 
 export type Panel = {
   isCompact: boolean
   isDoneCollapsed: boolean
   autoOpenedFor: string
+  /** Agent row ids whose details are expanded. Absent in state saved by older versions. */
+  openIds?: string[]
 }
 
 declare module 'claude-code' {
