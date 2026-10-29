@@ -48,6 +48,14 @@ The agents run in parallel where they can, within guardrails: **two attempts per
 
 Every task row shows the model and effort that ran it. When many agents run at once (more than 8), the panel switches to a grouped view: a summary, the model mix, one row per stage, only the few running agents in view, and the finished ones folded away. Press Details under a task to see the steps the agent planned and which are done. *(Illustration with example tasks.)*
 
+### Meet the crabs
+
+Every agent is a small animated pixel crab, and its costume tells you the job. The panel picks the costume from the stage name: a detective for `truth` and `verify`, a robot for `build`, a rocket for `deploy`, a doctor for `fix`, a ninja for `perf`, a librarian for `docs`, and more. Unknown stage names get the plain crab.
+
+<p align="center">
+  <img src="assets/duo-crabs.svg" alt="All the panel's crab costumes: fable, heavy, careful, medium, light, explore, wizard, monocle, detective, judge, hardhat, explorer, bulb, quill, crown, rocket, robot, scientist, artist, ninja, doctor, librarian, viking, cleaner, and the plain crab" width="70%">
+</p>
+
 ## Try it
 
 Install duo and the panel:

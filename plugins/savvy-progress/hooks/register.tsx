@@ -700,6 +700,15 @@ const STAGE_COSTUMES: [costume: string, words: string[]][] = [
   ['explorer', ['map', 'explore', 'scout']],
   ['bulb', ['ideate', 'brainstorm', 'design']],
   ['quill', ['synthesize', 'write', 'summary']],
+  ['rocket', ['deploy', 'release', 'ship', 'launch']],
+  ['robot', ['build', 'compile', 'generate', 'codegen']],
+  ['scientist', ['research', 'analy', 'investigate', 'study']],
+  ['artist', ['ui', 'visual', 'style', 'render', 'css']],
+  ['ninja', ['perf', 'optimi', 'speed', 'fast', 'bench']],
+  ['doctor', ['fix', 'debug', 'repair', 'patch', 'bug']],
+  ['librarian', ['docs', 'readme', 'document']],
+  ['viking', ['migrat', 'refactor', 'move']],
+  ['cleaner', ['lint', 'clean', 'prune', 'tidy', 'format']],
 ]
 export const stageCostume = (key: string): string => {
   const k = key.toLowerCase()
@@ -894,6 +903,72 @@ export const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
     crabBody(f)
     stamp(f, 8, 3, ['.g....gg....g.', '.gg..gggg..gg.', '.gggggggggggg.', '.gggrgggbgggg.', '.gggggggggggg.', '.dddddddddddd.'], { g: '#F5C542', d: '#C99A1E', r: '#E5484D', b: '#4A8BE8' })
   },
+  // Rocket (deploy, release, ship, launch): a rocket over the raised claw, its flame flickers.
+  rocket: f => {
+    crabBody(f, -4, 'it')
+    stamp(f, 24, 0, ['..r..', '.www.', '.wbw.', '.www.', 'rwwwr'], { r: '#E5484D', w: '#F4F1EA', b: '#4A8BE8' }, 'it')
+    stamp(f, 24, 5, ['.ooo.', '..o..'], { o: '#FF9A3C' }, 'gl')
+  },
+  // Robot (build, compile, generate, codegen): blinking antenna, riveted brow plate, cyan eyes, grille mouth.
+  robot: f => {
+    crabBody(f)
+    f(14, 5, 2, 5, '#8E96A3'); f(13, 2, 4, 3, '#E5484D', 'gl')
+    f(7, 10, 16, 2, '#8E96A3'); f(9, 10, 1, 1, INK); f(20, 10, 1, 1, INK)
+    f(9, 12, 2, 2, '#7FE0FF'); f(19, 12, 2, 2, '#7FE0FF')
+    f(11, 17, 8, 3, '#8E96A3')
+    for (const x of [12, 14, 16, 18]) f(x, 17, 1, 3, INK)
+  },
+  // Scientist (research, analyze, investigate, study): wild white hair, goggles, a bubbling flask.
+  scientist: f => {
+    crabBody(f, -4, 'it')
+    stamp(f, 6, 5, ['..w..w..ww..w..w..', '.wwwwwwwwwwwwwwwww.', 'wwwwwwwwwwwwwwwwwww', '.wwwwwwwwwwwwwwww..', '..wwwwwwwwwwwwww...'].map(r => r.slice(0, 18)), { w: '#F1EFE9' })
+    stamp(f, 8, 11, ['.kkkk.', 'k....k', 'k....k', 'k....k', '.kkkk.'], { k: '#3A3A3C' })
+    stamp(f, 17, 11, ['.kkkk.', 'k....k', 'k....k', 'k....k', '.kkkk.'], { k: '#3A3A3C' })
+    f(9, 12, 4, 3, 'rgba(150,220,255,.35)'); f(18, 12, 4, 3, 'rgba(150,220,255,.35)'); f(14, 13, 3, 1, '#3A3A3C')
+    stamp(f, 24, 1, ['.kk.', '.kk.', 'kggk', 'gggg', 'gggg'], { k: '#9FB4C7', g: '#6FCF97' }, 'it')
+    f(25, 0, 1, 1, '#B9F5D0', 'gl')
+  },
+  // Artist (ui, visual, style, render, css): a paint palette in the left claw, a brush in the raised one.
+  artist: f => {
+    crabBody(f, -4, 'it')
+    stamp(f, 0, 11, ['.ppppp.', 'prpbppp', 'ppgpypp', '.ppppp.'], { p: '#C99A5E', r: '#E5484D', b: '#4A8BE8', g: '#3FB68B', y: '#F5C542' })
+    f(25, 3, 1, 8, '#7A4A26', 'it'); f(24, 0, 3, 3, '#E5484D', 'it')
+  },
+  // Ninja (perf, optimize, speed, fast, bench): black mask with an eye slit, red headband tails that flutter.
+  ninja: f => {
+    crabBody(f)
+    f(7, 10, 16, 7, '#2B2B33'); f(7, 10, 16, 1, '#E5484D')
+    f(9, 12, 2, 2, '#F4F1EA'); f(19, 12, 2, 2, '#F4F1EA'); f(10, 13, 1, 1, INK); f(20, 13, 1, 1, INK)
+    f(23, 10, 5, 2, '#E5484D', 'it'); f(26, 12, 3, 2, '#E5484D', 'it')
+  },
+  // Doctor (fix, debug, repair, patch, bug): white cap with a red cross, a stethoscope.
+  doctor: f => {
+    crabBody(f)
+    stamp(f, 6, 4, ['......wwwwww......', '...wwwwwrrwwwww...', '..wwwwwrrrrwwwww..', '.wwwwwwrrrrwwwwww.', '..wwwwwwrrwwwwww..', 'wwwwwwwwwwwwwwwwww'], { w: '#F4F1EA', r: '#E5484D' })
+    f(11, 19, 1, 3, '#5A5E66'); f(18, 19, 1, 3, '#5A5E66'); f(12, 21, 6, 1, '#5A5E66'); f(14, 22, 2, 2, '#C9CCD2')
+  },
+  // Librarian (docs, readme, document): round glasses and a book in the raised claw.
+  librarian: f => {
+    crabBody(f, -4, 'it')
+    stamp(f, 8, 11, ['.kkkk.', 'k....k', 'k....k', 'k....k', '.kkkk.'], { k: '#8B5E3C' })
+    stamp(f, 17, 11, ['.kkkk.', 'k....k', 'k....k', 'k....k', '.kkkk.'], { k: '#8B5E3C' })
+    f(14, 13, 3, 1, '#8B5E3C')
+    stamp(f, 24, 2, ['rrrrr', 'rwwwr', 'rwwwr', 'rwwwr', 'rrrrr'], { r: '#B23A48', w: '#F4F1EA' }, 'it')
+  },
+  // Viking (migrate, refactor, move): horned iron helmet.
+  viking: f => {
+    crabBody(f)
+    stamp(f, 6, 5, ['......gggggg......', '....gggggggggg....', '...gggggggggggg...', '..gggggggggggggg..', 'dddddddddddddddddd'], { g: '#9AA0A8', d: '#5A5E66' })
+    f(3, 1, 2, 2, '#F4F1EA'); f(4, 3, 2, 2, '#F4F1EA'); f(5, 5, 2, 2, '#F4F1EA')
+    f(25, 1, 2, 2, '#F4F1EA'); f(24, 3, 2, 2, '#F4F1EA'); f(23, 5, 2, 2, '#F4F1EA')
+  },
+  // Cleaner (lint, clean, prune, tidy, format): blue bandana, a broom in the raised claw, sparkles.
+  cleaner: f => {
+    crabBody(f, -4, 'it')
+    f(7, 10, 16, 1, '#4A8BE8'); f(7, 11, 16, 1, '#78AEF2')
+    f(25, 0, 1, 11, '#A0703F', 'it'); stamp(f, 23, 11, ['.bbb.', 'bbbbb', 'b.b.b'], { b: '#E7C65A' }, 'it')
+    stamp(f, 2, 5, ['.w.', 'www', '.w.'], { w: '#FFFFFF' }, 'star'); f(8, 1, 1, 1, '#FFFFFF', 'star')
+  },
   other: f => crabBody(f),
 }
 
@@ -910,7 +985,7 @@ export const COSTUME_ALIAS: Record<string, string> = {
   'duo-verifier': 'detective',
 }
 // Costume tint where the costume is no tier (the tier colours live in TIER_COLOR).
-const COSTUME_TINT: Record<string, string> = { wizard: '#5B4BC4', monocle: '#C9444A', detective: '#B8935A', judge: '#7A4A26', hardhat: '#F5C542', explorer: '#D2B97A', bulb: '#FFD84A', quill: '#B23A48', crown: '#F5C542' }
+const COSTUME_TINT: Record<string, string> = { wizard: '#5B4BC4', monocle: '#C9444A', detective: '#B8935A', judge: '#7A4A26', hardhat: '#F5C542', explorer: '#D2B97A', bulb: '#FFD84A', quill: '#B23A48', crown: '#F5C542', rocket: '#E5484D', robot: '#8E96A3', scientist: '#6FCF97', artist: '#E8913A', ninja: '#2B2B33', doctor: '#E5484D', librarian: '#8B5E3C', viking: '#9AA0A8', cleaner: '#E7C65A' }
 
 export const costumeOf = (type: string): string => (type === 'Explore' ? 'explore' : tierOf(type))
 
