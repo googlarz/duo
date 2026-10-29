@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" width="960" height="340" role="img" aria-label="duo: Sonnet works, Opus checks">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1B1530"/><stop offset="1" stop-color="#0F1B33"/>
+    </linearGradient>
+    <linearGradient id="son" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF9A5A"/><stop offset="1" stop-color="#E8613A"/>
+    </linearGradient>
+    <linearGradient id="opu" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9B8CFF"/><stop offset="1" stop-color="#6A4DF0"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="340" rx="22" fill="url(#bg)"/>
+  <g font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="56" y="108" font-size="68" font-weight="800" fill="#FFFFFF" letter-spacing="-2">duo</text>
+    <text x="56" y="152" font-size="26" font-weight="600" fill="#C9D1F5">Sonnet works. Opus checks.</text>
+    <text x="56" y="186" font-size="18" fill="#8E9AC9">Your Claude subscription limit lasts longer.</text>
+
+    <rect x="56" y="222" width="400" height="76" rx="16" fill="url(#son)"/>
+    <text x="84" y="256" font-size="22" font-weight="700" fill="#FFFFFF">Sonnet</text>
+    <text x="84" y="282" font-size="15" fill="#FFF1E8">does the work, as hard as each task needs</text>
+
+    <text x="480" y="268" font-size="30" font-weight="700" fill="#8E9AC9" text-anchor="middle">+</text>
+
+    <rect x="504" y="222" width="400" height="76" rx="16" fill="url(#opu)"/>
+    <text x="532" y="256" font-size="22" font-weight="700" fill="#FFFFFF">Opus</text>
+    <text x="532" y="282" font-size="15" fill="#EEEAFF">checks the plan and the result, nothing more</text>
+
+    <g font-size="13" font-weight="600">
+      <rect x="560" y="52" width="92" height="30" rx="15" fill="#2A2650"/><text x="606" y="72" fill="#C9D1F5" text-anchor="middle">1 · plan</text>
+      <rect x="664" y="52" width="108" height="30" rx="15" fill="#2A2650"/><text x="718" y="72" fill="#C9D1F5" text-anchor="middle">2 · build</text>
+      <rect x="784" y="52" width="120" height="30" rx="15" fill="#2A2650"/><text x="844" y="72" fill="#C9D1F5" text-anchor="middle">3 · verify</text>
+      <rect x="640" y="94" width="130" height="30" rx="15" fill="#2A2650"/><text x="705" y="114" fill="#C9D1F5" text-anchor="middle">4 · review</text>
+      <rect x="782" y="94" width="122" height="30" rx="15" fill="#2A2650"/><text x="843" y="114" fill="#C9D1F5" text-anchor="middle">5 · done</text>
+    </g>
+  </g>
+</svg>

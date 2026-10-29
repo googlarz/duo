@@ -1,143 +1,157 @@
-# duo
+<p align="center">
+  <img src="assets/duo-hero.svg" alt="duo: Sonnet works. Opus checks." width="100%">
+</p>
 
-**Sonnet works. Opus checks. Your usage limit lasts.**
+<p align="center">
+  <b>A Claude Code plugin for people on a Claude subscription.</b><br>
+  Give it a task. Sonnet does the work, Opus double-checks it, and your usage limit lasts longer.
+</p>
 
-`duo` is an orchestrated delivery flow for [Claude Code](https://claude.com/claude-code) built for **Claude subscriptions (Pro / Max)**, where the budget is not dollars but your 5-hour and weekly usage limit. Most orchestration flows put the most expensive model on every task. `duo` does the opposite: a Sonnet does the volume, and Opus is called in only at the moments where a second, stronger opinion is worth its price.
+---
 
-```
-/duo:duo add rate limiting to the upload endpoint and cover it with tests
-```
+## The problem
 
-> Built on [savvy-flow](https://github.com/JohnnyVizz/claude-kit) by [JohnnyVizz](https://github.com/JohnnyVizz). This repo is a fork that keeps savvy-flow, savvy-progress and session-band intact and adds `duo`, the subscription flavour. See [Credits](#credits).
+On a Pro or Max plan you don't pay per task, you spend a **usage limit**. Run everything on the biggest model and the limit disappears by lunch. Run everything on a smaller one and you ship mistakes.
 
-## Why duo
+## The idea
 
-| On a subscription you want... | duo does this |
-| --- | --- |
-| Sonnet for the bulk of the work | Workers are Sonnet at effort `low`, `medium`, `high`, `xhigh` or `max`, chosen per task |
-| Opus where it pays off | Opus is a gate, not a worker: one plan critique, at most two reviews, and a last-resort escalation |
-| The right model for each stage | Explore, plan, implement, verify and review each run on the model that fits the stage |
-| No self-grading | Tests run in a fresh verifier agent; the review is by a different model than the one that wrote the code |
-| No surprise limit walls | The flow reads your usage windows and downshifts at 80%, stops starting tasks at 95% |
-| To see what happened | With the optional panel you see every task, its model, effort, steps and cost |
+Do what a good team does: the **builder** does the hours of work, and the **inspector** looks at the plan and the result.
 
-## How it works
-
-```mermaid
-flowchart LR
-  A[Explore<br/>Haiku / Sonnet low] --> B[Plan<br/>your session model]
-  B --> C{Plan gate<br/>Opus, once}
-  C --> D[Implement<br/>Sonnet low..max]
-  D --> E[Verify<br/>fresh Sonnet]
-  E --> F{Review<br/>Opus, on the combined diff}
-  F -->|defects| D
-  D -. stuck after 2 attempts .-> G[duo-opus<br/>only with your OK]
-```
-
-| Stage | Agent | Model / effort |
+|  | Who | What they do |
 | --- | --- | --- |
-| Explore | Explore subagent | Haiku or Sonnet low |
-| Plan | the orchestrator | your session model |
-| Plan gate (once) | `duo-advisor` | Opus high, no Edit/Write |
-| Implement | `duo-low` … `duo-max` | Sonnet, effort by difficulty |
-| Verify | `duo-verifier` | Sonnet medium, fresh agent, no Edit/Write |
-| Review | `duo-reviewer` | Opus high, no Edit/Write |
-| Last resort | `duo-opus` | Opus xhigh, only with your consent |
+| 🔨 | **Sonnet** | Reads your code, writes the changes, runs the tests. Works harder on hard tasks, lighter on easy ones. |
+| 🔍 | **Opus** | Criticises the plan before work starts and reviews the result at the end. Doesn't do the grunt work. |
 
-### Choosing the effort
+You just describe the task.
 
-| Tier | Use for |
-| --- | --- |
-| `duo-low` | mechanical edits, renames, boilerplate, config, small fixes |
-| `duo-medium` | standard features, bugs with a known cause, a few files |
-| `duo-high` | delicate but well-understood work: refactors, invariants, many edge cases |
-| `duo-xhigh` | unfamiliar or messy code, unclear root cause (never the default) |
-| `duo-max` | very complex logic, or a bug that survived xhigh |
-
-The default ceiling is `high`. A task goes up only after a failed attempt, and never more than two attempts: a failure jumps straight to the tier the defect list implies instead of climbing rung by rung.
-
-### Built-in cost guards
-
-- **Opus budget:** advisor at most once, reviewer at most twice per flow (one early only for risky tasks, one final), `duo-opus` only if you agree.
-- **Fast path:** two tasks or fewer, or a diff under about 50 lines, skips the advisor and reviewer. Only the verifier runs.
-- **Usage-aware:** at 80% of any window, the plan gate and early review are skipped and workers are capped at `medium`. At 95% nothing new starts and the flow reports where it stands, so you can resume after the reset.
-- **Small task?** Don't use a flow at all. `opusplan` or plain Sonnet is cheaper.
-
-## Install
-
-In Claude Code:
+## Try it
 
 ```
 /plugin marketplace add googlarz/duo
 /plugin install duo@duo
 ```
 
-Restart the session, then run `/duo:duo <task>`.
+Restart Claude Code, then:
 
-**Shorter command.** The docs say a bare skill name also resolves unless another command uses it, so try `/duo <task>` first (not confirmed on every version). If it does not resolve, copy the skill out of the plugin:
-
-```bash
-git clone https://github.com/googlarz/duo.git ~/duo
-cp -R ~/duo/plugins/duo/skills/duo ~/.claude/skills/
+```
+/duo:duo add a dark mode toggle to the settings page and make sure the tests pass
 ```
 
-That gives `/duo <task>`; the agents stay namespaced (`duo:duo-high`) and the skill finds them either way.
+That's it. `duo` plans the work, splits it up, builds it, tests it, has it reviewed, and tells you what changed.
 
-### Optional: usage awareness
+> Shorter command: try plain `/duo <task>`. If your version doesn't accept it, copy the skill once:
+> `git clone https://github.com/googlarz/duo.git ~/duo && cp -R ~/duo/plugins/duo/skills/duo ~/.claude/skills/`
 
-For the 80% / 95% behaviour, `duo` needs your usage windows. Claude Code hands them to the statusline command (Pro/Max only), so a small helper saves them to a file the skill reads. Setup takes two minutes: [plugins/duo/docs/usage-limits.md](plugins/duo/docs/usage-limits.md). Without it everything else still works, the flow just doesn't downshift on its own.
+## What a run looks like
 
-### Optional: see inside the tasks
+*An illustration of the flow, not a recording.*
 
-[`savvy-progress`](plugins/savvy-progress) adds a progress bar above the prompt and a live agents panel. For duo it shows every task with the model and effort that ran it (for example `duo-high · Sonnet 5.5 · high`), plus an expandable details view per task: its steps (planned, current, done), tokens, context, cost and time.
+```
+You      /duo:duo add rate limiting to the upload endpoint, with tests
+
+duo      Plan: 3 tasks.  1 middleware (medium)  2 config (low)  3 tests (medium)
+Opus     Plan check: add a limit per user, not per IP. Otherwise fine.
+Sonnet   Task 1 done · Task 2 done · Task 3 done
+Sonnet   Tests: 14 passed, 0 failed (a separate checker ran them)
+Opus     Review: one missing edge case in the middleware, sent back
+Sonnet   Fixed, tests re-run: 15 passed
+duo      Done. 4 files changed. Opus was used twice: plan check and review.
+```
+
+## Why you'll like it
+
+- **Your limit goes further.** Sonnet carries the load. Opus is used at most three times per run (one plan check, up to two reviews), and only when it pays off.
+- **Fewer mistakes get through.** The code is tested by a fresh checker and reviewed by a different model than the one that wrote it.
+- **It's in control of itself.** Never more than two attempts per task. It asks you before it reaches for Opus as a worker.
+- **It watches your limit** *(optional, 2 min setup)*. At 80% used it cuts back; at 95% it stops starting new work and tells you where it stands, so you can pick up after the reset.
+- **You can see what happened** *(optional)*. A panel shows every task, which model did it, how hard it worked, its steps and its cost.
+
+## Questions
+
+**Do I need Pro or Max?** `duo` works wherever Sonnet and Opus are available to you. The limit-watching feature needs Pro or Max, because only those plans report usage.
+
+**Will it burn my Opus limit?** That's what it's built to avoid. Opus is a reviewer, not a worker: one plan check and up to two reviews per run. Small jobs (two tasks, or a tiny change) skip Opus altogether.
+
+**Is it worth it for a small fix?** No. For small things, use plain Sonnet or Claude Code's built-in `opusplan`. `duo` pays off on multi-step work.
+
+**What if I hit my limit mid-run?** If you've set up the limit helper, `duo` stops before it hits the wall and reports which tasks are done and which are waiting. Say "continue" after the reset.
+
+**Does it change my files without asking?** The workers edit your project, like any Claude Code run, and you see every change. The plan checker, reviewer and verifier have no Edit or Write tools (they keep a shell for running checks, and are instructed not to change files).
+
+**Which Claude Code version?** Recent. `duo` uses subagents with per-agent model and effort. Effort levels `low` to `max` are available on Sonnet 5.5; on older Sonnets an unsupported level falls back to the closest lower one.
+
+## Go further (optional)
+
+<details>
+<summary><b>Let duo watch your usage limit</b></summary>
+
+Claude Code passes your usage windows to the statusline command (Pro/Max only). A tiny helper saves them to a file that `duo` reads before it plans. Setup takes about two minutes: **[usage-limits guide](plugins/duo/docs/usage-limits.md)**. Without it, everything else still works; `duo` just won't downshift on its own.
+
+</details>
+
+<details>
+<summary><b>See inside every task</b></summary>
 
 ```
 /plugin install savvy-progress@duo
 ```
 
-If the mod does not show up after installing from the marketplace, load it by hand: `claude --plugin-dir ~/duo/plugins/savvy-progress` (for every session, put the folder in `CLAUDE_CODE_PLUGIN_DIRS` under `env` in `~/.claude/settings.json`; separate several folders with `:`).
+Adds a progress bar and a live agents panel. For duo you see each task with the model and effort that ran it (for example `duo-high · Sonnet 5.5 · high`), and you can expand a task to see its steps (planned, current, done), tokens, context, cost and time. If the mod doesn't appear after installing, load it by hand: `claude --plugin-dir ~/duo/plugins/savvy-progress`.
 
-## What's in this repo
+</details>
 
-| Plugin | Type | What it does |
+<details>
+<summary><b>How it decides who does what</b></summary>
+
+| Stage | Agent | Model / effort |
 | --- | --- | --- |
-| [duo](plugins/duo) | skill + agents + hooks | The subscription flow described above |
-| [savvy-progress](plugins/savvy-progress) | mod | Progress bar and agents panel; shows any subagents, understands the duo tiers |
-| [savvy-flow](plugins/savvy-flow) | skill + agents | The original flow by JohnnyVizz: the session model plans, tiered Opus/Fable workers implement. For API-style budgets |
-| [session-band](plugins/session-band) | mod | Band above the prompt: turn, speed, cost, prompt-cache countdown and context |
+| Explore | Explore subagent | Haiku or Sonnet low |
+| Plan | the orchestrator | your session model |
+| Plan check (once) | `duo-advisor` | Opus high, no Edit/Write |
+| Build | `duo-low` … `duo-max` | Sonnet, effort by difficulty |
+| Verify | `duo-verifier` | Sonnet medium, fresh agent, no Edit/Write |
+| Review | `duo-reviewer` | Opus high, no Edit/Write |
+| Last resort | `duo-opus` | Opus xhigh, only with your consent |
 
-Each plugin stands alone; install only what you need.
+| Effort | Used for |
+| --- | --- |
+| `low` | renames, boilerplate, config, small fixes |
+| `medium` | standard features, bugs with a known cause |
+| `high` | delicate work: refactors, many edge cases (default ceiling) |
+| `xhigh` | unfamiliar code, unclear root cause (after a failure or when explicit) |
+| `max` | very complex logic, or a bug that survived xhigh |
 
-## Status and honest caveats
+Opus budget per run: plan check at most once, review at most twice (one early only for risky tasks, one final). Full rules: [SKILL.md](plugins/duo/skills/duo/SKILL.md).
 
-Verified: all plugins pass `claude plugin validate`; the panel mod's test suite passes; the helper scripts were run against sample input; the effort levels and frontmatter fields duo relies on were checked against the Claude Code docs.
+</details>
 
-Not verified yet, because it needs a real session: the statusline helper in live use, the limit hook firing on a real rate-limit event, how the details view looks on screen, and whether a bare `/duo` resolves on your version. Mods are built on Claude Code's early-access function hooks and may change between releases. If you try it, please open an issue with what you saw.
+<details>
+<summary><b>Honest status</b></summary>
 
-## Develop
+Verified: all plugins pass `claude plugin validate`; the panel's tests pass; the helper scripts ran against sample input; the effort levels and agent settings `duo` relies on were checked against the Claude Code docs.
 
-```bash
-claude plugin validate .                              # catalog and all plugins
-cd plugins/savvy-progress && claude plugin test .     # mod tests
-plugins/duo/scripts/gen-agents.sh                     # regenerate duo's six worker agents from one shared body
-```
+Not yet verified, because it needs a live session: the statusline helper in daily use, the rate-limit hook firing on a real limit, how the details view looks on screen, and whether a bare `/duo` resolves on your version. The panel is built on Claude Code's early-access hooks and may change between releases. If something looks off, please open an issue with what you saw.
 
-Plugin layout:
+</details>
 
-```
-.claude-plugin/marketplace.json   the catalog `/plugin marketplace add` reads
-plugins/<name>/
-  .claude-plugin/plugin.json      manifest
-  skills/<skill>/SKILL.md         a skill
-  agents/*.md                     subagents it ships
-  hooks/hooks.json                hooks (duo's rate-limit hook; a mod's entry point)
-  scripts/ docs/                  helpers and notes
-```
+<details>
+<summary><b>What's in this repo</b></summary>
+
+| Plugin | What it is |
+| --- | --- |
+| [duo](plugins/duo) | The subscription flow above |
+| [savvy-progress](plugins/savvy-progress) | Progress bar and agents panel; understands the duo tiers |
+| [savvy-flow](plugins/savvy-flow) | The original flow by JohnnyVizz (tiered Opus/Fable workers), for API-style budgets |
+| [session-band](plugins/session-band) | Band above the prompt: turn, speed, cost, cache countdown, context |
+
+Develop: `claude plugin validate .` · `cd plugins/savvy-progress && claude plugin test .` · `plugins/duo/scripts/gen-agents.sh` (regenerates duo's six worker agents from one shared body).
+
+</details>
+
+---
 
 ## Credits
 
-`duo` stands on the work of **[JohnnyVizz](https://github.com/JohnnyVizz)**: the savvy-flow orchestration pattern, the tiered-worker idea, the savvy-progress panel and session-band all come from [JohnnyVizz/claude-kit](https://github.com/JohnnyVizz/claude-kit). duo keeps that code and its licence, and adapts the idea to subscription budgets. Thank you.
+`duo` stands on the work of **[JohnnyVizz](https://github.com/JohnnyVizz)**. The savvy-flow orchestration pattern, the tiered-worker idea, the savvy-progress panel and session-band all come from [JohnnyVizz/claude-kit](https://github.com/JohnnyVizz/claude-kit). This repo started as a fork of it, keeps that code and its licence, and adapts the idea to subscription budgets. Thank you.
 
-## License
-
-MIT, see [LICENSE](LICENSE). Original work © 2026 johnnyvizz; duo additions © 2026 googlarz.
+MIT licence, see [LICENSE](LICENSE). Original work © 2026 johnnyvizz; duo additions © 2026 googlarz.
