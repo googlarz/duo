@@ -13,8 +13,8 @@
   <rect width="960" height="340" rx="22" fill="url(#bg)"/>
   <g font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Helvetica, Arial, sans-serif">
     <text x="56" y="108" font-size="68" font-weight="800" fill="#FFFFFF" letter-spacing="-2">duo</text>
-    <text x="56" y="152" font-size="26" font-weight="600" fill="#C9D1F5">See and steer the agents your AI spawns.</text>
-    <text x="56" y="186" font-size="16" fill="#8E9AC9">You describe the task. Claude creates the agents. duo shows you every one and lets you set the rules.</text>
+    <text x="56" y="152" font-size="26" font-weight="600" fill="#C9D1F5">See every agent your AI spawns.</text>
+    <text x="56" y="186" font-size="16" fill="#8E9AC9">You describe the task. Claude creates the agents and picks the model for each stage. duo shows you all of it.</text>
 
     <rect x="56" y="222" width="400" height="76" rx="16" fill="url(#son)"/>
     <text x="84" y="256" font-size="22" font-weight="700" fill="#FFFFFF">Sonnet</text>

@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="assets/duo-hero.svg" alt="duo: see and steer the agents your AI spawns" width="100%">
+  <img src="assets/duo-hero.svg" alt="duo: see every agent your AI spawns" width="100%">
 </p>
 
 <p align="center">
-  <b>Visibility and control over the many AI agents Claude spawns for you.</b><br>
+  <b>See every AI agent Claude spawns for you: what it does, and on which model.</b><br>
   Built for Claude Pro / Max, where every agent spends your usage limit.
 </p>
 
@@ -17,14 +17,14 @@ On a subscription that's your usage limit draining in a place you can't look.
 
 ## What duo gives you
 
-You still just describe the task. The AI still creates the agents. `duo` adds the two things that were missing:
+You describe the task. The AI creates the agents and picks the model for each stage. You don't configure anything. `duo` adds the two things that were missing:
 
 | | |
 | --- | --- |
 | 👁 **Visibility** | A live panel with **every agent**: its task, the **model and effort** it runs on, its steps, progress, tokens, cost and time. Open any task to see its steps. |
-| 🎛 **Control** | **You set the rules** the AI follows: which model runs each stage, how hard each task works, how much Opus is allowed, what needs your approval, and what happens when your limit runs low. |
+| 🧠 **The right model, automatically** | The AI picks the model for each stage and the effort for each task by itself, within built-in guardrails (an Opus budget, a cap on retries, a check when your limit runs low). Nothing for you to set up. |
 
-### Control: the right model at every stage
+### The right model at every stage, chosen automatically
 
 <p align="center">
   <img src="assets/duo-stages.svg" alt="The seven duo stages and the model used at each: explore on Haiku or Sonnet, plan on your session model, plan check on Opus, build on Sonnet from low to max effort, verify on Sonnet, review on Opus, last resort on Opus" width="100%">
@@ -32,13 +32,13 @@ You still just describe the task. The AI still creates the agents. `duo` adds th
 
 Sonnet does the volume. Opus is a gate (a plan check and a review), not a worker. Small jobs skip the Opus stages.
 
-### Control: what happens to every task
+### What happens to every task
 
 <p align="center">
   <img src="assets/duo-task.svg" alt="Each task: brief, built by Sonnet, checked by a fresh checker, reviewed by Opus, accepted. Failures go back with a defect list, max two attempts, Opus as a worker only with your approval" width="100%">
 </p>
 
-The agents run in parallel where they can, but not without limits: **two attempts per task**, a fresh checker that did not write the code, and **Opus as a worker only if you say yes**. Design decisions (anything users see) stay with you; agents don't invent UI.
+The agents run in parallel where they can, within guardrails: **two attempts per task**, a fresh checker that did not write the code, and **Opus as a worker only if you say yes** (the one thing it asks you). Design decisions (anything users see) stay with you; agents don't invent UI.
 
 ### Visibility: open any agent
 
@@ -64,12 +64,12 @@ Restart Claude Code, then give it a task:
 /duo:duo add rate limiting to the upload endpoint and cover it with tests
 ```
 
-duo plans, spawns the agents, runs them, and at the end tells you what changed, what was verified, what was left out, and which models did the work. If the panel doesn't appear, load it by hand: `claude --plugin-dir ~/duo/plugins/savvy-progress`.
+duo plans, the AI spawns the agents and runs them, and at the end you get a report: what changed, what was verified, what was left out, and which models did the work. If the panel doesn't appear, load it by hand: `claude --plugin-dir ~/duo/plugins/savvy-progress`.
 
 > Shorter command: try plain `/duo <task>`. If your version doesn't accept it, copy the skill once:
 > `git clone https://github.com/googlarz/duo.git ~/duo && cp -R ~/duo/plugins/duo/skills/duo ~/.claude/skills/`
 
-## Control over your usage limit
+## Built-in guardrails for your usage limit (automatic)
 
 - **Opus budget:** one plan check and up to two reviews per run. Opus as a worker only with your consent.
 - **Effort ceiling:** tasks run at `high` at most; `xhigh` and `max` only after a failed attempt or when the cause is unclear.
@@ -78,7 +78,7 @@ duo plans, spawns the agents, runs them, and at the end tells you what changed, 
 
 ## Questions
 
-**Do I have to create or configure agents?** No. Claude creates them. duo ships ready-made roles (`duo-low` … `duo-max`, `duo-verifier`, `duo-advisor`, `duo-reviewer`, `duo-opus`), and the AI picks the right ones for each task.
+**Do I have to create, configure or steer anything?** No. Claude creates the agents and chooses the models; you just watch. duo ships ready-made roles (`duo-low` … `duo-max`, `duo-verifier`, `duo-advisor`, `duo-reviewer`, `duo-opus`), and the AI picks the right ones for each task.
 
 **Will it burn my Opus limit?** That's what the rules prevent: one plan check and up to two reviews per run, none on small jobs.
 
