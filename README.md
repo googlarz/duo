@@ -50,10 +50,10 @@ Every task row shows the model and effort that ran it. When many agents run at o
 
 ### Meet the crabs
 
-Every agent is a small animated pixel crab, and its costume tells you the job. The panel picks the costume from the stage name: a detective for `truth` and `verify`, a robot for `build`, a rocket for `deploy`, a doctor for `fix`, a ninja for `perf`, a librarian for `docs`, and more. Unknown stage names get the plain crab.
+Every agent is a small animated pixel crab, and its costume tells you the job. The panel picks the costume from the stage name: a detective for `truth` and `verify`, a robot for `build`, a rocket for `deploy`, a doctor for `fix`, a ninja for `perf`, a librarian for `docs`, a cyborg cop for `enforce`, a fire ninja for `hotfix`, an ice ninja for `cache`, and more. Unknown stage names get the plain crab.
 
 <p align="center">
-  <img src="assets/duo-crabs.svg" alt="All the panel's crab costumes: fable, heavy, careful, medium, light, explore, wizard, monocle, detective, judge, hardhat, explorer, bulb, quill, crown, rocket, robot, scientist, artist, ninja, doctor, librarian, viking, cleaner, and the plain crab" width="70%">
+  <img src="assets/duo-crabs.svg" alt="All the panel's crab costumes: fable, heavy, careful, medium, light, explore, wizard, monocle, detective, judge, hardhat, explorer, bulb, quill, crown, rocket, robot, scientist, artist, ninja, doctor, librarian, viking, cleaner, cyborg, thunder, fireninja, iceninja, and the plain crab" width="70%">
 </p>
 
 ## Try it

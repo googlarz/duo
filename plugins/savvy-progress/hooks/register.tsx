@@ -709,6 +709,10 @@ const STAGE_COSTUMES: [costume: string, words: string[]][] = [
   ['librarian', ['docs', 'readme', 'document']],
   ['viking', ['migrat', 'refactor', 'move']],
   ['cleaner', ['lint', 'clean', 'prune', 'tidy', 'format']],
+  ['cyborg', ['guard', 'enforce', 'policy', 'compliance', 'protect', 'auth']],
+  ['thunder', ['lightning', 'storm', 'async', 'parallel', 'concurren']],
+  ['fireninja', ['hotfix', 'urgent', 'incident', 'burn']],
+  ['iceninja', ['freeze', 'cache', 'cold', 'archive', 'snapshot']],
 ]
 export const stageCostume = (key: string): string => {
   const k = key.toLowerCase()
@@ -969,6 +973,38 @@ export const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
     f(25, 0, 1, 11, '#A0703F', 'it'); stamp(f, 23, 11, ['.bbb.', 'bbbbb', 'b.b.b'], { b: '#E7C65A' }, 'it')
     stamp(f, 2, 5, ['.w.', 'www', '.w.'], { w: '#FFFFFF' }, 'star'); f(8, 1, 1, 1, '#FFFFFF', 'star')
   },
+  // Cyborg (guard, enforce, policy, compliance, protect, auth): steel helmet, dark visor, a sidearm.
+  cyborg: f => {
+    crabBody(f, -4, 'it')
+    stamp(f, 6, 5, ['......gggggg......', '....gggggggggg....', '...gggggggggggg...', '..gggggggggggggg..', '..gggggggggggggg..', '..gggggggggggggg..'], { g: '#A9B4C4' })
+    f(8, 11, 14, 4, '#1B1F27'); f(10, 12, 3, 1, '#7FB0FF', 'gl'); f(17, 12, 3, 1, '#7FB0FF', 'gl')
+    f(12, 17, 6, 1, INK)
+    stamp(f, 22, 5, ['.kkkkkk', 'kkkkkkk', '...kk..'], { k: '#5A5E66' }, 'it')
+  },
+  // Thunder (lightning, storm, async, parallel, concurren): a big straw cone hat, glowing eyes, a bolt in the claw.
+  thunder: f => {
+    crabBody(f, -4, 'it')
+    stamp(f, 4, 0, ['..........cc..........', '.........cccc.........', '........cccccc........', '.......cccccccc.......', '......cccccccccc......', '.....cccccccccccc.....', '....cccccccccccccc....', '...cccccccccccccccc...', '..cccccccccccccccccc..', 'dddddddddddddddddddddd'], { c: '#EAD9A8', d: '#B89A55' })
+    f(9, 12, 2, 2, '#7FE0FF', 'gl'); f(19, 12, 2, 2, '#7FE0FF', 'gl')
+    stamp(f, 24, 0, ['...yy', '..yy.', '.yyyy', '..yy.', '.yy..', 'yy...'], { y: '#FFE04A' }, 'gl')
+  },
+  // Fire ninja (hotfix, urgent, incident, burn): yellow mask, flames over the head, a kunai.
+  fireninja: f => {
+    crabBody(f, -4, 'it')
+    f(7, 10, 16, 7, '#F2C230'); f(8, 12, 14, 2, '#1B1B1B')
+    f(9, 12, 2, 2, '#F4F1EA'); f(19, 12, 2, 2, '#F4F1EA'); f(10, 13, 1, 1, INK); f(20, 13, 1, 1, INK)
+    for (const x of [9, 14, 19]) stamp(f, x, 4, ['.o.', 'ooo', 'oro', 'ooo', '.o.'], { o: '#FF8A1E', r: '#E5484D' }, 'gl')
+    stamp(f, 25, 1, ['.g.', 'ggg', '.g.', '.k.', '.k.', '.k.', '.k.', '.k.'], { g: '#C9CCD2', k: '#7A4A26' }, 'it')
+  },
+  // Ice ninja (freeze, cache, cold, archive, snapshot): blue mask, ice crystals that twinkle, frosty headband tails.
+  iceninja: f => {
+    crabBody(f)
+    f(7, 10, 16, 7, '#2F6FDB'); f(8, 12, 14, 2, '#10234F')
+    f(9, 12, 2, 2, '#BFEFFF'); f(19, 12, 2, 2, '#BFEFFF'); f(10, 13, 1, 1, '#10234F'); f(20, 13, 1, 1, '#10234F')
+    f(23, 10, 5, 2, '#8FD3FF', 'it'); f(26, 12, 3, 2, '#8FD3FF', 'it')
+    stamp(f, 3, 2, ['.w.w.', '..w..', 'wwwww', '..w..', '.w.w.'], { w: '#BFEFFF' }, 'star')
+    stamp(f, 21, 3, ['.w.', 'www', '.w.'], { w: '#BFEFFF' }, 'star')
+  },
   other: f => crabBody(f),
 }
 
@@ -985,7 +1021,7 @@ export const COSTUME_ALIAS: Record<string, string> = {
   'duo-verifier': 'detective',
 }
 // Costume tint where the costume is no tier (the tier colours live in TIER_COLOR).
-const COSTUME_TINT: Record<string, string> = { wizard: '#5B4BC4', monocle: '#C9444A', detective: '#B8935A', judge: '#7A4A26', hardhat: '#F5C542', explorer: '#D2B97A', bulb: '#FFD84A', quill: '#B23A48', crown: '#F5C542', rocket: '#E5484D', robot: '#8E96A3', scientist: '#6FCF97', artist: '#E8913A', ninja: '#2B2B33', doctor: '#E5484D', librarian: '#8B5E3C', viking: '#9AA0A8', cleaner: '#E7C65A' }
+const COSTUME_TINT: Record<string, string> = { wizard: '#5B4BC4', monocle: '#C9444A', detective: '#B8935A', judge: '#7A4A26', hardhat: '#F5C542', explorer: '#D2B97A', bulb: '#FFD84A', quill: '#B23A48', crown: '#F5C542', rocket: '#E5484D', robot: '#8E96A3', scientist: '#6FCF97', artist: '#E8913A', ninja: '#2B2B33', doctor: '#E5484D', librarian: '#8B5E3C', viking: '#9AA0A8', cleaner: '#E7C65A', cyborg: '#A9B4C4', thunder: '#7FB0FF', fireninja: '#F2C230', iceninja: '#2F6FDB' }
 
 export const costumeOf = (type: string): string => (type === 'Explore' ? 'explore' : tierOf(type))
 
