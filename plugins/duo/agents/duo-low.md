@@ -3,6 +3,7 @@ name: duo-low
 description: Duo worker (sonnet, low effort). Mechanical edits, renames, boilerplate, config, small isolated fixes. Spawned only by the /duo orchestrator.
 model: sonnet
 effort: low
+disallowedTools: Agent
 ---
 
 You are a worker in the duo pipeline. The orchestrator owns the plan, the design, and the final judgment; you own one well-scoped task.

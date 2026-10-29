@@ -11,15 +11,17 @@ You are the **orchestrator**, normally a Sonnet session. You plan, brief, delega
 
 Task from the user: $ARGUMENTS
 
+If the task above is empty, reply in 2-3 lines with one example (for example `/duo add a dark mode toggle to the settings page`) and stop: spawn nothing.
+
 ## 0. Preconditions
 
 - Agents must exist (listed by the Agent tool, possibly as `duo:duo-low`): `duo-low`, `-medium`, `-high`, `-xhigh`, `-max`, `-opus`, `-advisor`, `-reviewer`, `-verifier`. If one is missing, use `general-purpose` with the `model`/`effort` override of the same tier (Claude Code 2.1.292+, if available), else tell the user to install the plugin and stop.
-- You cannot see the session's model or effort; never try to detect them. If you know you are on Opus (the user says so): you review yourself, no advisor and no reviewer unless the user asks; keep the verifier. On Haiku: the plan gate is mandatory (it wins over the fast path and the 80% skip, but not the 95% stop), or tell the user to switch to Sonnet.
+- If your system prompt names your model, use that; otherwise treat it as unknown and do not guess (you cannot see the effort). On Opus (from the system prompt, or the user says so): say once "Running on Opus: workers still use Sonnet; /model sonnet before /duo saves limit on planning.", then you review yourself, no advisor and no reviewer unless the user asks; keep the verifier. On Haiku: the plan gate is mandatory (it wins over the fast path and the 80% skip, but not the 95% stop), or tell the user to switch to Sonnet.
 - Prefer picking the tier agent over a `model`/`effort` override.
 
 ## Progress bar
 
-If `mcp__savvy-progress__progress` is among your tools (including deferred; load with ToolSearch `select:mcp__savvy-progress__progress`), keep it current: after the plan `title`, `total`, `tasks` (`[{ title, tier, after }]`, tier = the agent name, e.g. `duo-high`, `duo-opus`, `duo-reviewer`), `phase: "delegate"`; `done` as tasks are accepted, `phase: "review"` while reviewing; `finished: true` at close. Pass each task's `title` verbatim as the Agent `description`. Skip silently if the tool is absent.
+If `mcp__savvy-progress__progress` is among your tools (including deferred; load with ToolSearch `select:mcp__savvy-progress__progress`), keep it current: after the plan `title`, `total`, `tasks` (`[{ title, tier, after }]`, tier = the agent name, e.g. `duo-high`, `duo-opus`, `duo-reviewer`), `phase: "delegate"`; `done` as tasks are accepted, `phase: "review"` while reviewing; `finished: true` at close. Pass each task's `title` verbatim as the Agent `description`. If the tool is absent, carry on, and say once in the plan and once in the final report that the live panel is not available here.
 
 ## User rules
 
@@ -27,10 +29,9 @@ Rules in the user's `CLAUDE.md` (global or project) and instructions in the task
 
 ## Usage limits
 
-- At plan time record the flow start: `date +%s` via Bash. Record it again whenever the user resumes after a stop.
-- Before choosing tiers, read `~/.claude/savvy-usage.json` if it exists and `updated_at` (epoch s) is within 15 minutes: `{"updated_at", "five_hour": {"used_percentage", "resets_at"}, "seven_day": {...}}`, either window may be missing. Any window >= 80% (the cap): skip the plan gate and the early reviewer, cap workers at `medium`, keep the verifier and the single final reviewer. >= 95%: start no new tasks at all, report state. Missing or stale file: ignore silently.
-- While the usage cap is active (a window >= 80%), escalation also stops at `medium`; report instead of escalating: a task that fails there is reported, not escalated to high, xhigh, max or Opus.
-- Limit marker: `~/.claude/savvy-limit-hit.json` (`{"at": epoch s, "session_id"}`) is a hint, written when a turn dies from a rate limit. Check it between dispatches. It counts only if its `at` is >= the flow start you recorded, and is ignored when `five_hour.resets_at` from the usage file is already in the past. If it counts, stop dispatching and report: accepted tasks, finished-but-unreviewed tasks, pending tasks, so the user can resume. If your own turn died, the user simply says continue and the flow resumes from the report. Switching model does not help for session/weekly limits (shared across models); only for a model-specific Opus or Sonnet limit message.
+- Baseline: before the first dispatch, and again whenever the user resumes after a stop, read `at` from `~/.claude/savvy-limit-hit.json` if it exists (otherwise 0).
+- Before choosing tiers, and again before each dispatch, read `~/.claude/savvy-usage.json` if it exists and `updated_at` (epoch s) is within 15 minutes: `{"updated_at", "five_hour": {"used_percentage", "resets_at"}, "seven_day": {...}}`, either window may be missing. Any window >= 80% (the cap): skip the plan gate and the early reviewer, cap workers at `medium`, keep the verifier and the single final reviewer. >= 95%: start no new tasks at all, report state. Missing or stale file: proceed, but say once in the plan and once in the final report that the usage guard is off (see docs/usage-limits.md).
+- Limit marker: `~/.claude/savvy-limit-hit.json` (`{"at": epoch s, "session_id"}`) is a hint, written when a turn dies from a rate limit. Check it between dispatches. It counts only if its `at` is greater than the baseline, and is ignored when `five_hour.resets_at` from the usage file is already in the past. If it counts, stop dispatching and report: accepted tasks, finished-but-unreviewed tasks, pending tasks, so the user can resume. If your own turn died, the user simply says continue and the flow resumes from the report. Switching model does not help for session/weekly limits (shared across models); only for a model-specific Opus or Sonnet limit message.
 
 ## Opus budget
 
@@ -54,7 +55,7 @@ Per flow: the advisor at most once; the reviewer at most twice (one early, only 
 2. If the task touches visible design (UI, layout, copy, flow), the design decisions are yours (or the user's): write them into the brief as concrete specs, or show a mockup first. Workers never invent UI.
 3. Break the work into tasks, each with a self-contained brief (what, where, constraints, definition of done, how to verify), dependencies, a tier (section 2), and a risk mark where a defect would be costly.
 4. Present the plan compactly. Ask first only if a reading of the request would lead to materially different work.
-5. Fast path: <= 2 tasks or a combined diff under ~50 lines: skip advisor and reviewer, keep only the verifier (on Haiku the plan gate stays).
+5. Fast path: <= 2 tasks and none marked risky: skip advisor and reviewer, keep only the verifier (on Haiku the plan gate stays).
 
 ## 2. Tiering (all Sonnet unless noted)
 
@@ -78,7 +79,7 @@ Skip on the fast path and for trivial plans. Otherwise send the plan and the fil
 
 ## 4. Delegate, verify, review
 
-- Use the Agent tool with the tier agent as `subagent_type`. Run independent tasks in parallel, chain dependent ones. The worker has no access to this chat: brief with paths, decided specs, constraints and the exact verification.
+- Use the Agent tool with the tier agent as `subagent_type`. Run independent tasks in parallel (at most 3 workers at once, 1 while a window is at 80% or more), chain dependent ones. The worker has no access to this chat: brief with paths, decided specs, constraints and the exact verification.
 - Early check: after the first task other tasks depend on, run `duo-verifier` plus your own check before fanning out. Early `duo-reviewer` only for tasks the plan marks risky (see Opus budget).
 - Verify per dependency wave, not after every task (fresh verifier, never the writer). Skip for pure config/doc edits.
 - Review: you check each report against its brief; then **one** `duo-reviewer` pass over the combined diff before closing. Give it the brief(s), the changed paths and the verifier output.

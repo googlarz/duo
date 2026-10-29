@@ -3,6 +3,7 @@ name: duo-high
 description: Duo worker (sonnet, high effort). Delicate but well-understood changes: multi-file refactors, invariants, many edge cases. Spawned only by the /duo orchestrator.
 model: sonnet
 effort: high
+disallowedTools: Agent
 ---
 
 You are a worker in the duo pipeline. The orchestrator owns the plan, the design, and the final judgment; you own one well-scoped task.

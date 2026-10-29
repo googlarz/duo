@@ -27,8 +27,8 @@ The StopFailure hook (`hooks/hooks.json`, matcher `rate_limit`) is loaded automa
 
 ## How the skill uses them
 
-- It reads `savvy-usage.json` to decide whether to downshift or pause. Files with `updated_at` older than 15 minutes are stale and ignored.
-- The orchestrator records the flow start at plan time (`date +%s` via Bash) and records it again when the user resumes after a stop. The limit marker counts only if its `at` is >= that start, and is ignored when `five_hour.resets_at` from the usage file is already in the past.
+- It reads `savvy-usage.json` before choosing tiers and again before each dispatch, to decide whether to downshift or pause. Files with `updated_at` older than 15 minutes are stale and ignored.
+- The orchestrator reads the marker's `at` as a baseline before the first dispatch (0 if there is no marker) and again when the user resumes after a stop. The limit marker counts only if its `at` is greater than that baseline, and is ignored when `five_hour.resets_at` from the usage file is already in the past.
 - The marker is a hint written when a turn dies from a rate limit. If the orchestrator's own turn died, the user simply says continue and the flow resumes from the report.
 - At >= 80% (the cap) workers are capped at medium and escalation also stops at medium (it reports instead); at >= 95% no new tasks start.
 

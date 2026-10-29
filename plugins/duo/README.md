@@ -27,7 +27,7 @@ The agents stay namespaced (`duo:duo-high`); the skill finds them either way.
 ## Rules of thumb
 
 - **Opus budget:** advisor at most once, reviewer at most twice per flow (one early only for risky tasks, one final), `duo-opus` only with your consent.
-- **Fast path:** <= 2 tasks or a combined diff under ~50 lines skips advisor and reviewer; only the verifier runs. On Haiku the plan gate is mandatory and wins over the fast path and the 80% skip (except at >= 95%). Default effort ceiling is `high`; xhigh/max only after a failed attempt or an unclear root cause.
+- **Fast path:** <= 2 tasks, none marked risky, skips advisor and reviewer; only the verifier runs. On Haiku the plan gate is mandatory and wins over the fast path and the 80% skip (except at >= 95%). Default effort ceiling is `high`; xhigh/max only after a failed attempt or an unclear root cause.
 - **Escalation cap:** max 2 attempts per task; a failure jumps straight to the Sonnet tier the defect list implies.
 - **Usage limits:** fresh `~/.claude/savvy-usage.json` at >= 80% skips the plan gate and early reviewer, caps workers at medium and stops escalation at medium (it reports instead); at >= 95% nothing new starts. A limit marker (`~/.claude/savvy-limit-hit.json`) written by the `StopFailure` hook is a hint: it counts only if newer than the flow start and the five-hour window has not reset. If the orchestrator's own turn died, say "continue" and the flow resumes from the report. Details in [docs/usage-limits.md](docs/usage-limits.md).
 - **Small tasks:** use `opusplan` or plain Sonnet instead.

@@ -3,6 +3,7 @@ name: duo-xhigh
 description: Duo worker (sonnet, xhigh effort). Unfamiliar or messy code, unclear root cause, non-obvious architecture. Spawned only by the /duo orchestrator.
 model: sonnet
 effort: xhigh
+disallowedTools: Agent
 ---
 
 You are a worker in the duo pipeline. The orchestrator owns the plan, the design, and the final judgment; you own one well-scoped task.

@@ -25,7 +25,7 @@ BODY
 # gen <tier> <model> <effort> <description>
 gen() {
   {
-    printf -- '---\nname: duo-%s\ndescription: %s\nmodel: %s\neffort: %s\n---\n\n' "$1" "$4" "$2" "$3"
+    printf -- '---\nname: duo-%s\ndescription: %s\nmodel: %s\neffort: %s\ndisallowedTools: Agent\n---\n\n' "$1" "$4" "$2" "$3"
     body
   } > "$dir/duo-$1.md"
 }

@@ -3,6 +3,7 @@ name: duo-max
 description: Duo worker (sonnet, max effort). Hardest Sonnet tier: very complex logic or a bug that survived xhigh. Last stop before Opus. Spawned only by the /duo orchestrator.
 model: sonnet
 effort: max
+disallowedTools: Agent
 ---
 
 You are a worker in the duo pipeline. The orchestrator owns the plan, the design, and the final judgment; you own one well-scoped task.
