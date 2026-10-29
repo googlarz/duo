@@ -8,6 +8,7 @@ const agents = atom({ plugin: 'savvy-progress', key: 'agents' } as const, [])
 const panel = atom({ plugin: 'savvy-progress', key: 'panel' } as const, {
   isCompact: false,
   isDoneCollapsed: false,
+  isFinishedOpen: false,
   autoOpenedFor: '',
   openIds: [] as string[],
 })
@@ -68,6 +69,8 @@ const STRINGS = {
     failed: 'error',
     after: 'after',
     tokensWord: 'tokens',
+    agentOne: 'agent',
+    agentFew: 'agents',
     agentsCount: 'agents',
     isRunning: 'running',
     isFinished: 'finished',
@@ -88,6 +91,17 @@ const STRINGS = {
     status: 'Status',
     timeWord: 'Time',
     stepsWord: 'Steps',
+    groupModels: 'Models',
+    groupStages: 'Stages',
+    runningNow: 'Running now',
+    moreRunning: 'more running',
+    startedSoFar: 'started so far',
+    nFinished: 'finished',
+    totalWord: 'total',
+    doneN: 'done',
+    failedN: 'failed',
+    shareOn: 'of tokens on',
+    apiEq: 'API-equivalent',
     tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
@@ -106,6 +120,8 @@ const STRINGS = {
     failed: 'ошибка',
     after: 'после',
     tokensWord: 'токенов',
+    agentOne: 'агент',
+    agentFew: 'агента',
     agentsCount: 'агентов',
     isRunning: 'работает',
     isFinished: 'завершён',
@@ -126,6 +142,17 @@ const STRINGS = {
     status: 'Статус',
     timeWord: 'Время',
     stepsWord: 'Шаги',
+    groupModels: 'Модели',
+    groupStages: 'Этапы',
+    runningNow: 'Сейчас работают',
+    moreRunning: 'ещё работают',
+    startedSoFar: 'запущено',
+    nFinished: 'завершено',
+    totalWord: 'всего',
+    doneN: 'готово',
+    failedN: 'с ошибкой',
+    shareOn: 'токенов на',
+    apiEq: 'по ценам API',
     tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
@@ -144,6 +171,8 @@ const STRINGS = {
     failed: 'שגיאה',
     after: 'אחרי',
     tokensWord: 'טוקנים',
+    agentOne: 'סוכן',
+    agentFew: 'סוכנים',
     agentsCount: 'סוכנים',
     isRunning: 'פועל',
     isFinished: 'הסתיים',
@@ -164,6 +193,17 @@ const STRINGS = {
     status: 'סטטוס',
     timeWord: 'זמן',
     stepsWord: 'שלבים',
+    groupModels: 'מודלים',
+    groupStages: 'שלבי עבודה',
+    runningNow: 'פועלים עכשיו',
+    moreRunning: 'פועלים נוספים',
+    startedSoFar: 'הופעלו עד כה',
+    nFinished: 'הסתיימו',
+    totalWord: 'סך הכול',
+    doneN: 'הושלמו',
+    failedN: 'נכשלו',
+    shareOn: 'מהטוקנים ב־',
+    apiEq: 'לפי מחירי API',
     tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'אחר' },
     effort: { low: 'נמוך', medium: 'בינוני', high: 'גבוה', xhigh: 'גבוה מאוד', max: 'מקסימלי' },
   },
@@ -179,6 +219,17 @@ const isRtl = () => lang === 'he'
 // Tier and effort words as shown; anything unknown shows as it came.
 const tierWord = (tier: string): string => (tr().tier as Record<string, string>)[tier] ?? tier
 const effortWord = (effort: string): string => (tr().effort as Record<string, string>)[effort] ?? effort
+
+// "1 agent", "2 агента", "5 агентов": Russian has a third form for 2-4.
+export const agentsWord = (n: number): string => {
+  const s = tr()
+  if (lang === 'ru') {
+    const a = n % 10
+    const b = n % 100
+    return a === 1 && b !== 11 ? s.agentOne : a >= 2 && a <= 4 && (b < 10 || b >= 20) ? s.agentFew : s.agentsCount
+  }
+  return n === 1 ? s.agentOne : s.agentsCount
+}
 
 const isRussian = (v: unknown): boolean => typeof v === 'string' && /^(ru|russian|рус)/i.test(v.trim())
 const isHebrew = (v: unknown): boolean => typeof v === 'string' && /^(he|iw|hebrew|עברית)/i.test(v.trim())
@@ -542,6 +593,120 @@ const totals = (list: AgentRun[], at: number) => {
   return { cost, tokens, time: list.length ? end - start : 0 }
 }
 
+// --- grouped view: a big fan-out (many workers sharing a `stage:name` label) is
+// shown per stage, not per agent. The engine reports no workflow phase, so the
+// label prefix is the only grouping signal there is.
+
+export const GROUP_THRESHOLD = 8
+export const isGrouped = (count: number): boolean => count > GROUP_THRESHOLD
+
+// 'truth:A10' -> 'truth'. No usable prefix -> 'other'.
+export const groupKey = (description: string): string => {
+  const i = (description ?? '').indexOf(':')
+  if (i <= 0) return 'other'
+  const key = description.slice(0, i).trim().toLowerCase()
+  return key.length >= 1 && key.length <= 24 ? key : 'other'
+}
+
+export type Group = { key: string; agents: AgentRun[]; done: number; running: number; failed: number; model: string }
+
+const mostCommon = (xs: string[]): string => {
+  const n = new Map<string, number>()
+  for (const x of xs) n.set(x, (n.get(x) ?? 0) + 1)
+  let best = ''
+  let max = 0
+  for (const [x, c] of n) if (c > max) [best, max] = [x, c]
+  return best
+}
+
+// Groups in order of their earliest start; ties keep the order the agents came in.
+export const groupAgents = (list: AgentRun[]): Group[] => {
+  const by = new Map<string, AgentRun[]>()
+  for (const a of list) {
+    const k = groupKey(a.description)
+    const group = by.get(k)
+    if (group) group.push(a)
+    else by.set(k, [a])
+  }
+  return [...by.entries()]
+    .map(([key, agents]) => ({
+      key,
+      agents,
+      done: agents.filter(a => a.status === 'done').length,
+      running: agents.filter(a => a.status === 'running').length,
+      failed: agents.filter(a => a.status === 'failed').length,
+      model: mostCommon(agents.map(runModel)),
+      first: Math.min(...agents.map(a => a.startedAt)),
+    }))
+    .sort((a, b) => a.first - b.first)
+    .map(({ first: _first, ...g }) => g)
+}
+
+export const tally = (list: AgentRun[]) => {
+  const running = list.filter(a => a.status === 'running').length
+  const failed = list.filter(a => a.status === 'failed').length
+  return { total: list.length, running, failed, done: list.length - running - failed, finished: list.length - running }
+}
+
+// Unknown models get a warm taupe, not the grey of secondary text.
+const MODEL_COLORS: Record<string, string> = { opus: '#8E78FF', sonnet: '#F07A3E', haiku: '#2FA67A', fable: '#7F77DD', mythos: '#7F77DD' }
+export const modelColor = (name: string): string => MODEL_COLORS[name.split(' ')[0]?.toLowerCase() ?? ''] ?? '#9C8F7E'
+const MODEL_NAME_MAX = 22
+
+export type ModelRow = { name: string; agents: number; tokens: number; pct: number; color: string }
+
+// Per model: agents, tokens and share of tokens (share of agents while no tokens are counted yet).
+export const modelMix = (list: AgentRun[]): { rows: ModelRow[]; isMixed: boolean; top: ModelRow | undefined } => {
+  const by = new Map<string, { agents: number; tokens: number }>()
+  for (const a of list) {
+    const name = modelName(a.model)
+    const m = by.get(name) ?? { agents: 0, tokens: 0 }
+    by.set(name, { agents: m.agents + 1, tokens: m.tokens + a.tokens })
+  }
+  const sumTokens = [...by.values()].reduce((s, m) => s + m.tokens, 0)
+  const sumAgents = list.length
+  const rows = [...by.entries()]
+    .map(([name, m]) => ({
+      name,
+      ...m,
+      pct: Math.round(100 * (sumTokens ? m.tokens / sumTokens : sumAgents ? m.agents / sumAgents : 0)),
+      color: modelColor(name),
+    }))
+    .sort((a, b) => b.tokens - a.tokens || b.agents - a.agents)
+  return { rows, isMixed: rows.length > 1, top: rows[0] }
+}
+
+// Segment widths of the model share bar: at least 2px each, the last takes the rest, never negative;
+// when the minimums alone overflow, the others shrink so the segments still fill the bar exactly.
+export const barWidths = (pcts: number[], barW: number): number[] => {
+  if (!pcts.length) return []
+  const head = pcts.slice(0, -1).map(p => Math.max(2, Math.round((barW * p) / 100)))
+  const sum = head.reduce((n, w) => n + w, 0)
+  if (sum > barW) {
+    const scaled = head.map(w => Math.floor((w * barW) / sum))
+    scaled[0] = (scaled[0] ?? 0) + barW - scaled.reduce((n, w) => n + w, 0)
+    return [...scaled, 0]
+  }
+  return [...head, barW - sum]
+}
+
+// Stage keyword -> costume; a key matches a keyword or starts with it ("reviewer", "truth2").
+const STAGE_COSTUMES: [costume: string, words: string[]][] = [
+  ['wizard', ['plan', 'advisor']],
+  ['monocle', ['review', 'reviewer']],
+  ['detective', ['truth', 'verify', 'verifier', 'check', 'test']],
+  ['judge', ['value', 'judge', 'rank']],
+  ['hardhat', ['risk', 'security', 'audit']],
+  ['explorer', ['map', 'explore', 'scout']],
+  ['bulb', ['ideate', 'brainstorm', 'design']],
+  ['quill', ['synthesize', 'write', 'summary']],
+]
+export const stageCostume = (key: string): string => {
+  const k = key.toLowerCase()
+  return STAGE_COSTUMES.find(([, words]) => words.some(w => k === w || k.startsWith(w)))?.[0] ?? 'other'
+}
+export const STAGE_COSTUME_NAMES: string[] = STAGE_COSTUMES.map(([c]) => c)
+
 // --- desktop drawings: each row is one SVG, as the band above the prompt is.
 
 // The pane's backdrop: a dotted grid as tall as the content laid over it; the
@@ -615,12 +780,16 @@ const CRAB_CSS = `<style>
 .c-light.run .la{animation-duration:.25s}.c-light.run .lb{animation-duration:.25s;animation-delay:-.125s}
 .c-light.run .flag{transform-origin:0 50%;animation:wave .25s steps(1) infinite}
 @keyframes wave{50%{transform:skewY(-12deg) scaleX(.85)}}
+.c-detective.run .it,.c-explorer.run .it,.c-quill.run .it{animation:scan 1s steps(1) infinite}
+.c-detective.run .gl,.c-hardhat.run .gl,.c-bulb.run .gl{animation:blink 1s steps(1) infinite -.5s}
+.c-wizard.run .star{animation:blink .5s steps(1) infinite -.25s}
+.c-judge.run .it{transform-origin:100% 100%;animation:twist .5s ease-in-out infinite}
 .c-explore.run .it{transform-origin:50% 100%;animation:fence .5s ease-in-out infinite}
 @keyframes fence{50%{transform:rotate(25deg)}}
 @media (prefers-reduced-motion: reduce){.run,.run g{animation:none!important}}
 </style>`
 
-const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
+export const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
   // Fable: astronaut in a glass dome; floats instead of walking, the antenna and the star blink.
   fable: (f, t) => {
     crabBody(f)
@@ -664,22 +833,86 @@ const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
     f(7, 11, 11, 1, INK); f(18, 11, 4, 3, INK)
     f(27, 6, 1, 9, '#C9CCD2', 'it'); f(26, 15, 3, 1, '#7A4A26', 'it')
   },
+  // Wizard (plan, advisor): pointy hat with a star that twinkles.
+  wizard: (f, t) => {
+    crabBody(f)
+    stamp(f, 6, 0, ['........pp........', '.......pppp.......', '.......pppp.......', '......ppyppp......', '......pyyypp......', '.....pppyppp.....', '.....pppppppp.....', '...pppppppppppp...', '.bbbbbbbbbbbbbbbb.', 'bbbbbbbbbbbbbbbbbb'], { p: '#5B4BC4', y: '#F5C542', b: t })
+    f(11, 8, 1, 1, '#F5C542', 'star'); f(18, 2, 1, 1, '#F5C542', 'star')
+  },
+  // Monocle (review, reviewer): a gold-rimmed lens over one eye on a chain, and a bow tie.
+  monocle: (f, t) => {
+    crabBody(f)
+    stamp(f, 16, 8, ['..gggg..', '.g....g.', 'g......g', 'g......g', 'g......g', 'g......g', '.g....g.', '..gggg..'], { g: '#F2C84B' })
+    f(17, 10, 2, 1, 'rgba(255,255,255,.55)')
+    for (let i = 0; i < 9; i++) f(23 + (i % 2), 16 + i, 1, 1, '#F2C84B')
+    stamp(f, 12, 19, ['rr...rr', 'rrrkrrr', 'rr...rr'], { r: t, k: INK })
+  },
+  // Detective (truth, verify, check, test, verifier): deerstalker, magnifier held in the left claw.
+  detective: (f, t) => {
+    crabBody(f)
+    stamp(f, 6, 3, ['......tttttt......', '....tttttttttt....', '...tttttttttttt...', '.tttttttttttttttt.', 'dddddddddddddddddd'], { t: '#B8935A', d: '#7A5A30' })
+    f(6, 6, 18, 1, '#8A6A3A'); f(6, 8, 2, 3, '#7A5A30'); f(22, 8, 2, 3, '#7A5A30')
+    stamp(f, 0, 5, ['.kkk.', 'k...k', 'k...k', 'k...k', '.kkk.'], { k: '#3A3A3C' }, 'it')
+    f(1, 6, 3, 3, 'rgba(169,214,245,.7)', 'it'); f(2, 10, 2, 5, '#7A4A26', 'it'); f(1, 6, 1, 1, '#fff', 'gl')
+  },
+  // Judge (value, judge, rank): white wig, gavel in the raised claw.
+  judge: f => {
+    crabBody(f, -4, 'it')
+    stamp(f, 5, 4, ['......wwwwww......', '....wwwwwwwwww....', '...wwwwwwwwwwww...', '..wwwwwwwwwwwwww..', '.wwww..........www', '.www............ww', '.ww..............w'], { w: '#F1EFE9' })
+    stamp(f, 23, 1, ['kkkkk', 'kkkkk'], { k: '#7A4A26' }, 'it')
+    f(25, 3, 1, 7, '#A0703F', 'it')
+  },
+  // Hardhat (risk, security, audit): yellow hat with a lamp and a stripe.
+  hardhat: (f, t) => {
+    crabBody(f)
+    stamp(f, 6, 4, ['.....yyyyyyyy.....', '...yyyyyyyyyyyy...', '..yyyyyyyyyyyyyy..', '..yyyyyyyyyyyyyy..', '.yyyyyyyyyyyyyyyy.', 'dddddddddddddddddd'], { y: '#F5C542', d: '#C99A1E' })
+    f(13, 5, 4, 2, '#FBE08A', 'gl'); f(14, 6, 2, 1, '#fff', 'gl')
+    f(6, 8, 18, 1, t)
+  },
+  // Explorer (map, explore, scout): safari hat, binoculars in the raised claw.
+  explorer: f => {
+    crabBody(f, -4, 'it')
+    stamp(f, 5, 3, ['......cccccc......', '.....cccccccc.....', '.....cccccccc.....', '.....bbbbbbbb.....', '..cccccccccccccc..', 'cccccccccccccccccc'], { c: '#D2B97A', b: '#6B4F2A' })
+    stamp(f, 22, 3, ['kk.kk', 'kk.kk', 'kkkkk', 'bb.bb'], { k: '#3A3A3C', b: '#7FB5E0' }, 'it')
+  },
+  // Bulb (ideate, brainstorm, design): a lightbulb over the head that glows.
+  bulb: f => {
+    crabBody(f)
+    stamp(f, 11, 0, ['..yyyy..', '.yyyyyy.', 'yywyyyyy', 'yyyyyyyy', '.yyyyyy.', '..yyyy..'], { y: '#FFD84A', w: '#fff' }, 'gl')
+    stamp(f, 12, 6, ['gggggg', '.kkkk.'], { g: '#9A9EA6', k: '#5A5E66' })
+    f(8, 2, 2, 1, '#FFD84A', 'gl'); f(20, 2, 2, 1, '#FFD84A', 'gl'); f(9, 5, 2, 1, '#FFD84A', 'gl'); f(19, 5, 2, 1, '#FFD84A', 'gl')
+  },
+  // Quill (synthesize, write, summary): beret and a quill pen in the raised claw.
+  quill: f => {
+    crabBody(f, -4, 'it')
+    stamp(f, 5, 4, ['......rrrrrrr.......', '....rrrrrrrrrrr.....', '..rrrrrrrrrrrrrrr...', '.rrrrrrrrrrrrrrrrr..', '..dddddddddddddd....'].map(r => r.slice(0, 18)), { r: '#B23A48', d: '#7E2632' })
+    f(10, 3, 1, 1, '#7E2632')
+    stamp(f, 24, 0, ['...ww', '..www', '.www.', 'www..', 'w.k..', '..k..', '.k...'], { w: '#F4F1EA', k: INK }, 'it')
+  },
+  // Crown (duo-opus): gold crown with a red and a blue jewel.
+  crown: f => {
+    crabBody(f)
+    stamp(f, 8, 3, ['.g....gg....g.', '.gg..gggg..gg.', '.gggggggggggg.', '.gggrgggbgggg.', '.gggggggggggg.', '.dddddddddddd.'], { g: '#F5C542', d: '#C99A1E', r: '#E5484D', b: '#4A8BE8' })
+  },
   other: f => crabBody(f),
 }
 
 // The duo tiers reuse an existing crab; their own colour still tints it.
-const COSTUME_ALIAS: Record<string, string> = {
+export const COSTUME_ALIAS: Record<string, string> = {
   'duo-low': 'light',
   'duo-medium': 'medium',
   'duo-high': 'careful',
   'duo-xhigh': 'heavy',
   'duo-max': 'fable',
-  'duo-opus': 'fable',
-  'duo-advisor': 'heavy',
-  'duo-reviewer': 'careful',
-  'duo-verifier': 'light',
+  'duo-opus': 'crown',
+  'duo-advisor': 'wizard',
+  'duo-reviewer': 'monocle',
+  'duo-verifier': 'detective',
 }
-const costumeOf = (type: string): string => (type === 'Explore' ? 'explore' : tierOf(type))
+// Costume tint where the costume is no tier (the tier colours live in TIER_COLOR).
+const COSTUME_TINT: Record<string, string> = { wizard: '#5B4BC4', monocle: '#C9444A', detective: '#B8935A', judge: '#7A4A26', hardhat: '#F5C542', explorer: '#D2B97A', bulb: '#FFD84A', quill: '#B23A48', crown: '#F5C542' }
+
+export const costumeOf = (type: string): string => (type === 'Explore' ? 'explore' : tierOf(type))
 
 const CRAB_SCALE = 1.1
 
@@ -694,7 +927,7 @@ const crab = (x: number, y: number, costume: string, dim = false, isWalking = fa
   }
   const look = COSTUME_ALIAS[costume] ?? costume
   const draw = COSTUMES[look] ?? ((g: Fill) => crabBody(g))
-  draw(f, colorOf(costume))
+  draw(f, COSTUME_TINT[look] ?? colorOf(costume))
   const group = (cls: string) => `<g class="${cls}">${(groups.get(cls) ?? []).join('')}</g>`
   const props = [...groups.keys()].filter(k => k !== 'bd' && k !== 'la' && k !== 'lb')
   const body = `<g class="bd">${(groups.get('bd') ?? []).join('')}${props.map(group).join('')}</g>`
@@ -802,6 +1035,18 @@ const isOpen = (p: Panel, a: AgentRun): boolean => openOf(p).includes(a.id)
 // Not known whether an Svg takes a press, so a plain Button (proven pressable here) under each row toggles the details.
 // Wide (CJK) characters take two columns.
 const wideLen = (t: string): number => [...t].reduce((n, c) => n + ((c.codePointAt(0) ?? 0) >= 0x2e80 ? 2 : 1), 0)
+// Cuts a line to `cols` terminal columns, with an ellipsis when it had to cut.
+const fitCols = (t: string, cols: number): string => {
+  if (wideLen(t) <= cols) return t
+  let out = ''
+  for (const ch of t) {
+    if (wideLen(out + ch) > cols - 1) break
+    out += ch
+  }
+  return out + '…'
+}
+// Pads to `cols` display columns: wide characters count two.
+const padCols = (t: string, cols: number): string => t + ' '.repeat(Math.max(0, cols - wideLen(t)))
 const detailLineCount = (a: AgentRun, at: number, cols: number): number =>
   detailLines(a, at).reduce((n, l) => n + Math.max(1, Math.ceil(wideLen(l) / Math.max(20, cols))), 0)
 
@@ -871,6 +1116,233 @@ const compactSvg = (W: number, list: AgentRun[], planned: Planned[], t: ReturnTy
     `${body}${more ? `<text class="s" ${startText(W, x, 21, false)} font-family="${FONT}" font-size="12">+${more}</text>` : ''}
 <text class="s" ${endText(W, W, 21)} font-family="${FONT}" font-size="12" font-variant-numeric="tabular-nums">≈${fmtCost(t.cost)} · ${fmtTokens(t.tokens)} · ${fmtTime(t.time)}</text>`,
   )
+}
+
+// --- desktop drawings of the grouped view.
+
+const C_DONE = '#3FB68B'
+const C_RUN = '#F5B44A'
+const C_FAIL = '#E5484D'
+const GP = 6
+const STAGE_CRAB = 1.2
+const MAX_SQUARES = 40
+const MAX_FINISHED_ROWS = 60
+
+const fmtSpan = (ms: number): string => {
+  const m = Math.floor(Math.max(0, ms) / 60000)
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : m ? `${m}m ${Math.floor(ms / 1000) % 60}s` : fmtTime(ms)
+}
+
+// An agent type with its own crab keeps it; a plain worker takes its stage's.
+export const agentCostume = (a: AgentRun): string => {
+  const c = costumeOf(a.type)
+  return c !== 'other' ? c : stageCostume(groupKey(a.description))
+}
+
+const crabAt = (W: number, x: number, y: number, costume: string, scale: number, isWalking: boolean): string =>
+  crab(mx(W, x, crabWidth(scale)), y, costume, false, isWalking, scale, isRtl())
+
+const T = (W: number, cls: string, x: number, y: number, size: number, weight: number, text: string, side: 'start' | 'end', extra = ''): string =>
+  `<text class="${cls}" ${side === 'start' ? startText(W, x, y) : endText(W, x, y, true)} font-family="${FONT}" font-size="${size}" font-weight="${weight}"${extra}>${xml(text)}</text>`
+
+const sectionLabel = (W: number, y: number, text: string): string =>
+  T(W, 'm', GP, y, 10.5, 700, isRtl() ? text : text.toUpperCase(), 'start', isRtl() ? '' : ' letter-spacing="1.2"')
+
+const stageBadge = (cx: number, cy: number, kind: 'done' | 'running' | 'failed'): string =>
+  kind === 'done'
+    ? `<circle cx="${cx}" cy="${cy}" r="6.5" fill="${C_DONE}"/><path d="M${cx - 3.2} ${cy}l2.2 2.2 4.2-4.4" fill="none" stroke="#0F2B22" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`
+    : kind === 'failed'
+      ? `<circle cx="${cx}" cy="${cy}" r="6.5" fill="${C_FAIL}"/><path d="M${cx - 2.6} ${cy - 2.6}l5.2 5.2M${cx + 2.6} ${cy - 2.6}l-5.2 5.2" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>`
+      : `<circle cx="${cx}" cy="${cy}" r="6.5" fill="#1d1d1c" stroke="${C_RUN}" stroke-width="1.8"/><circle class="live" cx="${cx}" cy="${cy}" r="2.6" fill="${C_RUN}"/>`
+
+const countsText = (g: { done: number; running: number; failed: number }): string => {
+  const s = tr()
+  return [g.done ? `${g.done} ${s.doneN}` : '', g.running ? `${g.running} ${s.isRunning}` : '', g.failed ? `${g.failed} ${s.failedN}` : ''].filter(Boolean).join(' · ') || `0 ${s.doneN}`
+}
+
+// Header, models and stages, running now: one drawing. Returns the markup and its height.
+export const groupedSvg = (W: number, list: AgentRun[], at: number, title: string, planned: Planned[] = []): { source: string; height: number } => {
+  const s = tr()
+  const out: string[] = []
+  const tl = tally(list)
+  const t = totals(list, at)
+  const rule = (y: number) => `<rect class="k" x="${GP}" y="${y}" width="${W - GP * 2}" height="1"/>`
+  const wide = W - GP * 2
+
+  // Header
+  const headCounts = `${tl.running} ${s.isRunning} · ${tl.done} ${s.doneN}${tl.failed ? ` · ${tl.failed} ${s.failedN}` : ''}`
+  out.push(T(W, 't', GP, 22, 16, 700, fitText(title, 16, Math.max(40, W - GP * 3 - textWidth(headCounts, 12.5))), 'start'))
+  out.push(T(W, 's', W - GP, 22, 12.5, 400, headCounts, 'end'))
+  const seg = (from: number, n: number, color: string) => (n ? `<rect x="${mx(W, GP + from, Math.round((wide * n) / tl.total))}" y="34" width="${Math.round((wide * n) / tl.total)}" height="8" rx="4" fill="${color}"/>` : '')
+  const wd = Math.round((wide * tl.done) / tl.total)
+  const wr = Math.round((wide * tl.running) / tl.total)
+  out.push(`<rect class="k" x="${GP}" y="34" width="${wide}" height="8" rx="4"/>${seg(0, tl.done, C_DONE)}${seg(wd, tl.running, C_RUN)}${seg(wd + wr, tl.failed, C_FAIL)}`)
+  out.push(T(W, 's', GP, 62, 12, 400, `${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`, 'start'))
+  const right = `${fmtSpan(t.time)} ${s.totalWord} · ${fmtTokens(t.tokens)} ${s.tokensWord}`
+  const leftW = textWidth(`${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`, 12)
+  out.push(T(W, 's', W - GP, 62, 12, 400, fitText(right, 12, Math.max(40, wide - leftW - 12)), 'end'))
+
+  // Models
+  let y = 88
+  out.push(sectionLabel(W, y, s.groupModels))
+  const mix = modelMix(list)
+  const narrow = W < 480
+  const barW = narrow ? wide : Math.min(210, Math.round(W * 0.38))
+  const bar = (by: number) => {
+    const shown = mix.rows.filter(r => r.tokens > 0 || !mix.rows.some(q => q.tokens > 0))
+    const widths = barWidths(shown.map(r => r.pct), barW)
+    let x = 0
+    const segs = shown.map((r, i) => {
+      const w = widths[i] ?? 0
+      const mark = `<rect x="${mx(W, (narrow ? GP : W - GP - barW) + x, w)}" y="${by}" width="${w}" height="8" fill="${r.color}"/>`
+      x += w
+      return mark
+    })
+    return `<clipPath id="mb"><rect x="${mx(W, narrow ? GP : W - GP - barW, barW)}" y="${by}" width="${barW}" height="8" rx="4"/></clipPath><g clip-path="url(#mb)"><rect class="k" x="${mx(W, narrow ? GP : W - GP - barW, barW)}" y="${by}" width="${barW}" height="8"/>${segs.join('')}</g>`
+  }
+  const rowsY = y + 18
+  mix.rows.forEach((r, i) => {
+    const ry = rowsY + i * 22
+    const shownName = clip(r.name, MODEL_NAME_MAX)
+    const nameW = textWidth(shownName, 13) + 4
+    out.push(`<circle cx="${mx(W, GP + 5)}" cy="${ry - 4}" r="5" fill="${r.color}"/>`)
+    out.push(T(W, 't', GP + 18, ry, 13, 600, shownName, 'start'))
+    const free = (narrow ? wide : wide - barW - 16) - 18 - nameW - 8
+    out.push(T(W, 's', GP + 18 + nameW + 8, ry, 12, 400, fitText(`${r.agents} ${agentsWord(r.agents)} · ${fmtTokens(r.tokens)} ${s.tokensWord}`, 12, Math.max(30, free)), 'start'))
+  })
+  const rowsEnd = rowsY + (mix.rows.length - 1) * 22
+  if (narrow) {
+    out.push(bar(rowsEnd + 12))
+    y = rowsEnd + 12
+    if (mix.isMixed && mix.top) out.push(T(W, 's', W - GP, y + 24, 12, 400, `${mix.top.pct}% ${s.shareOn} ${clip(mix.top.name.split(' ')[0] ?? '', 14)}`, 'end'))
+    y += mix.isMixed ? 32 : 14
+  } else {
+    out.push(bar(rowsY - 12))
+    if (mix.isMixed && mix.top) out.push(T(W, 's', W - GP, rowsY + 10, 12, 400, `${mix.top.pct}% ${s.shareOn} ${clip(mix.top.name.split(' ')[0] ?? '', 14)}`, 'end'))
+    y = Math.max(rowsEnd, rowsY + 10) + 14
+  }
+  out.push(rule(y))
+
+  // Stages
+  y += 26
+  out.push(sectionLabel(W, y, s.groupStages))
+  y += 12
+  const cw = Math.round(crabWidth(STAGE_CRAB))
+  const textX = GP + 2 + cw + 12
+  for (const g of groupAgents(list)) {
+    const active = g.running > 0
+    const costume = (() => {
+      const c = stageCostume(g.key)
+      return c !== 'other' ? c : agentCostume(g.agents[0] as AgentRun)
+    })()
+    const name = g.key === 'other' ? tierWord('other') : g.key
+    const counts = countsText(g)
+    const countsW = textWidth(counts, 12)
+    const cells = Math.min(g.agents.length, MAX_SQUARES)
+    const more = g.agents.length - cells
+    const moreText = more ? `+${more}` : ''
+    const nCells = cells + (more ? 1 : 0)
+    let rowH = 48
+    let sq: string[] = []
+    let nameMax = Math.max(40, W - textX - GP - countsW - 10)
+    let place = (_i: number) => ({ x: 0, y: 0 })
+    if (active) {
+      const sx = textX + Math.min(Math.max(textWidth(name, 14), textWidth(g.model, 11.5)) + 14, W * 0.3)
+      const per = Math.floor((W - GP - countsW - 12 - sx + 4) / 16)
+      if (per >= 6) {
+        const lines = Math.ceil(nCells / per)
+        const blockH = lines * 16 - 4
+        rowH = Math.max(56, blockH + 18)
+        const top = y + (rowH - blockH) / 2
+        place = i => ({ x: sx + (i % per) * 16, y: top + Math.floor(i / per) * 16 })
+        nameMax = sx - textX - 10
+      } else {
+        const perB = Math.max(1, Math.floor((W - GP - textX + 4) / 16))
+        const lines = Math.ceil(nCells / perB)
+        rowH = 54 + lines * 16
+        place = i => ({ x: textX + (i % perB) * 16, y: y + 52 + Math.floor(i / perB) * 16 })
+      }
+      const order = [...Array(g.done).fill(C_DONE), ...Array(g.running).fill(C_RUN), ...Array(g.failed).fill(C_FAIL)].slice(0, cells)
+      sq = order.map((c, i) => {
+        const p = place(i)
+        return `<rect x="${mx(W, p.x, 12)}" y="${p.y}" width="12" height="12" rx="3" fill="${c}"/>`
+      })
+      if (more) {
+        const p = place(cells)
+        sq.push(T(W, 's', p.x + 2, p.y + 10, 11, 600, moreText, 'start'))
+      }
+    }
+    const cy = y + (active && rowH > 56 && place(0).x === textX ? 28 : rowH / 2)
+    const crabY = cy - Math.round(28 * STAGE_CRAB) / 2
+    const kind = active ? 'running' : g.failed ? 'failed' : 'done'
+    const body = `${crabAt(W, GP + 2, crabY, costume, STAGE_CRAB, active)}${stageBadge(mx(W, GP + 2 + cw - 3), crabY + Math.round(28 * STAGE_CRAB) - 3, kind)}
+${T(W, 't', textX, cy - 4, 14, 700, fitText(name, 14, nameMax), 'start')}${T(W, 's', textX, cy + 12, 11.5, 400, fitText(g.model, 11.5, nameMax), 'start')}${sq.join('')}${T(W, 's', W - GP, cy + 4, 12, 400, counts, 'end')}`
+    out.push(active ? `<g>${body}</g>` : `<g opacity="0.62">${body}</g>`)
+    y += rowH
+    out.push(rule(y))
+  }
+
+  // Running now
+  const running = list.filter(a => a.status === 'running').sort((a, b) => b.startedAt - a.startedAt)
+  if (running.length) {
+    y += 20
+    const shown = running.slice(0, 4)
+    out.push(sectionLabel(W, y, s.runningNow))
+    out.push(T(W, 's', W - GP, y, 11.5, 400, `${shown.length}/${running.length}`, 'end'))
+    y += 10
+    for (const a of shown) {
+      const right = `${fmtTokens(a.tokens)} ${s.tokensWord} · ${fmtTime(elapsed(a, at))}`
+      const rw = textWidth(right, 12)
+      out.push(crabAt(W, GP + 2, y + 5, agentCostume(a), 0.73, true))
+      out.push(T(W, 't', GP + 2 + 22 + 10, y + 20, 13, 600, fitText(a.description || a.type, 13, Math.max(40, W - GP * 2 - 34 - rw - 14)), 'start'))
+      out.push(T(W, 's', W - GP, y + 20, 12, 400, right, 'end', ' font-variant-numeric="tabular-nums"'))
+      y += 30
+    }
+    if (running.length > shown.length) {
+      out.push(T(W, 's', GP + 34, y + 14, 12, 400, `+${running.length - shown.length} ${s.moreRunning}`, 'start'))
+      y += 24
+    }
+    y += 6
+    out.push(rule(y))
+  }
+  if (planned.length) {
+    out.push(T(W, 'm', GP, y + 20, 12, 400, `◷ ${s.planned} · ${planned.length}`, 'start'))
+    y += 30
+  }
+  const height = Math.ceil(y + 4)
+  return { source: svg(W, height, out.join('\n')), height }
+}
+
+// "3.6M tokens · ≈$4.20 API-equivalent" under the Finished toggle.
+export const footerSvg = (W: number, finished: AgentRun[]): string => {
+  const s = tr()
+  const tokens = finished.reduce((n, a) => n + a.tokens, 0)
+  const cost = finished.reduce((n, a) => n + a.costUsd, 0)
+  return svg(W, 22, `<text class="s" ${endText(W, W - GP, 15, true)} font-family="${FONT}" font-size="12" font-variant-numeric="tabular-nums">${xml(`${fmtTokens(tokens)} ${s.tokensWord}`)}<tspan class="m"> · ≈${xml(fmtCost(cost))} ${xml(s.apiEq)}</tspan></text>`)
+}
+
+// Compact rows: still crab, label, model, tokens, time. Capped, newest first.
+// The pane redraws every second while anything runs; finished rows do not change, so the last drawing is kept.
+let finishedMemo = { key: '', out: { source: '', height: 0 } }
+const finishedCached = (W: number, list: AgentRun[], at: number): { source: string; height: number } => {
+  const key = `${W}|${lang}|${finishedRows(list).map(a => `${a.id}${a.status}${a.tokens}`).join(',')}`
+  if (finishedMemo.key !== key) finishedMemo = { key, out: finishedSvg(W, list, at) }
+  return finishedMemo.out
+}
+export const FINISHED_ROW = 30
+export const finishedRows = (list: AgentRun[]): AgentRun[] => list.slice(0, MAX_FINISHED_ROWS)
+export const finishedSvg = (W: number, list: AgentRun[], at: number): { source: string; height: number } => {
+  const s = tr()
+  const rows = finishedRows(list)
+  const out = rows.map((a, i) => {
+    const y = i * FINISHED_ROW
+    const right = `${modelName(a.model)} · ${fmtTokens(a.tokens)} · ${fmtTime(elapsed(a, at))}`
+    const rw = textWidth(right, 11.5)
+    const label = fitText(a.description || a.type, 12.5, Math.max(40, W - GP * 2 - 30 - rw - 12))
+    return `${crabAt(W, GP + 2, y + 6, agentCostume(a), 0.6, false)}${T(W, a.status === 'failed' ? 'f' : 't', GP + 2 + 18 + 10, y + 19, 12.5, 500, label, 'start')}${T(W, 's', W - GP, y + 19, 11.5, 400, right, 'end', ' font-variant-numeric="tabular-nums"')}${a.status === 'failed' ? `<text class="f" ${startText(W, GP + 2 + 18 + 10 + textWidth(label, 12.5) + 6, y + 19, false)} font-family="${FONT}" font-size="10.5">${xml(s.failed)}</text>` : ''}`
+  })
+  const height = Math.max(1, rows.length) * FINISHED_ROW
+  return { source: svg(W, height, `<style>.f{fill:#E5484D}</style>${out.join('')}`), height }
 }
 
 // --- terminal drawing: the same rows in text.
@@ -1171,12 +1643,15 @@ export const register: Register = (on, options) => {
         onPress={() => update($, panel, prev => ({ ...prev, isCompact: !prev.isCompact }))}
       />
     )
+    // The grouped view has its own switch, closed by default: its point is to avoid the long list.
+    const isGroupedView = isGrouped(list.length)
+    const finClosed = isGroupedView ? !p.isFinishedOpen : p.isDoneCollapsed
     const toggleDone = (
       <Button
         key="done"
-        label={`${p.isDoneCollapsed ? (isRtl() ? '◂' : '▸') : '▾'} ${s.finished} · ${finished.length}`}
+        label={`${finClosed ? (isRtl() ? '◂' : '▸') : '▾'} ${s.finished} · ${finished.length}`}
         plain
-        onPress={() => update($, panel, prev => ({ ...prev, isDoneCollapsed: !prev.isDoneCollapsed }))}
+        onPress={() => update($, panel, prev => (isGroupedView ? { ...prev, isFinishedOpen: !prev.isFinishedOpen } : { ...prev, isDoneCollapsed: !prev.isDoneCollapsed }))}
       />
     )
     const toggleRow = (a: AgentRun) => (
@@ -1221,6 +1696,27 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column" gap={1} alignItems={align}>
             <Svg source={compactSvg(W, list, planned, t)} alt={`${list.length} ${s.agentsCount}, ${summary}`} width={W} height={32} />
             {toggleCompact}
+          </Box>
+        )
+      }
+      if (isGrouped(list.length)) {
+        const g = groupedSvg(W, list, at, title || s.pane, planned)
+        const fin = finClosed || finished.length === 0 ? null : finishedCached(W, finished, at)
+        const more = finished.length - finishedRows(finished).length
+        const gridH = g.height + 2 * LINE_H + (finished.length > 0 ? 22 : 0) + (fin ? fin.height : 0) + (fin && more > 0 ? LINE_H : 0)
+        return (
+          <Box flexDirection="column">
+            {gridTiles(gridH).map((tileH, i) => (
+              <Svg key={`grid-${i}`} source={gridSvg(W, tileH)} alt="dotted grid" width={W} height={tileH} />
+            ))}
+            <Box flexDirection="column" position="absolute" top={0} left={0} right={0} alignItems={align}>
+              <Svg source={g.source} alt={`${title || s.pane}: ${summary}`} width={W} height={g.height} />
+              {finished.length > 0 && toggleDone}
+              {fin && <Svg source={fin.source} alt={`${s.finished} · ${finished.length}`} width={W} height={fin.height} />}
+              {fin && more > 0 && <Text dimColor>+{more}</Text>}
+              {finished.length > 0 && <Svg source={footerSvg(W, finished)} alt={s.finished} width={W} height={22} />}
+              {toggleCompact}
+            </Box>
           </Box>
         )
       }
@@ -1303,6 +1799,60 @@ export const register: Register = (on, options) => {
       )
     }
 
+    // Grouped terminal view: one text line per stage; every line is cut to the columns.
+    const groupedTerminal = () => {
+      const tl = tally(list)
+      const mix = modelMix(list)
+      const cut = (text: string) => fitCols(text, cols)
+      const stages = groupAgents(list)
+      const nameW = Math.min(14, Math.max(...stages.map(g => wideLen(g.key === 'other' ? tierWord('other') : g.key))))
+      const running = list.filter(a => a.status === 'running').sort((a, b) => b.startedAt - a.startedAt)
+      return (
+        <Box flexDirection="column" marginTop={1}>
+          <Text wrap="truncate-end">
+            {cut(`${tl.running} ${s.isRunning} · ${tl.done} ${s.doneN}${tl.failed ? ` · ${tl.failed} ${s.failedN}` : ''} · ${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`)}
+          </Text>
+          <Text dimColor wrap="truncate-end">
+            {cut(mix.rows.map(r => `${clip(r.name, MODEL_NAME_MAX)} ${r.agents} · ${fmtTokens(r.tokens)}`).join('  ') + (mix.isMixed && mix.top ? `  ${mix.top.pct}% ${s.shareOn} ${clip(mix.top.name.split(' ')[0] ?? '', 14)}` : ''))}
+          </Text>
+          {stages.map(g => {
+            const name = g.key === 'other' ? tierWord('other') : g.key
+            const counts = countsText(g)
+            const glyph = g.running ? '●' : g.failed ? '✗' : '✓'
+            const used = 2 + nameW + 1 + 1 + wideLen(counts)
+            const bw = Math.max(0, Math.min(16, cols - used - 1))
+            const filled = Math.round((bw * (g.done + g.failed)) / g.agents.length)
+            const bar = bw >= 4 ? `${'█'.repeat(filled)}${'░'.repeat(bw - filled)} ` : ''
+            return (
+              <Text key={g.key} dimColor={!g.running} wrap="truncate-end">
+                {cut(`${glyph} ${padCols(fitCols(name, nameW), nameW)} ${bar}${counts}`)}
+              </Text>
+            )
+          })}
+          {running.slice(0, 4).map(a => (
+            <Text key={a.id} wrap="truncate-end">
+              {cut(`● ${a.description || a.type}  ${fmtTokens(a.tokens)} · ${fmtTime(elapsed(a, at))}`)}
+            </Text>
+          ))}
+          {running.length > 4 && <Text dimColor>{cut(`+${running.length - 4} ${s.moreRunning}`)}</Text>}
+          {finished.length > 0 && toggleDone}
+          {!finClosed &&
+            finishedRows(finished).map(a => (
+              <Text key={a.id} dimColor wrap="truncate-end">
+                {cut(`${a.status === 'failed' ? '✗' : '✓'} ${a.description || a.type}  ${modelName(a.model)} · ${fmtTokens(a.tokens)} · ${fmtTime(elapsed(a, at))}`)}
+              </Text>
+            ))}
+          {!finClosed && finished.length > finishedRows(finished).length && <Text dimColor>+{finished.length - finishedRows(finished).length}</Text>}
+          {planned.length > 0 && <Text dimColor>{cut(`◷ ${s.planned} · ${planned.length}`)}</Text>}
+          {finished.length > 0 && (
+            <Text dimColor wrap="truncate-end">
+              {cut(`${fmtTokens(finished.reduce((n, a) => n + a.tokens, 0))} ${s.tokensWord} · ≈${fmtCost(finished.reduce((n, a) => n + a.costUsd, 0))} ${s.apiEq}`)}
+            </Text>
+          )}
+        </Box>
+      )
+    }
+
     return (
       <Box flexDirection="column">
         <Box flexDirection="row" justifyContent="space-between">
@@ -1328,6 +1878,7 @@ export const register: Register = (on, options) => {
             ))}
           </Text>
         ) : (
+          isGrouped(list.length) ? groupedTerminal() : (
           <Box flexDirection="column" marginTop={1}>
             {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && <Text dimColor>{s.running} · {running.length}</Text>}
@@ -1351,6 +1902,7 @@ export const register: Register = (on, options) => {
               )
             })}
           </Box>
+          )
         )}
       </Box>
     )

@@ -21,7 +21,7 @@ You describe the task. The AI creates the agents and picks the model for each st
 
 | | |
 | --- | --- |
-| 👁 **Visibility** | A live panel with **every agent**: its task, the **model and effort** it runs on, its steps, progress, tokens, cost and time. Open any task to see its steps. |
+| 👁 **Visibility** | A live panel with **every agent**: its task, the **model and effort** it runs on, its steps, progress, tokens, cost and time. Open any task to see its steps. With big fan-outs of many agents it groups them by stage and shows the model mix, so it stays readable. Each stage gets its own animated pixel crab in a costume. |
 | 🧠 **The right model, automatically** | The AI picks the model for each stage and the effort for each task by itself, within built-in guardrails (an Opus budget, a cap on retries, a check when your limit runs low). Works out of the box; shape it with your own rules in `CLAUDE.md` if you want (see below). |
 
 ### The right model at every stage, chosen automatically
@@ -46,7 +46,7 @@ The agents run in parallel where they can, within guardrails: **two attempts per
   <img src="assets/duo-panel.svg" alt="The agents panel: each task with the model it ran on, its step count, and an expandable list of steps" width="100%">
 </p>
 
-Every task row shows the model and effort that ran it. Press Details under a task to see the steps the agent planned and which are done. *(Illustration with example tasks.)*
+Every task row shows the model and effort that ran it. When many agents run at once (more than 8), the panel switches to a grouped view: a summary, the model mix, one row per stage, only the few running agents in view, and the finished ones folded away. Press Details under a task to see the steps the agent planned and which are done. *(Illustration with example tasks.)*
 
 ## Try it
 
@@ -129,7 +129,7 @@ Agents behind the stages: Explore subagent, the orchestrator (your session), `du
 
 Verified: all plugins pass `claude plugin validate`; the panel's tests pass; the helper scripts ran against sample input; the effort levels and agent settings duo relies on were checked against the Claude Code docs.
 
-Not yet verified, because it needs a live session: the statusline helper in daily use, the rate-limit hook firing on a real limit, how the panel's details view looks on screen, and whether a bare `/duo` resolves on your version. The panel is built on Claude Code's early-access hooks and may change between releases. If something looks off, please open an issue with what you saw.
+Not yet verified, because it needs a live session: the statusline helper in daily use, the rate-limit hook firing on a real limit, how the panel's details and grouped views look in the real app, and whether a bare `/duo` resolves on your version. The panel is built on Claude Code's early-access hooks and may change between releases. If something looks off, please open an issue with what you saw.
 
 </details>
 
