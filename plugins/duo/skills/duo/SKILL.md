@@ -21,6 +21,10 @@ Task from the user: $ARGUMENTS
 
 If `mcp__savvy-progress__progress` is among your tools (including deferred; load with ToolSearch `select:mcp__savvy-progress__progress`), keep it current: after the plan `title`, `total`, `tasks` (`[{ title, tier, after }]`, tier = the agent name, e.g. `duo-high`, `duo-opus`, `duo-reviewer`), `phase: "delegate"`; `done` as tasks are accepted, `phase: "review"` while reviewing; `finished: true` at close. Pass each task's `title` verbatim as the Agent `description`. Skip silently if the tool is absent.
 
+## User rules
+
+Rules in the user's `CLAUDE.md` (global or project) and instructions in the task itself override the defaults in this file: model and effort preferences, the Opus budget, usage thresholds, fast-path size, review depth. Follow them. Exception: `duo-opus` as a worker still needs the user's explicit yes (a rule that pre-approves Opus counts), and a read-only role stays read-only. Environment overrides (`CLAUDE_CODE_SUBAGENT_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`) can silently replace the tier's model or effort; if you suspect that, say so in the report.
+
 ## Usage limits
 
 - At plan time record the flow start: `date +%s` via Bash. Record it again whenever the user resumes after a stop.
