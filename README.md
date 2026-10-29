@@ -22,7 +22,13 @@ Do what a good team does: the **builder** does the hours of work, and the **insp
 | 🔨 | **Sonnet** | Reads your code, writes the changes, runs the tests. Works harder on hard tasks, lighter on easy ones. |
 | 🔍 | **Opus** | Criticises the plan before work starts and reviews the result at the end. Doesn't do the grunt work. |
 
-You just describe the task.
+You just describe the task. And the model isn't fixed: it changes at every stage of the job.
+
+<p align="center">
+  <img src="assets/duo-stages.svg" alt="The seven duo stages and the model used at each: explore on Haiku or Sonnet, plan on your session model, plan check on Opus, build on Sonnet from low to max effort, verify on Sonnet, review on Opus, last resort on Opus" width="100%">
+</p>
+
+Small jobs (two tasks, or a tiny change) skip the two Opus stages. The usage-limit helper can also trim stages when your limit runs low (see below). If you install the optional panel, you see each stage's model live, per task.
 
 ## Try it
 
@@ -103,15 +109,7 @@ Adds a progress bar and a live agents panel. For duo you see each task with the 
 <details>
 <summary><b>How it decides who does what</b></summary>
 
-| Stage | Agent | Model / effort |
-| --- | --- | --- |
-| Explore | Explore subagent | Haiku or Sonnet low |
-| Plan | the orchestrator | your session model |
-| Plan check (once) | `duo-advisor` | Opus high, no Edit/Write |
-| Build | `duo-low` … `duo-max` | Sonnet, effort by difficulty |
-| Verify | `duo-verifier` | Sonnet medium, fresh agent, no Edit/Write |
-| Review | `duo-reviewer` | Opus high, no Edit/Write |
-| Last resort | `duo-opus` | Opus xhigh, only with your consent |
+Agents behind the stages: Explore subagent, the orchestrator (your session), `duo-advisor` (plan check, no Edit/Write), `duo-low` … `duo-max` (build), `duo-verifier` (no Edit/Write), `duo-reviewer` (no Edit/Write), `duo-opus` (last resort).
 
 | Effort | Used for |
 | --- | --- |
