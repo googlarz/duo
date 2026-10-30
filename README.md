@@ -1,10 +1,10 @@
 # duo: see every AI agent Claude spawns for you
 
 <p align="center">
-  <img src="assets/duo-panel-plan-2.jpg" alt="The agents panel for a plan of fourteen tasks in four stages: a card with its own crab per task, arrows from what each task waits for, green for done, amber for running, red for a failed task, dashed for tasks still waiting; each card names its model with a dot in the model's colour and shows the effort as rising bars; on top, the job's name, how far it is and a progress bar, and the limit; a failed card gives its reason, a running one what it is reading" width="709">
+  <img src="assets/duo-panel-live.png" alt="The agents panel after a real run: a ten-task audit of duo-progress itself in four stages, every card green and ticked; each card has its own crab, the model that did the task (Sonnet 5.5 at low, medium and high effort, Opus 5.5 for the final review) with its effort as rising bars, and the time it took; arrows show what waited for what; on top, the job's name, the usage meters for the 5-hour and weekly windows, '10/10 done, 7m 8s, this run 5% of the 5-hour window' and a progress bar" width="709">
 </p>
 
-<p align="center"><em>The panel on a sample plan of 14 tasks (rendered from simulated events, not a live run: the times, the limit and the agents' actions are made up).</em></p>
+<p align="center"><em>A real run: ten agents audit the plugin's own code in four stages (Sonnet workers, one Opus review at the end). It took 7 minutes and used 5% of the 5-hour window.</em></p>
 
 On a big job, Claude Code starts helper agents by itself. By default you can't see what they are doing, which model each one runs on, or what they cost you. **duo shows every one of them live**: its task, model, effort, steps and tokens, plus how much of your usage limit you have used. You don't create or steer the agents; you watch.
 
