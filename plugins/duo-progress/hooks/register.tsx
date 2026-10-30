@@ -1446,7 +1446,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
   const depth = Math.max(0, ...layers)
   // Cards are taller when some title needs two lines (decided from the titles, so it does not change while the job runs).
   const two = !compact && rows.some(r => textWidth(cardLabel(r), 12) > cw - 50)
-  const ch = compact ? 46 : two ? 70 : 58
+  const ch = compact ? 46 : two ? 82 : 70
   const place = new Map<number, { x: number; y: number }>()
   let y = 6
   for (let l = 0; l <= depth; l++) {
@@ -1480,6 +1480,12 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const edge = status === 'failed' ? C_FAIL : status === 'running' ? C_RUN : status === 'stalled' ? C_CHECK : status === 'done' ? C_DONE : '#9a9a96'
     const pips = a && a.status === 'running' && a.stepTotal && a.stepTotal <= 10 ? a.stepTotal : 0
     const sub = pips ? '' : !a ? tierWord(tier) : a.status === 'failed' ? s.failed : isQuiet ? `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : a.status === 'running' ? (a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : (a.action ?? fmtTime(elapsed(a, at)))) : fmtTime(elapsed(a, at))
+    // Which model does the task: the one that ran it, or the one it is planned for. A dot in its colour; the name when there is room.
+    const modelText = a ? runModel(a) : tierModel(tier)
+    const dotColor = modelColor(a ? modelName(a.model) : modelText)
+    const model = compact
+      ? `<circle cx="${mx(W, to.x + cw - 12, 0)}" cy="${to.y + ch - 15}" r="3.5" fill="${dotColor}"/>`
+      : `<circle cx="${mx(W, to.x + 48, 0)}" cy="${to.y + (two ? 60 : 47)}" r="3.5" fill="${dotColor}"/>${T(W, 'm', to.x + 57, to.y + (two ? 64 : 51), 10.5, 500, fitText(modelText, 10.5, Math.max(30, cw - 63)), 'start')}`
     const pct = !a ? 0 : a.status === 'done' ? 1 : a.status === 'failed' ? 1 : (progressOf(a) ?? 0)
     const bx = to.x + 8
     const bw = cw - 16
@@ -1488,7 +1494,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
 <rect x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8" fill="none" stroke="${edge}" stroke-width="${status === 'planned' ? 1 : 1.6}"${status === 'planned' ? ' stroke-dasharray="4 3"' : ''}/>
 ${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? cardCostume(r.title, a ? a.type : r.tier, a ? costumeOf(a.type) : tier) : 'other', !a, status === 'running').replaceAll('#D97757', CRAB_TINTS[i % CRAB_TINTS.length])}
 ${(compact ? [fitText(cardLabel(r), 12, Math.max(30, cw - 50))] : titleLines(cardLabel(r), 12, Math.max(30, cw - 50)).slice(0, 2)).map((line, k) => T(W, 't', to.x + 44, to.y + (compact ? 19 : 20) + k * 13, 12, 600, line, 'start')).join('')}
-${T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 50 : 38), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50)), 'start')}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : two ? 46 : 34)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
+${T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50)), 'start')}${model}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : two ? 44 : 31)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
 <rect class="k" x="${mx(W, bx, bw)}" y="${to.y + ch - 7}" width="${bw}" height="3" rx="1.5"/><rect x="${mx(W, bx, Math.round(bw * pct))}" y="${to.y + ch - 7}" width="${Math.round(bw * pct)}" height="3" rx="1.5" fill="${edge}"/>
 ${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' : status, edge)}</g>`)
   })

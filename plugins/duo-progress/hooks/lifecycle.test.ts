@@ -180,6 +180,14 @@ test('planSvg: cards that wear the same costume still differ by the colour of th
   expect(source).toContain('#3FA796')
 })
 
+test('planSvg: every card says which model does the task: the one that ran it, or the one it is planned for', () => {
+  const rows = taskRowsOf(PLAN, [mk({ id: 'm', description: 'Map', model: 'claude-opus-5-5', effort: 'high' })])
+  const { source } = planSvg(480, rows, 5)
+  expect(source).toContain('Opus 5.5 · high') // started: what ran it
+  expect(source).toContain('Sonnet · medium') // planned: Build is duo-high, Check is the verifier
+  expect(source).toContain('#8E78FF') // the Opus colour
+})
+
 test('titleLines: a title that fits stays on one line, a long one breaks at a space, the second line is cut', () => {
   expect(titleLines('Short title', 12, 300)).toEqual(['Short title'])
   const two = titleLines('Translate every alt text and aria label on the German pages', 12, 120)
