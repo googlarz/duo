@@ -1379,6 +1379,8 @@ export const taskRowsOf = (f: Flow | null, list: AgentRun[]): TaskRow[] => {
 // jumps; tasks with no plan (agents Claude started on its own) form one wrapping grid.
 const CARD_GAP = 10
 const LAYER_GAP = 24
+// Stages side by side: the gap between two columns, where the arrows run.
+const COL_GAP = 34
 
 export const layersOf = (rows: readonly TaskRow[]): number[] => {
   const byN = new Map<number, TaskRow[]>()
@@ -1415,17 +1417,27 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
   const widest = Math.max(1, ...[...new Set(layers)].map(l => layers.filter(x => x === l).length))
   const perRow = Math.max(1, Math.floor((wide + CARD_GAP) / (base + CARD_GAP)))
   const cols = Math.min(perRow, widest)
-  const cw = Math.min(260, Math.floor((wide - (cols - 1) * CARD_GAP) / cols))
   const depth = Math.max(0, ...layers)
+  // Stages run left to right when they fit side by side (cards at least 120 px wide, no stage of more than six);
+  // otherwise they stack top to bottom.
+  const colW = Math.min(260, Math.floor((wide - depth * COL_GAP) / (depth + 1)))
+  const horizontal = depth >= 1 && widest <= 6 && colW >= 120
+  const cw = horizontal ? colW : Math.min(260, Math.floor((wide - (cols - 1) * CARD_GAP) / cols))
   const place = new Map<number, { x: number; y: number }>()
   let y = 6
+  let colsH = 0
   for (let l = 0; l <= depth; l++) {
     const idx = rows.map((_, i) => i).filter(i => layers[i] === l)
     if (!idx.length) continue
+    if (horizontal) {
+      idx.forEach((i, k) => place.set(i, { x: GP + l * (cw + COL_GAP), y: 6 + k * (ch + CARD_GAP) }))
+      colsH = Math.max(colsH, idx.length * (ch + CARD_GAP) - CARD_GAP)
+      continue
+    }
     idx.forEach((i, k) => place.set(i, { x: GP + (k % perRow) * (cw + CARD_GAP), y: y + Math.floor(k / perRow) * (ch + CARD_GAP) }))
     y += Math.ceil(idx.length / perRow) * (ch + CARD_GAP) - CARD_GAP + LAYER_GAP
   }
-  const height = Math.ceil(y - LAYER_GAP + 10) + (omitted ? 22 : 0)
+  const height = (horizontal ? 6 + colsH + 10 : Math.ceil(y - LAYER_GAP + 10)) + (omitted ? 22 : 0)
   const edges: string[] = []
   const cards: string[] = []
   rows.forEach((r, i) => {
@@ -1435,13 +1447,25 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
       const j = rows.findIndex(q => q.n === dep)
       const from = j >= 0 ? place.get(j) : undefined
       if (!from || edges.length > 60) continue
+      const done = rows[j]?.a?.status === 'done'
+      const ink = `fill="none" stroke="${done ? C_DONE : '#9a9a96'}" stroke-opacity="${done ? 0.9 : 0.5}" stroke-width="1.6"`
+      if (horizontal) {
+        // From the right edge of the card it waits for to the left edge of this one.
+        const dir = isRtl() ? -1 : 1
+        const sx = mx(W, from.x + cw)
+        const tx = mx(W, to.x)
+        const sy = from.y + ch / 2
+        const ty = to.y + ch / 2
+        const mid = (sx + tx) / 2
+        edges.push(`<path d="M${sx} ${sy}C${mid} ${sy} ${mid} ${ty} ${tx - dir * 2} ${ty}" ${ink}/><path d="M${tx - dir * 7} ${ty - 3.5}L${tx - dir} ${ty}L${tx - dir * 7} ${ty + 3.5}" ${ink} stroke-linecap="round" stroke-linejoin="round"/>`)
+        continue
+      }
       const sx = mx(W, from.x + cw / 2)
       const tx = mx(W, to.x + cw / 2)
       const sy = from.y + ch
       const ty = to.y
-      const done = rows[j]?.a?.status === 'done'
       const mid = (sy + ty) / 2
-      edges.push(`<path d="M${sx} ${sy}C${sx} ${mid} ${tx} ${mid} ${tx} ${ty - 2}" fill="none" stroke="${done ? C_DONE : '#9a9a96'}" stroke-opacity="${done ? 0.9 : 0.5}" stroke-width="1.6"/><path d="M${tx - 3.5} ${ty - 6}L${tx} ${ty - 1}L${tx + 3.5} ${ty - 6}" fill="none" stroke="${done ? C_DONE : '#9a9a96'}" stroke-opacity="${done ? 0.9 : 0.5}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`)
+      edges.push(`<path d="M${sx} ${sy}C${sx} ${mid} ${tx} ${mid} ${tx} ${ty - 2}" ${ink}/><path d="M${tx - 3.5} ${ty - 6}L${tx} ${ty - 1}L${tx + 3.5} ${ty - 6}" ${ink} stroke-linecap="round" stroke-linejoin="round"/>`)
     }
     const a = r.a
     const tier = a ? tierOf(a.type) : r.tier in TIER_COLOR ? r.tier : 'other'

@@ -153,7 +153,15 @@ test('planSvg: a card per task with its tier colour, arrows from what it waits f
   expect(source).toContain('3. Check')
   expect(source.split('stroke-dasharray').length - 1).toBe(2) // the two tasks that have not started are dashed
   expect(source).toContain('<path d="M') // arrows
-  expect(height).toBeGreaterThan(120)
+  expect(height).toBeGreaterThan(60)
+})
+
+test('planSvg: stages run left to right when they fit side by side, top to bottom when the pane is narrow', () => {
+  const rows = taskRowsOf(PLAN, [])
+  const wide = planSvg(900, rows, 0)
+  const narrow = planSvg(300, rows, 0)
+  expect(wide.height).toBeLessThan(100) // one row of three stages
+  expect(narrow.height).toBeGreaterThan(150) // three layers stacked
 })
 
 test('planSvg: a failed card is red, a stalled one amber; text from an agent cannot break the drawing', () => {
