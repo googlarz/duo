@@ -373,7 +373,8 @@ export const rowSvg = (f: Flow, W: number, isWorking: boolean, usage = ''): stri
   const title = fitText(f.title, 13, Math.max(60, W * 0.4))
   const BAR_X = Math.round(16 + textWidth(title, 13) + 12)
   const percent = `${Math.round(ratio(f) * 100)}%`
-  const tail = usage ? `${percent} · ${usage}` : percent
+  // The pill already says where the flow stands, so with a usage reading the right side is only usage, named: a bare "100%" next to it reads as usage.
+  const tail = usage ? `${tr().limit} ${usage}` : percent
   const BAR_W = Math.max(60, W - BAR_X - Math.max(56, Math.ceil(textWidth(tail, 12.5)) + 26) - CRAB_W)
   const color = f.isFinished ? DONE : ACCENT
   const y0 = (H - BAR_H) / 2
