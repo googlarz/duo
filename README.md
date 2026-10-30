@@ -1,25 +1,22 @@
-<p align="center">
-  <img src="assets/duo-hero.svg" alt="duo: see every agent your AI spawns" width="100%">
-</p>
+# duo: see every AI agent Claude spawns for you
 
 <p align="center">
-  <b>See every AI agent Claude spawns for you: what it does, and on which model.</b><br>
-  Built for Claude Pro / Max, where every agent spends your usage limit.
+  <img src="assets/duo-panel-real.png" alt="The agents panel after a real duo run: a Usage tile showing 12% of the 5-hour window and 32% of the weekly window, each task with the model and effort that ran it, and a Details view listing the steps the agent planned with the ones done" width="592">
 </p>
 
-<p align="center">
-  <img src="assets/duo-panel-real.png" alt="The real agents panel after a duo run: the Usage tile shows 12% of the 5-hour window and 32% of the weekly window, each task shows its model and effort, and Details lists the steps the agent planned with the ones done" width="592">
-</p>
+On a big job, Claude Code starts helper agents by itself. By default you can't see what they are doing, which model each one runs on, or what they cost you. **duo shows every one of them live**: its task, model, effort, steps and tokens, plus how much of your usage limit you have used. You don't create or steer the agents; you watch.
 
-<p align="center"><i>The live panel from a real run: every agent, the model it ran on, its steps, and your usage.</i></p>
+*An **agent** is a helper Claude starts for one task. The **model** (Haiku, Sonnet or Opus) is the brain it runs on, and **effort** is how hard it thinks. A **token** is a small piece of text the model reads or writes; your limit is counted in them.*
 
-> **A fork of the amazing [savvy](https://github.com/JohnnyVizz/claude-kit) by [JohnnyVizz](https://github.com/JohnnyVizz), rebuilt for subscription users.** savvy is a great multi-agent flow built for API-style budgets (Opus and Fable workers). duo keeps its panel and orchestration ideas, credited in full below, and adapts them to a Pro/Max plan: Sonnet does the work, Opus is only a gate, and your usage limit is the budget.
+| | |
+| --- | --- |
+| **What it is** | A panel and a bar for Claude Code on a Pro or Max plan, plus a small flow that picks a model and effort for each agent. |
+| **What it costs** | It may use **more** of your limit than plain Sonnet. In our first runs a worker used about 76k tokens and a checker about 14k, even for a one-file change (three tiny tasks, one machine). Cost compared with plain Sonnet is **unmeasured**. Try it on one task first; removing it is two commands. |
+| **Who it is for** | People who want to see what their agents are doing, and are fine paying for that visibility. |
 
----
+> **A fork of the amazing [savvy](https://github.com/JohnnyVizz/claude-kit) by [JohnnyVizz](https://github.com/JohnnyVizz).** duo is built on his flow, panel and band; we adapted it for Pro and Max and renamed parts of it. [What is his and what is new](#savvy-and-duo).
 
-## Try it
-
-Install duo and the panel:
+## Install
 
 ```
 /plugin marketplace add googlarz/duo
@@ -33,126 +30,113 @@ Restart Claude Code, then give it a task:
 /duo:duo add rate limiting to the upload endpoint and cover it with tests
 ```
 
-duo plans, the AI spawns the agents and runs them, and at the end you get a report: what changed, what was verified, what was left out, and which models did the work. If the panel doesn't appear, load it by hand: `claude --plugin-dir ~/duo/plugins/duo-progress`.
+`duo` is the flow and `duo-progress` is the panel; you need both to see your agents. That is all that is required. duo plans, Claude creates the agents, and you watch them in the panel and in the bar above the prompt. At the end you get a short report with what changed, what was verified, and how much of your limit the run used.
 
-Then, once, turn on the usage guard (it asks before touching your settings):
+## What you see
 
-```
-/duo:setup
-```
+- **A live panel** with every agent: task, **model and effort**, progress, steps (open *Details* under a task), context, tokens, an estimated cost and time. With many agents at once (more than 8) it groups them by stage and shows the model mix.
+- **Your usage:** the first tile shows how much of your 5-hour and weekly window you have used, read from Claude Code itself (no setup). When a run ends it says how much that run used.
+- **A bar above the prompt** that shows the flow's progress and your usage, and appears together with the plan.
+- **Something Claude Code does not show by default.** Claude Code has `/agents` (which lists agent definitions) and `/usage` (which shows your totals). duo adds the live, per-run view of who is working on what, and on which model.
 
-> Shorter command: try plain `/duo <task>`. If your version doesn't accept it, copy the skill once:
-> `git clone https://github.com/googlarz/duo.git ~/duo && cp -R ~/duo/plugins/duo/skills/duo ~/.claude/skills/`
+## When to use it
 
-## Why duo
+Use it on multi-step work where you want to follow what happens, for example "add rate limiting to the upload endpoint and cover it with tests". Claude splits it into a few tasks, Sonnet workers do them, a fresh checker verifies, and you can see each step.
 
-When you give Claude Code a big job, it doesn't work alone. It **creates agents on its own**: one to explore, several to build, one to test, one to review. You don't write them and you don't pick them. By default you also can't see them: which model each one runs on, what it is doing, how far along it is, what it costs.
+Skip it for a one-file fix: the agents add overhead and plain Claude is simpler.
 
-On a subscription that's your usage limit draining in a place you can't look.
+## What is tested
 
-## What duo gives you
+In our own runs in the desktop app, duo works from the task to the report: Sonnet workers, a fresh checker, the panel with model, effort, steps and usage, and the bar above the prompt. **Not tested live yet:** the Opus plan check and review, the 80% and 95% limit behaviour, and the grouped view with a real fan-out.
 
-You describe the task. The AI creates the agents and picks the model for each stage. duo works with zero setup, and you can shape it with ordinary rules in your `CLAUDE.md`. It adds the two things that were missing:
+<details>
+<summary><b>The full list</b></summary>
 
-| | |
-| --- | --- |
-| 👁 **Visibility** | A live panel with **every agent**: its task, the **model and effort** it runs on, its steps, progress, tokens, cost and time, plus **how much of your 5-hour and weekly limit you have used** (read from Claude Code itself; needs no setup), and at the end of a run **how much of it that run cost** ("This run used 4% of your 5-hour window"). Open any task to see its steps. With big fan-outs of many agents it groups them by stage and shows the model mix, so it stays readable. Each stage gets its own animated pixel crab in a costume. |
-| 🧠 **The right model, automatically** | The AI picks the model for each stage and the effort for each task by itself, within built-in guardrails (an Opus budget, a cap on retries, a check when your limit runs low). Works out of the box; shape it with your own rules in `CLAUDE.md` if you want (see below). |
+Tested live (desktop app): the whole `/duo:duo` flow, the panel (model, effort, steps, usage tile), the bar above the prompt, the per-run usage line, the history file, `/duo:setup`. In a terminal the status-line helper wrote the usage file. Automated tests: 77 for the panel (`cd plugins/duo-progress && claude plugin test .`) and 16 for the helper scripts (`plugins/duo/scripts/selftest.sh`).
 
-## How it works
+Not tested live: the Opus plan check and review (no run has needed them), the 80% and 95% limit behaviour, the hook for a real limit, the cost forecast beyond tiny tasks, learning from past runs, resuming after a reset, a bare `/duo` (use `/duo:duo`), the grouped view with a real fan-out of more than 8 agents, and narrow terminals. The panel uses Claude Code's early-access hooks and may change between releases.
 
-### The right model at every stage, chosen automatically
+</details>
 
-<p align="center">
-  <img src="assets/duo-stages.svg" alt="The seven duo stages and the model used at each: explore on Haiku or Sonnet, plan on your session model, plan check on Opus, build on Sonnet from low to max effort, verify on Sonnet, review on Opus, last resort on Opus" width="100%">
-</p>
+## savvy and duo
 
-Sonnet does the volume. Opus is a gate (a plan check and a review), not a worker. Small jobs skip the Opus stages: up to 2 tasks skip both Opus calls, 3 to 4 low-risk tasks skip the plan check and keep one final review.
+duo is a fork of **savvy** by JohnnyVizz ([JohnnyVizz/claude-kit](https://github.com/JohnnyVizz/claude-kit)). savvy works on any plan; its default workers are Opus and Fable, which spend a subscription limit faster. duo keeps the same ideas and retunes them for Pro and Max.
 
-### What happens to every task
+| In savvy | In duo | What is new in duo |
+| --- | --- | --- |
+| `savvy-flow` (the orchestrated flow, Opus and Fable workers) | [`duo-flow`](plugins/duo-flow), the same flow renamed | nothing; it stays as the original |
+| `savvy-progress` (the agents panel) | [`duo-progress`](plugins/duo-progress), renamed and extended | usage tile and per-run usage, grouped view for big fan-outs, more costumes, a bar with usage |
+| `session-band` | [`session-band`](plugins/session-band), unchanged | |
+| | [`duo`](plugins/duo) | the Sonnet-based flow: nine agents (workers by effort, an advisor, a reviewer, a verifier), a usage guard, a run history |
 
-<p align="center">
-  <img src="assets/duo-task.svg" alt="Each task: brief, built by Sonnet, checked by a fresh checker, reviewed by Opus, accepted. Failures go back with a defect list, max two attempts, Opus as a worker only with your approval" width="100%">
-</p>
+**Which one to use:** the original savvy if you want Opus or Fable workers; it works on any plan, including Pro. duo if you want Sonnet workers with Opus only as a plan check and a review, tuned for how fast a Pro or Max limit drains. To install the original: `/plugin marketplace add JohnnyVizz/claude-kit`, then `/plugin install savvy-flow@claude-kit` (see his README for the current steps). You can have both: the commands differ (`/savvy-flow:savvy-flow` there, `/duo-flow:duo-flow` for the same flow here, `/duo:duo` for the Sonnet flow), and `duo-progress` shows agents from either. Install only one panel plugin, not both `savvy-progress` and `duo-progress`.
 
-The agents run in parallel where they can, within guardrails: **two attempts per task**, a fresh checker that did not write the code, and **Opus as a worker only if you say yes** (the one thing it asks you). Design decisions (anything users see) stay with you; agents don't invent UI.
+## Optional extras
 
-### Visibility: open any agent
+**Usage guard (`/duo:setup`).** Run it once if you want duo to slow down near your limit: at 80% it stops using the Opus plan check and caps workers at medium, at 95% it stops starting new work. It asks first, then adds a small helper to your status line (your own status line keeps working) by changing `statusLine` in `~/.claude/settings.json` and keeping a backup as `settings.json.bak-duo`. Designed, not yet tested on a real limit. Details: [usage-limits guide](plugins/duo/docs/usage-limits.md).
 
-The panel at the top is a real run, not a mock-up. Its first tile shows **how much of your 5-hour and weekly limit you have used**. Every task row shows the model and effort that ran it, its context, tokens, an estimated cost and time. Press **Details** under a task to see its steps and which are done.
-
-When many agents run at once (more than 8), the panel switches to a grouped view: a summary, the model mix, one row per stage, only the few running agents in view, and the finished ones folded away. Illustration of that view, with example tasks:
-
-<p align="center">
-  <img src="assets/duo-panel.svg" alt="Illustration of the grouped panel view for a big fan-out: the model mix, one row per stage, finished agents folded away" width="100%">
-</p>
-
-### Meet the crabs
-
-Every agent is a small animated pixel crab, and its costume tells you the job. The panel picks the costume from the stage name: a detective for `truth` and `verify`, a robot for `build`, a rocket for `deploy`, a doctor for `fix`, a ninja for `perf`, a librarian for `docs`, a cyborg cop for `enforce`, a fire ninja for `hotfix`, an ice ninja for `cache`, and more. Unknown stage names get the plain crab.
-
-<p align="center">
-  <img src="assets/duo-crabs.svg" alt="All the panel's crab costumes: fable, heavy, careful, medium, light, explore, wizard, monocle, detective, judge, hardhat, explorer, bulb, quill, crown, rocket, robot, scientist, artist, ninja, doctor, librarian, viking, cleaner, cyborg, thunder, fireninja, iceninja, and the plain crab" width="70%">
-</p>
-
-## Built-in guardrails for your usage limit (automatic)
-
-- **Opus budget:** one plan check and up to two reviews per run. Opus as a worker only with your consent.
-- **Effort ceiling:** tasks run at `high` at most; `xhigh` and `max` only after a failed attempt or when the cause is unclear.
-- **Limit-aware** *(one command: `/duo:setup`)*: at 80% used, duo skips the plan check and early review and caps workers at `medium`. At 95% it stops starting new work and reports where it stands, so you can continue after the reset. Manual steps and details: **[usage-limits guide](plugins/duo/docs/usage-limits.md)** (Pro/Max only; the plan reports usage only there). **Where it works:** with the duo-progress panel installed, duo reads your usage live from Claude Code, in the terminal and in the desktop app, with no setup. Without the panel it falls back to the status-line helper (`/duo:setup`), which we confirmed only in the terminal; if neither gives a reading, the guard is off and duo says so in its plan and report.
-- **Your session model:** run duo from a Sonnet session. duo can't see which model your session runs, so tell it if it's Opus (then it reviews itself instead of calling a second Opus) or Haiku (then the plan check is mandatory).
-
-## What a run costs, learned over time
-
-duo keeps a small log of past runs on your machine (`~/.claude/duo-history.jsonl`: size, tiers used, how much of your limit each run took). After a few runs the plan gives a forecast in your own currency, for example "about 3-5% of your 5-hour window", and warns when a run would cross 80%. If a tier keeps needing escalation in your projects, duo starts similar tasks one tier higher and says so. Nothing is sent anywhere. At a limit stop it offers, once, to resume by itself at the reset time (needs your yes and a session left open; unverified, see Honest status).
-
-Want Claude to suggest duo on big jobs without you remembering the command? Add one rule to your `CLAUDE.md`: `When a task spans 5 or more files or has independent parts, suggest running /duo:duo instead of doing it inline.`
-
-## Make it yours: rules in CLAUDE.md
-
-duo's defaults are plain instructions, so you change them the way you change any Claude Code behaviour: with rules in `CLAUDE.md`, either **global** (`~/.claude/CLAUDE.md`, all projects) or **per project** (`CLAUDE.md` in the repo). The orchestrator reads them like any session does, and your rules beat duo's defaults. For example:
+**Your own rules in `CLAUDE.md`.** duo's defaults are plain instructions, so you change them the way you change any Claude Code behaviour: with rules in `CLAUDE.md`, global (`~/.claude/CLAUDE.md`) or per project. For example:
 
 ```markdown
 ## duo
 - Opus only for the plan check and the review, never as a worker.
 - Cap effort at medium unless I say otherwise.
 - Always run the final review, even on small jobs.
-- Stop starting new tasks at 90% of my limit.
 ```
 
-The one thing a rule can't quietly switch off is the safety stop: Opus as a worker still needs your explicit yes (a rule that pre-approves it counts as a yes).
+The one thing a rule cannot quietly switch off is the safety stop: Opus as a worker still needs your explicit yes.
 
-Also good to know:
-- **Different model or effort for a role?** Each role is an agent file (`plugins/duo/agents/duo-*.md`, generated by `scripts/gen-agents.sh`). Edit `model:` / `effort:` in your copy.
-- **Environment overrides win over duo.** If you have set `CLAUDE_CODE_SUBAGENT_MODEL` (especially with `_FORCE`) or `CLAUDE_CODE_EFFORT_LEVEL`, Claude Code applies them over duo's per-stage models and effort (per its docs). Unset them for duo to work as designed.
-- **Claude Code's own `/usage`** also breaks your usage down by subagent, a handy cross-check for the panel.
+**What duo keeps on your machine.** `~/.claude/duo-history.jsonl` (one line per run: size, tiers, how much of your limit it used; used for a forecast after a few runs), and with `/duo:setup` also `~/.claude/duo-usage.json`. duo's own scripts make no network calls (the agents themselves use Claude Code's normal tools, such as the shell, and the advisor can fetch web pages).
 
-## Questions
+**session-band.** A band above the prompt with turn, speed, cost, cache countdown and context. Optional: `/plugin install session-band@duo`.
 
-**Do I have to create, configure or steer anything?** No. Claude creates the agents and chooses the models; you just watch. If you do want a say, use rules in `CLAUDE.md` (see above). duo ships ready-made roles (`duo-low` … `duo-max`, `duo-verifier`, `duo-advisor`, `duo-reviewer`, `duo-opus`), and the AI picks the right ones for each task.
+## Requirements and uninstall
 
-**Will it burn my Opus limit?** That's what the rules prevent: one plan check and up to two reviews per run, none on small jobs.
+A recent Claude Code (we run 2.1.314) on a Pro or Max plan; the usage reading needs a subscription. The panel works in the desktop app.
 
-**Is it worth it for a small fix?** No. Use plain Sonnet or the built-in `opusplan`. duo pays off on multi-step work with several agents.
+To remove duo:
 
-**What if I hit my limit mid-run?** With the limit helper set up, duo stops before the wall and reports which tasks are done and which are waiting. Say "continue" after the reset (in interactive sessions Claude Code can also wait for the reset and continue on its own, per its docs).
+```
+/plugin uninstall duo@duo
+/plugin uninstall duo-progress@duo
+```
 
-**Does it change my files without asking?** The builder agents edit your project, as in any Claude Code run, and you see every change. The plan checker, reviewer and verifier have no Edit or Write tools (they keep a shell to run checks and are told not to change files).
+If you ran `/duo:setup`, put your status line back: change `statusLine` in `~/.claude/settings.json` to what it was (the backup `~/.claude/settings.json.bak-duo` shows the old value; copying the whole file back also undoes any settings you changed since), and delete `~/.claude/duo-usage-cache.sh`, `duo-usage.json`, `duo-limit-hit.json` and `duo-history.jsonl` if you like.
 
-**Which Claude Code version?** Recent. duo uses subagents with per-agent model and effort. Effort `low` to `max` is available on Sonnet 5.5; on older Sonnets an unsupported level falls back to the closest lower one.
+## Questions and words
 
-## Honest status
+**Do I have to create or steer anything?** No. Claude creates the agents and picks models; you watch. Shape duo only with `CLAUDE.md` rules if you want.
 
-duo's goal is **visibility**: seeing every agent and the model behind it. Spending less of your limit would be a bonus, not the promise. We have not measured whether duo costs less or more than plain Sonnet, and it may cost more, because every agent has overhead (about 76k tokens per worker in our first runs). The protocol to find out is in [benchmark/](benchmark/README.md); the first result is still missing.
+**What is an agent? A model? Effort?** An *agent* is a helper Claude starts for one task. The *model* (Haiku, Sonnet, Opus) is the brain it runs on. *Effort* (low to max) is how hard it thinks. duo shows all three for every agent.
 
-Verified: all plugins pass `claude plugin validate`; the panel's tests pass; the helper scripts ran against sample input; the effort levels and agent settings duo relies on were checked against the Claude Code docs.
+**What is the "Opus gate"?** Opus is only asked to check the plan and to review the finished work; Sonnet does the building. Small jobs skip it.
 
-Not yet verified, because it needs a live session: the per-run usage line (computed in the panel and unit-tested, never seen in a real run), the history forecast and tier learning (written as instructions to the orchestrator, not tested at all), the offer to resume after a reset, the statusline helper in daily use, the rate-limit hook firing on a real limit, how the panel's details and grouped views look in the real app, and whether a bare `/duo` resolves on your version. The panel is built on Claude Code's early-access hooks and may change between releases. If something looks off, please open an issue with what you saw.
+**Will it use more of my limit?** Possibly, see the box at the top. Each run reports how much it used, so you can judge for yourself.
 
-Since 0.3.0: an offline selftest for the helper scripts (`plugins/duo/scripts/selftest.sh`, 16 checks, all passing).
+**Does it change my files?** The builder agents edit your project, as in any Claude Code run. The plan checker, reviewer and verifier have no Edit or Write tools (they keep a shell for running checks and are told not to change files).
+
+**Something looks off.** Please [open an issue](https://github.com/googlarz/duo/issues) with what you saw.
+
+## The crabs
+
+Every agent in the panel is a small animated pixel crab, and its costume follows the job: a detective for verification, a robot for building, a doctor for fixes, a rocket for deploys, ninjas for speed, cold and hot fixes, and more (29 costumes; unknown jobs get the plain crab). They are decoration, and we like them. [See them all](assets/duo-crabs.svg).
 
 <details>
-<summary><b>Effort per task</b></summary>
+<summary><b>How the flow works</b></summary>
+
+<p align="center">
+  <img src="assets/duo-stages.svg" alt="The seven duo stages and the model used at each: explore on Haiku or Sonnet, plan on your session model, plan check on Opus, build on Sonnet from low to max effort, verify on Sonnet, review on Opus, last resort on Opus" width="100%">
+</p>
+
+<p align="center">
+  <img src="assets/duo-task.svg" alt="Each task: brief, built by Sonnet, checked by a fresh checker, reviewed by Opus, accepted. Failures go back with a defect list, max two attempts, Opus as a worker only with your approval" width="100%">
+</p>
+
+Sonnet does the volume and Opus is a gate. Up to 2 tasks skip both Opus calls; 3 to 4 low-risk tasks skip the plan check and keep one final review. Two attempts per task, a checker that did not write the code, and Opus as a worker only if you say yes. For big fan-outs the panel switches to a grouped view (illustration with example tasks):
+
+<p align="center">
+  <img src="assets/duo-panel.svg" alt="Illustration of the grouped panel view for a big fan-out: the model mix, one row per stage, finished agents folded away" width="100%">
+</p>
 
 | Effort | Used for |
 | --- | --- |
@@ -162,22 +146,21 @@ Since 0.3.0: an offline selftest for the helper scripts (`plugins/duo/scripts/se
 | `xhigh` | unfamiliar code, unclear root cause (after a failure or when explicit) |
 | `max` | very complex logic, or a bug that survived xhigh |
 
-Agents behind the stages: Explore subagent, the orchestrator (your session), `duo-advisor` (plan check), `duo-low` … `duo-max` (build), `duo-verifier`, `duo-reviewer`, `duo-opus` (last resort). Full rules: [SKILL.md](plugins/duo/skills/duo/SKILL.md).
+Environment overrides win over duo: if you set `CLAUDE_CODE_SUBAGENT_MODEL` (especially with `_FORCE`) or `CLAUDE_CODE_EFFORT_LEVEL`, Claude Code applies them over duo's per-stage models and effort. Full rules: [SKILL.md](plugins/duo/skills/duo/SKILL.md). Whether duo costs more or less than plain Sonnet is what [the benchmark](benchmark/README.md) is meant to answer; [the first small run](benchmark/mini-run.md) only checks the plumbing.
 
 </details>
 
-
 <details>
-<summary><b>What's in this repo</b></summary>
+<summary><b>What is in this repo</b></summary>
 
 | Plugin | What it is |
 | --- | --- |
-| [duo](plugins/duo) · **start here** | The rules and the agents: model per stage, effort per task, Opus budget, limit awareness |
-| [duo-progress](plugins/duo-progress) · **recommended** | The panel: every agent with its model, steps, cost; understands the duo tiers |
-| [duo-flow](plugins/duo-flow) · optional | The original flow by JohnnyVizz (tiered Opus/Fable workers), for API-style budgets |
-| [session-band](plugins/session-band) · optional | Band above the prompt: turn, speed, cost, cache countdown, context |
+| [duo](plugins/duo) | The flow and the nine agents: model and effort per stage, a usage guard, a run history |
+| [duo-progress](plugins/duo-progress) | The panel and the bar: every agent with model, steps and usage |
+| [duo-flow](plugins/duo-flow) | savvy's original flow (Opus and Fable workers), renamed |
+| [session-band](plugins/session-band) | Band above the prompt: turn, speed, cost, cache countdown, context |
 
-Develop: `scripts/check-versions.sh` (run before pushing: a plugin change needs a version bump, or `update` will not see it) · `plugins/duo/scripts/selftest.sh` · `claude plugin validate .` · `cd plugins/duo-progress && claude plugin test .` · `plugins/duo/scripts/gen-agents.sh` (regenerates duo's six worker agents from one shared body).
+Develop: `scripts/check-versions.sh` before pushing (a plugin change needs a version bump, or `update` will not see it), `plugins/duo/scripts/selftest.sh`, `cd plugins/duo-progress && claude plugin test .`, `claude plugin validate .`, and `plugins/duo/scripts/gen-agents.sh` (regenerates the six worker agents from one shared body).
 
 </details>
 
@@ -185,6 +168,6 @@ Develop: `scripts/check-versions.sh` (run before pushing: a plugin change needs 
 
 ## Credits
 
-`duo` stands on the work of **[JohnnyVizz](https://github.com/JohnnyVizz)**. The savvy-flow orchestration pattern (now `duo-flow`), the tiered-worker idea, the savvy-progress panel (now `duo-progress`) and session-band all come from [JohnnyVizz/claude-kit](https://github.com/JohnnyVizz/claude-kit). This repo started as a fork of it, keeps that code and its licence, and adapts the idea to subscription budgets. Thank you.
+duo stands on the work of **[JohnnyVizz](https://github.com/JohnnyVizz)**: the orchestration flow (savvy-flow, now `duo-flow`), the tiered-worker idea, the agents panel (savvy-progress, now `duo-progress`) and session-band all come from [JohnnyVizz/claude-kit](https://github.com/JohnnyVizz/claude-kit). This repository began as a fork of it, keeps his code and licence, and adapts the idea to Pro and Max plans. Thank you.
 
-MIT licence, see [LICENSE](LICENSE). Original work © 2026 johnnyvizz; duo additions © 2026 googlarz.
+MIT licence, see [LICENSE](LICENSE). Original work © 2026 JohnnyVizz (written "johnnyvizz" in the licence file); duo additions © 2026 googlarz.
