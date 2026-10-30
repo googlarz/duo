@@ -35,4 +35,11 @@ chk "limit marker has at"            'grep -q "\"at\"" "$H/.claude/duo-limit-hit
 
 printf '%s' 'garbage' | HOME=$H "$here/limit-hit.sh"; rc=$?
 chk "limit-hit garbage: exits 0"     '[ $rc -eq 0 ]'
+printf 'old' >"$H/.claude/duo-usage-cache.sh"
+CLAUDE_PLUGIN_ROOT="$here/.." HOME=$H "$here/refresh-helper.sh"; rc=$?
+chk "refresh-helper exits 0"         '[ $rc -eq 0 ]'
+chk "refresh-helper updates copy"    'cmp -s "$here/usage-cache.sh" "$H/.claude/duo-usage-cache.sh"'
+rm -f "$H/.claude/duo-usage-cache.sh"
+CLAUDE_PLUGIN_ROOT="$here/.." HOME=$H "$here/refresh-helper.sh"
+chk "refresh-helper skips without setup" '[ ! -e "$H/.claude/duo-usage-cache.sh" ]'
 exit $fail

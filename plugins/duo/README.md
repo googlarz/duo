@@ -36,7 +36,7 @@ The agents stay namespaced (`duo:duo-high`); the skill finds them either way.
 
 ## Set up usage awareness
 
-Run `/duo:setup`: it copies the statusline helper and, after you confirm, wires it into `~/.claude/settings.json` (chaining your own statusline). Manual steps are in [docs/usage-limits.md](docs/usage-limits.md). Without it the usage check silently does nothing: no usage file, no downshifting. The cache can also go stale (>15 min) during long subagent waits; the skill then ignores it.
+Run `/duo:setup` once: after you say yes it adds a small helper to your status line (your own status line keeps working) and duo keeps the helper up to date by itself. Manual steps are in [docs/usage-limits.md](docs/usage-limits.md). Without it the usage check silently does nothing: no usage file, no downshifting. The cache can also go stale (>15 min) during long subagent waits; the skill then ignores it.
 
 ## Read-only agents
 

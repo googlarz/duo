@@ -1,5 +1,5 @@
 {
-  "description": "Record usage-limit hits so duo can pause or downshift",
+  "description": "Record usage-limit hits so duo can pause or downshift; keep the usage helper current",
   "hooks": {
     "StopFailure": [
       {
@@ -8,6 +8,17 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/limit-hit.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/refresh-helper.sh",
             "timeout": 10
           }
         ]

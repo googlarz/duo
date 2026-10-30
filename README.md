@@ -131,7 +131,7 @@ Verified: all plugins pass `claude plugin validate`; the panel's tests pass; the
 
 Not yet verified, because it needs a live session: the statusline helper in daily use, the rate-limit hook firing on a real limit, how the panel's details and grouped views look in the real app, and whether a bare `/duo` resolves on your version. The panel is built on Claude Code's early-access hooks and may change between releases. If something looks off, please open an issue with what you saw.
 
-New in 0.3.0: an offline selftest for the helper scripts (`plugins/duo/scripts/selftest.sh`, 13 checks, all passing).
+Since 0.3.0: an offline selftest for the helper scripts (`plugins/duo/scripts/selftest.sh`, 16 checks, all passing).
 
 <details>
 <summary><b>Effort per task</b></summary>

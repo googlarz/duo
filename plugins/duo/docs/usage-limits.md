@@ -11,7 +11,7 @@ duo can check how much of your subscription window is used before spawning expen
 
 Easiest: run `/duo:setup` (it asks before it changes anything). The manual steps below do the same.
 
-The plugin directory may change when the plugin updates (unverified), so first copy the script to a stable path (`cp <plugin dir>/scripts/usage-cache.sh ~/.claude/duo-usage-cache.sh`; refresh this copy after every plugin update), then in `~/.claude/settings.json`:
+The plugin directory may change when the plugin updates (unverified), so first copy the script to a stable path (`cp <plugin dir>/scripts/usage-cache.sh ~/.claude/duo-usage-cache.sh`; after `/duo:setup` duo refreshes this copy itself at session start; refresh it by hand only for a manual setup), then in `~/.claude/settings.json`:
 
 ```json
 { "statusLine": { "type": "command", "command": "~/.claude/duo-usage-cache.sh" } }
