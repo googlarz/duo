@@ -12,7 +12,7 @@
       "name": "duo-flow",
       "source": "./plugins/duo-flow",
       "description": "Skill: the original orchestrated flow (formerly savvy-flow by JohnnyVizz): plan, delegate to tiered Opus/Fable workers, review. For API-style budgets.",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "category": "skill"
     },
     {
