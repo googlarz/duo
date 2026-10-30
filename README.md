@@ -143,7 +143,7 @@ Also good to know:
 
 ## Honest status
 
-We have **not** measured whether duo saves your limit compared with plain Sonnet; the protocol to find out is in [benchmark/](benchmark/README.md), and the first result is still missing.
+duo's goal is **visibility**: seeing every agent and the model behind it. Spending less of your limit would be a bonus, not the promise. We have not measured whether duo costs less or more than plain Sonnet, and it may cost more, because every agent has overhead (about 76k tokens per worker in our first runs). The protocol to find out is in [benchmark/](benchmark/README.md); the first result is still missing.
 
 Verified: all plugins pass `claude plugin validate`; the panel's tests pass; the helper scripts ran against sample input; the effort levels and agent settings duo relies on were checked against the Claude Code docs.
 

@@ -1,6 +1,6 @@
-# Does duo save your limit? A benchmark you can run
+# What does duo cost you? A benchmark you can run
 
-Claim to test: on multi-step work, duo uses **less of your usage limit** than plain Sonnet or `opusplan`, with the same or better first-try success. We have not run this yet. Until someone does, treat the claim as unproven (a trivial one-file task already cost duo about 90k tokens, mostly agent overhead).
+duo's goal is visibility: seeing every agent and its model. Using less of your limit would be a bonus, not the promise. This benchmark exists to tell you honestly **what the visibility costs**: how much of your usage limit duo uses on multi-step work compared with plain Sonnet or `opusplan`, and whether first-try success is the same. We have not run the comparison yet. A trivial one-file task already cost duo about 90k tokens, mostly agent overhead, so expect duo to cost more on small jobs.
 
 ## Protocol
 
@@ -13,7 +13,7 @@ Claim to test: on multi-step work, duo uses **less of your usage limit** than pl
    `task, variant, used_5h_points, used_7d_points, minutes, first_try_ok (0/1), human_fixups (count), notes`.
    - `used_*` is the move of the usage reading over the run. For C it is printed in the report and in the panel's band ("Usage 5h 13% (+4%)"). For A and B read the Usage tile before and after.
    - `first_try_ok` = the acceptance check passes without you asking for any change.
-4. Compare medians per variant. duo earns its place only if its median `used_5h_points` is lower than A's **or** its `first_try_ok` rate is clearly higher at a similar cost.
+4. Compare medians per variant and report the difference either way: what duo costs over plain Sonnet (or saves), and any change in `first_try_ok`. There is no pass or fail on cost; the point is that you can decide with the number in hand.
 
 ## Rules that keep it honest
 
