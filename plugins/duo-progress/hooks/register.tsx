@@ -2351,7 +2351,12 @@ export const register: Register = (on, options) => {
     const crewButton = <Button key="duo-agents" label={crewLabel} plain onPress={() => void togglePane($)} />
     // The job's name for the bar: never the placeholder.
     const named = { ...f, title: shownTitle(f.title, await projectName($)) || tr().pane }
-    const percent = `${Math.round(ratio(f) * 100)}%`
+    // The bar counts what the agents really did (the same as the panel), not only what the orchestrator reported.
+    const rows = taskRowsOf(f, list)
+    const live: Flow = list.length
+      ? { ...named, done: rows.filter(r => r.a?.status === 'done').length, running: rows.filter(r => r.a?.status === 'running').length, total: Math.max(f.total, rows.length) }
+      : named
+    const percent = `${Math.round(ratio(live) * 100)}%`
     const usage = usageShort(await freshLimits($), f.isFinished ? await read($, runBase) : null)
     const looks = needsOf(list, await read($, now)).length
     const alert = looks ? `⚠ ${looks}` : ''
@@ -2374,7 +2379,7 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column">
           <Box flexDirection={isRtl() ? 'row-reverse' : 'row'} alignItems="center" gap={1}>
-            <Svg source={rowSvg(named, width, isWorking, usage, alert)} alt={`${named.title}: ${label(f)}, ${percent}`} width={width} height={H} />
+            <Svg source={rowSvg(live, width, isWorking, usage, alert)} alt={`${live.title}: ${label(live)}, ${percent}`} width={width} height={H} />
             {crewButton}
             {dismiss}
           </Box>
@@ -2393,8 +2398,8 @@ export const register: Register = (on, options) => {
             <Text color={f.isFinished ? DONE : ACCENT}>● </Text>
             <Text wrap="truncate-end">{named.title}</Text>
           </Box>
-          <Text color={f.isFinished ? DONE : ACCENT}>{barText(f, width)}</Text>
-          <Text bold>{label(f)}</Text>
+          <Text color={f.isFinished ? DONE : ACCENT}>{barText(live, width)}</Text>
+          <Text bold>{label(live)}</Text>
           <Text dimColor>{percent}</Text>
           <Text color={CLAY}>▣</Text>
           {crewButton}

@@ -225,6 +225,19 @@ test('band: a flow nobody has named does not show the placeholder', async ($, on
   expect(drawn).not.toContain('duo-flow')
 })
 
+test('band: the bar counts the agents that really finished, whatever the orchestrator reported', async ($, on) => {
+  setup(on)
+  const tasks = Array.from({ length: 4 }, (_, i) => ({ title: `Job ${i}`, tier: 'duo-low', after: [] as number[] }))
+  await $.tool.call({ tool: 'mcp__duo-progress__progress', title: 'Four jobs', phase: 'delegate', tasks, total: 4 } as never) // done stays 0
+  for (let i = 0; i < 3; i++) await spawn($, `b${i}`, `Job ${i}`, 'duo:duo-low')
+  await $.turn.complete({ agentId: 'b0', reason: 'answer', answer: 'ok' } as never)
+  await $.turn.complete({ agentId: 'b1', reason: 'answer', answer: 'ok' } as never)
+  const props = { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100, scroll: { offset: 0, bodyRows: 4 }, view: {} }
+  const bar = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'AbovePrompt', props } as never)
+  const drawn = (await bar.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
+  expect(drawn).toContain('Tasks 2/4') // two finished, one running, one waiting
+})
+
 test('titleLines: a title that fits stays on one line, a long one breaks at a space, the second line is cut', () => {
   expect(titleLines('Short title', 12, 300)).toEqual(['Short title'])
   const two = titleLines('Translate every alt text and aria label on the German pages', 12, 120)
