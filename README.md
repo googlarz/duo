@@ -11,7 +11,7 @@ On a big job, Claude Code starts helper agents by itself. By default you can't s
 | | |
 | --- | --- |
 | **What it is** | A panel and a bar for Claude Code on a Pro or Max plan, plus a small flow that picks a model and effort for each agent. |
-| **What it costs** | It may use **more** of your limit than plain Sonnet. In our first runs a worker used about 76k tokens and a checker about 14k, even for a one-file change (three tiny tasks, one machine). Cost compared with plain Sonnet is **unmeasured**. Try it on one task first; removing it is two commands. |
+| **What it costs** | It may use **more** of your limit than plain Sonnet. In our first runs a worker used about 76k tokens and a checker about 14k, even for a one-file change (unmeasured beyond that: three tiny tasks on one machine, not a benchmark). Cost compared with plain Sonnet is **unmeasured**. Try it on one task first; removing it is two commands. |
 | **Who it is for** | People who want to see what their agents are doing, and are fine paying for that visibility. |
 
 > **A fork of the amazing [savvy](https://github.com/JohnnyVizz/claude-kit) by [JohnnyVizz](https://github.com/JohnnyVizz).** duo is built on his flow, panel and band; we adapted it for Pro and Max and renamed parts of it. [What is his and what is new](#savvy-and-duo).
@@ -101,7 +101,7 @@ To remove duo:
 /plugin uninstall duo-progress@duo
 ```
 
-If you ran `/duo:setup`, put your status line back: change `statusLine` in `~/.claude/settings.json` to what it was (the backup `~/.claude/settings.json.bak-duo` shows the old value; copying the whole file back also undoes any settings you changed since), and delete `~/.claude/duo-usage-cache.sh`, `duo-usage.json`, `duo-limit-hit.json` and `duo-history.jsonl` if you like.
+Only if you ran `/duo:setup` (it is what creates the backup), put your status line back: change `statusLine` in `~/.claude/settings.json` to what it was (the backup `~/.claude/settings.json.bak-duo` shows the old value; copying the whole file back also undoes any settings you changed since), and delete `~/.claude/duo-usage-cache.sh`, `duo-usage.json`, `duo-limit-hit.json` and `duo-history.jsonl` if you like.
 
 ## Questions and words
 
@@ -113,7 +113,7 @@ If you ran `/duo:setup`, put your status line back: change `statusLine` in `~/.c
 
 **Will it use more of my limit?** Possibly, see the box at the top. Each run reports how much it used, so you can judge for yourself.
 
-**Does it change my files?** The builder agents edit your project, as in any Claude Code run. The plan checker, reviewer and verifier have no Edit or Write tools (they keep a shell for running checks and are told not to change files).
+**Does it change my files?** The builder agents edit your project, as in any Claude Code run. The plan checker (the advisor), reviewer and verifier have no Edit or Write tools (they keep a shell for running checks and are told not to change files).
 
 **Something looks off.** Please [open an issue](https://github.com/googlarz/duo/issues) with what you saw.
 
