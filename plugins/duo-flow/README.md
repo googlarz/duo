@@ -1,6 +1,6 @@
 # duo-flow
 
-> The original orchestrated flow, formerly **savvy-flow** by [JohnnyVizz](https://github.com/JohnnyVizz), renamed here as part of the duo family and kept as he wrote it. Its default workers are Opus and Fable, which spend a subscription limit faster; on a Pro or Max plan, [duo](../duo) (Sonnet workers, Opus only as a gate) is the variant tuned for that. Both work on any plan.
+> The original orchestrated flow, formerly **savvy-flow** from [JohnnyVizz's claude-kit](https://github.com/JohnnyVizz/claude-kit), renamed here as part of the duo family and kept as he wrote it. Its default workers are Opus and Fable, which spend a subscription limit faster; on a Pro or Max plan, [duo](../duo) (Sonnet workers, Opus only as a gate) is the variant tuned for that. Both work on any plan.
 
 An orchestrated delivery flow for Claude Code. Run `/duo-flow <task>` (`/duo-flow:duo-flow` when installed as a plugin): the session model plans, owns design, delegates implementation to tiered worker subagents and adversarially reviews what they return.
 

@@ -2,6 +2,8 @@
 
 A Claude Code mod: a progress bar above the prompt and a live panel of subagents. Made for the [duo-flow](../duo-flow) skill, and useful with any subagents.
 
+> Formerly **savvy-progress** from [JohnnyVizz's claude-kit](https://github.com/JohnnyVizz/claude-kit), renamed and extended here (usage tile, grouped view, run receipt, needs-attention queue).
+
 - **Progress bar**: the flow's title, phase, accepted tasks out of planned, and a button with the crew size that opens the panel. It appears once something reports progress (duo-flow does) or a `duo-flow-*` or `duo-*` worker (or a legacy `savvy-*` one) starts.
 - **Agents panel** (`/agents-info` toggles it; `/agents-info open` opens it or brings it forward without toggling): running, finished and planned subagents with model, effort, task progress, context, estimated cost and time. Working crabs walk, and each duo-flow tier animates its prop: the astronaut floats, the detective sweeps the magnifier, the engineer turns the wrench, the chef tosses the omelette, the racer runs with a fluttering flag. `prefers-reduced-motion` stops them.
 
