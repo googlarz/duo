@@ -16,6 +16,9 @@ const now = atom({ plugin: 'duo-progress', key: 'now' } as const, 0)
 // The subscription windows the host reports (`$.session.usage()`, `session.measure`).
 type Limit = { kind: string; percentUsed: number; resetsAt?: string }
 const limits = atom({ plugin: 'duo-progress', key: 'limits' } as const, [] as Limit[])
+// The usage when the current flow began: what a run cost is the move since.
+type RunBase = Partial<Record<'five_hour' | 'seven_day', number>> | null
+const runBase = atom({ plugin: 'duo-progress', key: 'runBase' } as const, null as RunBase)
 
 const TOOL = 'mcp__duo-progress__progress'
 const STEP_TOOL = 'mcp__duo-progress__step'
@@ -359,11 +362,37 @@ const fitText = (s: string, size: number, maxW: number): string => {
   return out + '…'
 }
 
-// The 5-hour usage for the band, else the weekly one: a few characters beside the percent.
-export const usageShort = (list: readonly Limit[]): string => {
+export const baseOf = (list: readonly Limit[]): RunBase => {
+  const out: Partial<Record<'five_hour' | 'seven_day', number>> = {}
+  for (const [kind] of WINDOWS) {
+    const l = list.find(x => x.kind === kind)
+    if (l && Number.isFinite(l.percentUsed)) out[kind as 'five_hour' | 'seven_day'] = l.percentUsed
+  }
+  return Object.keys(out).length ? out : null
+}
+
+// What the run used per window, in points; a window that reset mid-run (now below the base) is left out.
+export const runDelta = (base: RunBase, list: readonly Limit[]): { short: string; pct: number }[] =>
+  WINDOWS.flatMap(([kind, short]) => {
+    const b = base?.[kind as 'five_hour' | 'seven_day']
+    const l = list.find(x => x.kind === kind)
+    if (b === undefined || !l || !Number.isFinite(l.percentUsed) || l.percentUsed < b) return []
+    return [{ short, pct: Math.round((l.percentUsed - b) * 10) / 10 }]
+  })
+
+const fmtPct = (n: number): string => `${Number.isInteger(n) ? n : n.toFixed(1)}%`
+
+// The sentence the progress tool hands the orchestrator when the flow closes.
+export const runSentence = (d: readonly { short: string; pct: number }[]): string =>
+  d.length ? ` This run used ${d.map(x => `${fmtPct(x.pct)} of the ${x.short === '5h' ? '5-hour window' : 'weekly window'}`).join(' and ')}.` : ''
+
+// The 5-hour usage for the band, else the weekly one; with a base, what the run added.
+export const usageShort = (list: readonly Limit[], base: RunBase = null): string => {
   for (const [kind, short] of WINDOWS) {
     const l = list.find(x => x.kind === kind)
-    if (l && Number.isFinite(l.percentUsed)) return `${short} ${Math.round(l.percentUsed)}%`
+    if (!l || !Number.isFinite(l.percentUsed)) continue
+    const used = runDelta(base, list).find(d => d.short === short)
+    return `${short} ${Math.round(l.percentUsed)}%${used && used.pct > 0 ? ` (+${fmtPct(used.pct)})` : ''}`
   }
   return ''
 }
@@ -1514,6 +1543,16 @@ async function autoOpen($: EngineInterface, key: string): Promise<void> {
   void $.ui.open({ id: PANE, title: tr().pane })
 }
 
+// The host's reading now, else the last one the panel saw.
+async function currentLimits($: EngineInterface): Promise<Limit[]> {
+  try {
+    const u = await $.session.usage()
+    return u.rateLimits.map(l => ({ kind: l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt }))
+  } catch {
+    return read($, limits)
+  }
+}
+
 export const register: Register = (on, options) => {
   on('session.measure', async ($, e, next) => {
     await update($, limits, () => e.rateLimits.map(l => ({ kind: l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt })))
@@ -1623,21 +1662,17 @@ export const register: Register = (on, options) => {
     if (isNewFlow(prev, input) && input.title !== undefined) {
       // A new flow starts with a clean list; agents still running stay.
       await update($, agents, list => list.filter(a => a.status === 'running'))
+      const base = baseOf(await currentLimits($))
+      await update($, runBase, () => base)
     }
     const next = await update($, flow, p => merge(p, input))
     if (next && input.tasks?.length) await autoOpen($, next.title)
-    return { result: `ok: ${label(next ?? blank())}` }
+    const note = next?.isFinished && !prev?.isFinished ? runSentence(runDelta(await read($, runBase), await currentLimits($))) : ''
+    return { result: `ok: ${label(next ?? blank())}${note}` }
   })
 
   // A worker's own progress: the call runs in the worker's loop, so agentId names it.
-  on('tool.call', { tool: USAGE_TOOL }, async $ => {
-    try {
-      const u = await $.session.usage()
-      return { result: usageReport(u.rateLimits) }
-    } catch {
-      return { result: usageReport(await read($, limits)) }
-    }
-  })
+  on('tool.call', { tool: USAGE_TOOL }, async $ => ({ result: usageReport(await currentLimits($)) }))
 
   on('tool.call', { tool: STEP_TOOL }, async ($, e) => {
     const input = e as unknown as { done?: number; total?: number; note?: string; plan?: unknown }
@@ -2090,7 +2125,7 @@ export const register: Register = (on, options) => {
     const crewLabel = `${crew} ${agentsWord(crew)}`
     const crewButton = <Button key="duo-agents" label={crewLabel} plain onPress={() => void togglePane($)} />
     const percent = `${Math.round(ratio(f) * 100)}%`
-    const usage = usageShort(await read($, limits))
+    const usage = usageShort(await read($, limits), f.isFinished ? await read($, runBase) : null)
     const dismiss = (
       <Button
         key="savvy-dismiss"

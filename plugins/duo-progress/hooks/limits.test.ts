@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { AgentRun } from '../types'
-import { headerSvg, limitTile, rowSvg, stepsDone, usageReport, usageShort } from './register'
+import { baseOf, headerSvg, limitTile, rowSvg, runDelta, runSentence, stepsDone, usageReport, usageShort } from './register'
 
 test('limitTile: both windows, label names them, value their rounded percentages', () => {
   expect(limitTile([{ kind: 'five_hour', percentUsed: 9.4 }, { kind: 'seven_day', percentUsed: 31 }])).toEqual({ label: '5h · 7d', value: '9% · 31%' })
@@ -74,4 +74,29 @@ test('band: solid bar, no dither, usage named and the flow percent left out', ()
 test('band: without a reading the text is just the percent; a working bar breathes', () => {
   expect(rowSvg(flowOf, 600, false)).toContain('>100%</text>')
   expect(rowSvg({ ...flowOf, isFinished: false, done: 1, running: 1 }, 600, true)).toContain('class="run"')
+})
+
+const at = (five: number, seven: number) => [{ kind: 'five_hour', percentUsed: five }, { kind: 'seven_day', percentUsed: seven }]
+
+test('runDelta: what the run added per window; a window that reset or has no base is left out', () => {
+  const base = baseOf(at(9, 31))
+  expect(runDelta(base, at(13, 32))).toEqual([{ short: '5h', pct: 4 }, { short: '7d', pct: 1 }])
+  expect(runDelta(base, at(2, 32))).toEqual([{ short: '7d', pct: 1 }])
+  expect(runDelta(null, at(13, 32))).toEqual([])
+  expect(runDelta(base, [])).toEqual([])
+})
+
+test('runDelta: fractions are kept to one decimal', () => {
+  expect(runDelta(baseOf(at(9.1, 31)), at(9.6, 31))).toEqual([{ short: '5h', pct: 0.5 }, { short: '7d', pct: 0 }])
+})
+
+test('runSentence: plain words for the orchestrator; empty when nothing is known', () => {
+  expect(runSentence([{ short: '5h', pct: 4 }, { short: '7d', pct: 1 }])).toBe(' This run used 4% of the 5-hour window and 1% of the weekly window.')
+  expect(runSentence([])).toBe('')
+})
+
+test('usageShort: with a base the band adds what the run used', () => {
+  expect(usageShort(at(13, 32), baseOf(at(9, 31)))).toBe('5h 13% (+4%)')
+  expect(usageShort(at(13, 32), baseOf(at(13, 32)))).toBe('5h 13%')
+  expect(usageShort(at(13, 32))).toBe('5h 13%')
 })

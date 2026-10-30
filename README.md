@@ -56,7 +56,7 @@ You describe the task. The AI creates the agents and picks the model for each st
 
 | | |
 | --- | --- |
-| 👁 **Visibility** | A live panel with **every agent**: its task, the **model and effort** it runs on, its steps, progress, tokens, cost and time, plus **how much of your 5-hour and weekly limit you have used** (read from Claude Code itself; needs no setup). Open any task to see its steps. With big fan-outs of many agents it groups them by stage and shows the model mix, so it stays readable. Each stage gets its own animated pixel crab in a costume. |
+| 👁 **Visibility** | A live panel with **every agent**: its task, the **model and effort** it runs on, its steps, progress, tokens, cost and time, plus **how much of your 5-hour and weekly limit you have used** (read from Claude Code itself; needs no setup), and at the end of a run **how much of it that run cost** ("This run used 4% of your 5-hour window"). Open any task to see its steps. With big fan-outs of many agents it groups them by stage and shows the model mix, so it stays readable. Each stage gets its own animated pixel crab in a costume. |
 | 🧠 **The right model, automatically** | The AI picks the model for each stage and the effort for each task by itself, within built-in guardrails (an Opus budget, a cap on retries, a check when your limit runs low). Works out of the box; shape it with your own rules in `CLAUDE.md` if you want (see below). |
 
 ## How it works
@@ -102,6 +102,12 @@ Every agent is a small animated pixel crab, and its costume tells you the job. T
 - **Limit-aware** *(one command: `/duo:setup`)*: at 80% used, duo skips the plan check and early review and caps workers at `medium`. At 95% it stops starting new work and reports where it stands, so you can continue after the reset. Manual steps and details: **[usage-limits guide](plugins/duo/docs/usage-limits.md)** (Pro/Max only; the plan reports usage only there). **Where it works:** with the duo-progress panel installed, duo reads your usage live from Claude Code, in the terminal and in the desktop app, with no setup. Without the panel it falls back to the status-line helper (`/duo:setup`), which we confirmed only in the terminal; if neither gives a reading, the guard is off and duo says so in its plan and report.
 - **Your session model:** run duo from a Sonnet session. duo can't see which model your session runs, so tell it if it's Opus (then it reviews itself instead of calling a second Opus) or Haiku (then the plan check is mandatory).
 
+## What a run costs, learned over time
+
+duo keeps a small log of past runs on your machine (`~/.claude/duo-history.jsonl`: size, tiers used, how much of your limit each run took). After a few runs the plan gives a forecast in your own currency, for example "about 3-5% of your 5-hour window", and warns when a run would cross 80%. If a tier keeps needing escalation in your projects, duo starts similar tasks one tier higher and says so. Nothing is sent anywhere. At a limit stop it offers, once, to resume by itself at the reset time (needs your yes and a session left open; unverified, see Honest status).
+
+Want Claude to suggest duo on big jobs without you remembering the command? Add one rule to your `CLAUDE.md`: `When a task spans 5 or more files or has independent parts, suggest running /duo:duo instead of doing it inline.`
+
 ## Make it yours: rules in CLAUDE.md
 
 duo's defaults are plain instructions, so you change them the way you change any Claude Code behaviour: with rules in `CLAUDE.md`, either **global** (`~/.claude/CLAUDE.md`, all projects) or **per project** (`CLAUDE.md` in the repo). The orchestrator reads them like any session does, and your rules beat duo's defaults. For example:
@@ -137,9 +143,11 @@ Also good to know:
 
 ## Honest status
 
+We have **not** measured whether duo saves your limit compared with plain Sonnet; the protocol to find out is in [benchmark/](benchmark/README.md), and the first result is still missing.
+
 Verified: all plugins pass `claude plugin validate`; the panel's tests pass; the helper scripts ran against sample input; the effort levels and agent settings duo relies on were checked against the Claude Code docs.
 
-Not yet verified, because it needs a live session: the statusline helper in daily use, the rate-limit hook firing on a real limit, how the panel's details and grouped views look in the real app, and whether a bare `/duo` resolves on your version. The panel is built on Claude Code's early-access hooks and may change between releases. If something looks off, please open an issue with what you saw.
+Not yet verified, because it needs a live session: the per-run usage line (computed in the panel and unit-tested, never seen in a real run), the history forecast and tier learning (written as instructions to the orchestrator, not tested at all), the offer to resume after a reset, the statusline helper in daily use, the rate-limit hook firing on a real limit, how the panel's details and grouped views look in the real app, and whether a bare `/duo` resolves on your version. The panel is built on Claude Code's early-access hooks and may change between releases. If something looks off, please open an issue with what you saw.
 
 Since 0.3.0: an offline selftest for the helper scripts (`plugins/duo/scripts/selftest.sh`, 16 checks, all passing).
 
