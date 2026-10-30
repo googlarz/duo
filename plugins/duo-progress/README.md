@@ -15,7 +15,7 @@ Under each running or finished agent row a `▸ Details · <model>` button opens
 
 ## Needs attention
 
-An agent that fails, or that has shown no sign of life (a model request, a step report or a tool call) for three minutes, is marked in its row ("stalled 4m", the crab stops walking) and shown, first, in a **Needs attention** block at the top of the grouped view with its last action or result. The bar above the prompt adds a count (⚠ 2). Each agent's row also shows what its last tool call was doing ("editing cart.py", "running: python3 -m unittest…") when it has not reported steps. Agents Claude starts outside a duo flow get a bar of their own ("Agents", counting them). Not yet seen in a real run (unit-tested only).
+An agent that fails, or that has shown no sign of life (a model request, a step report or a tool call) for three minutes, is marked in its row ("stalled 4m", the crab stops walking) and shown, first, in a **Needs attention** block at the top of the grouped view with its last action or result. The bar above the prompt adds a count (⚠ 2). Each agent's row also shows what its last tool call was doing ("editing cart.py", "running: python3") when it has not reported steps. Agents Claude starts outside a duo flow get a bar of their own ("Agents", counting them). Not yet seen in a real run (unit-tested only).
 
 ## Grouped view (big fan-outs)
 

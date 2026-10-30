@@ -45,8 +45,9 @@ const MAX_NOTE = 80
 const MAX_WHY = 140
 const MAX_RESULT = 160
 const MAX_FILES = 20
-// An agent with no sign of life for this long is called stalled in the panel.
+// An agent with no sign of life for this long is called stalled in the panel; a running tool call (a build, a test run) gets longer.
 const STALL_MS = 3 * 60 * 1000
+const STALL_BUSY_MS = 10 * 60 * 1000
 const MAX_OPEN = 200
 const ACCENT = '#8f8cf4'
 const DONE = '#5fbf8f'
@@ -1216,7 +1217,8 @@ export const describeAction = (tool: string, input: Record<string, unknown>): st
     case 'Read':
       return str('file_path') ? `reading ${baseName(str('file_path'))}` : 'reading'
     case 'Bash':
-      return str('command') ? `running: ${clip(str('command').trim().replace(/\s+/g, ' '), 36)}` : 'running a command'
+      // Only the program: the arguments can hold tokens or passwords.
+      return str('command').trim() ? `running: ${clip(baseName(str('command').trim().split(/\s+/)[0]), 24)}` : 'running a command'
     case 'Grep':
     case 'Glob':
       return 'searching'
@@ -1224,7 +1226,7 @@ export const describeAction = (tool: string, input: Record<string, unknown>): st
     case 'WebSearch':
       return 'looking things up'
     default:
-      return tool.replace(/^mcp__[^_]+__/, '')
+      return tool.replace(/^mcp__.+?__/, '')
   }
 }
 
@@ -1236,7 +1238,7 @@ export const verdictOf = (answer: unknown): 'pass' | 'fail' | undefined => {
 }
 
 // Running with no sign of life for STALL_MS.
-export const isStalled = (a: AgentRun, at: number): boolean => a.status === 'running' && at - (a.lastAt ?? a.startedAt) > STALL_MS
+export const isStalled = (a: AgentRun, at: number): boolean => a.status === 'running' && at - (a.lastAt ?? a.startedAt) > (a.busy ? STALL_BUSY_MS : STALL_MS)
 
 // What the usage tool answers: the same shape duo's usage file has (percent used, reset as epoch
 // seconds, per window), or a plain sentence when the host has no reading.
@@ -1713,7 +1715,13 @@ async function currentLimits($: EngineInterface): Promise<Limit[]> {
 
 export type Receipt = { at: number; title: string; used: string; agents: AgentRun[] }
 
-const mdCell = (t: string): string => t.replace(/\|/g, '/').replace(/\s+/g, ' ').trim()
+// Free text from an agent (its task, answer, file names) goes into markdown the user may paste into a pull
+// request: every character that could make a link, an image, a heading or HTML is escaped.
+export const mdCell = (t: string): string =>
+  t
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[\\`*_{}\[\]()<>#!|~]/g, c => `\\${c}`)
 
 export const receiptMarkdown = (r: Receipt): string => {
   const rows = r.agents.map(
@@ -1725,9 +1733,9 @@ export const receiptMarkdown = (r: Receipt): string => {
       a.why ? `- Why this tier (the orchestrator's words): ${mdCell(a.why)}` : '',
       a.verdict ? `- Verdict: ${a.verdict.toUpperCase()}` : '',
       a.result ? `- Result: ${mdCell(a.result)}` : '',
-      a.files?.length ? `- Files: ${a.files.map(f => '`' + f + '`').join(', ')}` : '',
+      a.files?.length ? `- Files: ${a.files.map(f => mdCell(f)).join(', ')}` : '',
     ].filter(Boolean)
-    return bits.length ? [`### ${mdCell(a.description || a.type)} (${a.type})`, ...bits, ''] : []
+    return bits.length ? [`### ${mdCell(a.description || a.type)} (${mdCell(a.type)})`, ...bits, ''] : []
   })
   return [
     `# duo run receipt: ${mdCell(r.title)}`,
@@ -1746,7 +1754,7 @@ export const receiptMarkdown = (r: Receipt): string => {
 async function currentReceipt($: EngineInterface): Promise<Receipt | null> {
   const f = await read($, flow)
   const list = await read($, agents)
-  const mine = f?.isImplicit ? list.slice(f.skip ?? 0) : list
+  const mine = f?.isImplicit ? list.filter(a => a.startedAt >= (f.since ?? 0)) : list
   if (!mine.length) return null
   const used = runSentence(runDelta(await read($, runBase), await currentLimits($))).replace(/\.$/, '')
   return { at: await $.clock.now(), title: f?.title ?? 'Agents', used, agents: mine.slice(-50) }
@@ -1767,7 +1775,7 @@ async function persistReceipt($: EngineInterface): Promise<void> {
 async function syncImplicit($: EngineInterface): Promise<void> {
   const f = await read($, flow)
   if (!f?.isImplicit) return
-  const mine = (await read($, agents)).slice(f.skip ?? 0)
+  const mine = (await read($, agents)).filter(a => a.startedAt >= (f.since ?? 0))
   const running = mine.filter(a => a.status === 'running').length
   const total = mine.length
   const isFinished = running === 0 && total > 0
@@ -1780,15 +1788,13 @@ async function syncImplicit($: EngineInterface): Promise<void> {
 }
 
 // No duo flow is running and an agent started anyway: the bar follows these agents too, from `before`.
-async function ensureImplicit($: EngineInterface, before: number): Promise<void> {
+async function ensureImplicit($: EngineInterface, at: number): Promise<void> {
   const prev = await read($, flow)
-  if (prev && !prev.isFinished && !prev.isImplicit) return
-  const skip = prev?.isImplicit ? (prev.skip ?? 0) : before
-  if (!prev?.isImplicit) {
-    const base = baseOf(await currentLimits($))
-    await update($, runBase, () => base)
-  }
-  await update($, flow, () => ({ ...blank(), title: 'Agents', phase: 'delegate', isImplicit: true, skip }))
+  // A duo flow in progress, or an implicit one still running, is left as it is; otherwise a new run begins now.
+  if (prev && !prev.isFinished) return
+  const base = baseOf(await currentLimits($))
+  await update($, runBase, () => base)
+  await update($, flow, () => ({ ...blank(), title: 'Agents', phase: 'delegate', isImplicit: true, since: at }))
 }
 
 export const register: Register = (on, options) => {
@@ -1950,6 +1956,7 @@ export const register: Register = (on, options) => {
               : {
                   ...a,
                   lastAt: at,
+                  busy: true,
                   action: describeAction(tool, input),
                   files: path && !(a.files ?? []).includes(path) ? [...(a.files ?? []), path].slice(0, MAX_FILES) : a.files,
                 },
@@ -1957,7 +1964,18 @@ export const register: Register = (on, options) => {
         )
       }
     } catch {}
-    return next(e)
+    try {
+      return await next(e)
+    } finally {
+      // The call is over: the clock for "no sign of life" starts again from now.
+      const agentId = (e as { agentId?: string }).agentId
+      if (agentId) {
+        try {
+          const done = await $.clock.now()
+          await update($, agents, list => list.map(a => (a.agentId === agentId ? { ...a, busy: false, lastAt: done } : a)))
+        } catch {}
+      }
+    }
   })
 
   on('tool.call', { tool: STEP_TOOL }, async ($, e) => {
@@ -2006,7 +2024,6 @@ export const register: Register = (on, options) => {
     if (started.deny !== undefined) return started
 
     const at = await $.clock.now()
-    const before = (await read($, agents)).length
     const planned = (await read($, flow))?.tasks.find(t => norm(t.title) === norm(e.description) && e.description)
     await update($, agents, list => {
       const round = 1 + list.filter(a => norm(a.description) === norm(e.description) && e.description).length
@@ -2030,7 +2047,7 @@ export const register: Register = (on, options) => {
       return [...list.filter(a => a.id !== run.id), run].slice(-200)
     })
     await update($, now, () => at)
-    if (!isPipelineAgent(e.subagentType)) await ensureImplicit($, before)
+    if (!isPipelineAgent(e.subagentType)) await ensureImplicit($, at)
     await syncImplicit($)
     if (isPipelineAgent(e.subagentType)) {
       const f = await read($, flow)

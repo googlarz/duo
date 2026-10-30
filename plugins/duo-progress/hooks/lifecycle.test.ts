@@ -37,7 +37,7 @@ test('lifecycle: edited files reach the receipt once, and only for a subagent', 
   await $.tool.call({ tool: 'Edit', agentId: 'a2', file_path: '/x/a.py' } as never)
   await $.tool.call({ tool: 'Edit', file_path: '/x/main.py' } as never)
   const md = await receipt($)
-  expect(md).toContain('- Files: `/x/a.py`')
+  expect(md).toContain('- Files: /x/a.py')
   expect(md).not.toContain('main.py')
 })
 
@@ -56,10 +56,10 @@ test('lifecycle: with nothing run the receipt says so', async ($, on) => {
 test('receiptMarkdown: a table, the why, the files, and the honest footer', () => {
   const a = { id: 'x', type: 'duo:duo-low', description: 'Fix | the bug', model: 'claude-sonnet-5-5', effort: 'low', status: 'done', startedAt: 0, endedAt: 12_000, contextTokens: 0, contextMax: 1, tokens: 76_000, costUsd: 0.2, steps: 3, round: 1, stepTotal: 2, stepDone: 2, why: 'a one-line known cause', verdict: 'pass', result: 'done', files: ['/p/a.py'] } as AgentRun
   const md = receiptMarkdown({ at: 0, title: 'Fix the bug', used: ' This run used 1% of the 5-hour window', agents: [a] })
-  expect(md).toContain('| Fix / the bug |')
+  expect(md).toContain('| Fix \\| the bug |')
   expect(md).toContain('2/2')
   expect(md).toContain("- Why this tier (the orchestrator's words): a one-line known cause")
-  expect(md).toContain('- Files: `/p/a.py`')
+  expect(md).toContain('- Files: /p/a.py')
   expect(md).toContain('This run used 1% of the 5-hour window')
   expect(md).toContain('Cost is an API-price estimate, not your bill.')
 })
@@ -78,9 +78,12 @@ test('detailLines: the stalled time, why, action, verdict, result and file names
 test('describeAction: a few words per tool', () => {
   expect(describeAction('Edit', { file_path: '/a/b/cart.py' })).toBe('editing cart.py')
   expect(describeAction('Read', { file_path: 'C:\\a\\b.txt' })).toBe('reading b.txt')
-  expect(describeAction('Bash', { command: 'python3   -m unittest discover -s tests' })).toBe('running: python3 -m unittest discover -s tes…')
+  // Only the program: arguments can hold secrets.
+  expect(describeAction('Bash', { command: 'curl -H "Authorization: Bearer abc123" https://x' })).toBe('running: curl')
+  expect(describeAction('Bash', { command: '/usr/local/bin/python3 -m unittest' })).toBe('running: python3')
   expect(describeAction('Grep', {})).toBe('searching')
   expect(describeAction('mcp__duo-progress__step', {})).toBe('step')
+  expect(describeAction('mcp__plugin_x_y__do_it', {})).toBe('do_it')
 })
 
 test('verdictOf: PASS or FAIL at the start of an answer, markdown allowed', () => {
@@ -162,4 +165,68 @@ test('inkOn: dark ink on the light fills the bar uses, white on a dark one', () 
 test('band: the pill text uses the ink that reads on its fill', () => {
   const f = { title: 'Job', total: 1, done: 1, running: 0, phase: 'close', isFinished: true } as Parameters<typeof rowSvg>[0]
   expect(rowSvg(f, 600, false)).toContain('fill="#10151a">Done</text>')
+})
+
+// ---- fixes from the review ----
+import { mdCell } from './register'
+
+test('receiptMarkdown: free text from an agent cannot become a link, an image, a heading or HTML', () => {
+  const hostile = '![x](https://evil.example/p.png?q=1) [click](https://evil.example) <img src=x onerror=alert(1)> # heading `code`'
+  const a = mk({ status: 'done', type: 'general-purpose', description: hostile, result: hostile, files: ['/p/a`b.py', '/p/![x](y).md'], endedAt: 5 })
+  const md = receiptMarkdown({ at: 0, title: hostile, used: '', agents: [a] })
+  // No unescaped markdown constructs survive.
+  expect(md).not.toMatch(/(^|[^\\])!\[/)
+  expect(md).not.toMatch(/(^|[^\\])\]\(/)
+  expect(md).not.toMatch(/(^|[^\\])</)
+  expect(md.split('\n').filter(l => /^#{1,6} /.test(l)).length).toBe(2) // only our own two headings
+})
+
+test('mdCell: escapes the characters that make markdown, keeps plain words and hyphens', () => {
+  expect(mdCell('duo-low runs *fast* [now]')).toBe('duo-low runs \\*fast\\* \\[now\\]')
+  expect(mdCell('a   b\n c')).toBe('a b c')
+})
+
+test('implicit flow: a second run starts its own window; the receipt holds only that run', async ($, on) => {
+  let t = 1000
+  on('clock.now', () => ({ value: (t += 1000) }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('agent.spawn', (_$, e) => ({ model: 'claude-sonnet-5-5', agentId: e.tool_use_id }))
+  on('turn.complete', () => ({ text: 'ok' }) as never)
+  await spawn($, 'r1', 'First run job')
+  await $.turn.complete({ agentId: 'r1', reason: 'answer', answer: 'ok' } as never)
+  expect(await receipt($)).toContain('First run job')
+  // The clock moves on, a new agent starts: a new window.
+  await spawn($, 'r2', 'Second run job')
+  const md = await receipt($)
+  expect(md).toContain('Second run job')
+  expect(md).toContain('1 agent')
+  expect(md).not.toContain('First run job')
+})
+
+test('isStalled: a running tool call gets the longer allowance', () => {
+  const at = 5 * 60_000
+  const quiet = mk({ lastAt: 0 })
+  expect(isStalled(quiet, at)).toBe(true) // 5 minutes of silence
+  expect(isStalled({ ...quiet, busy: true }, at)).toBe(false) // a build may take that long
+  expect(isStalled({ ...quiet, busy: true }, 11 * 60_000)).toBe(true) // but not forever
+})
+
+test('contrast: the colours the band and the panel really use meet 4.5:1', () => {
+  // The first `.m{fill:#…}` in the light rules and the first one after the dark media query.
+  const muted = (css: string): { light: string; dark: string } => {
+    const at = css.indexOf('prefers-color-scheme: dark')
+    const pick = (t: string): string => /\.m\{fill:(#[0-9a-f]{6})\}/.exec(t)?.[1] ?? ''
+    return { light: pick(css.slice(0, at)), dark: pick(css.slice(at)) }
+  }
+  const f = { title: 'Job', total: 1, done: 1, running: 0, phase: 'close', isFinished: true } as Parameters<typeof rowSvg>[0]
+  const band = muted(rowSvg(f, 600, false))
+  expect(band.light).toMatch(/^#/)
+  expect(band.dark).toMatch(/^#/)
+  expect(contrast(band.light, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+  expect(contrast(band.dark, '#1e1e1e')).toBeGreaterThanOrEqual(4.5)
+  const panel = muted(groupedSvg(480, [mk({ status: 'done' })], 0, 'x').source)
+  expect(panel.light).toMatch(/^#/)
+  expect(panel.dark).toMatch(/^#/)
+  expect(contrast(panel.light, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+  expect(contrast(panel.dark, '#262625')).toBeGreaterThanOrEqual(4.5)
 })

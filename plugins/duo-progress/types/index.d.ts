@@ -18,8 +18,8 @@ export type Flow = {
   tasks: PlannedTask[]
   // A flow the panel made itself for agents started outside a duo flow: it counts them.
   isImplicit?: boolean
-  // How many agents were listed before it began; it counts the ones after.
-  skip?: number
+  // When it began (ms): it counts the agents started since.
+  since?: number
 }
 
 export type AgentStatus = 'running' | 'done' | 'failed'
@@ -50,6 +50,8 @@ export type AgentRun = {
   stepLog?: { n: number; note: string; at: number }[]
   /** Last sign of life: spawn, a model request, a step report or a tool call. */
   lastAt?: number
+  /** A tool call is running: a long build is not a stall. */
+  busy?: boolean
   /** What the last tool call was doing, in a few words ("editing cart.py"). */
   action?: string
   /** Files the agent edited or wrote, as given. */
