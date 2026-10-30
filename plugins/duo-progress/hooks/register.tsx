@@ -1540,6 +1540,37 @@ const countsText = (g: { done: number; running: number; failed: number; fails?: 
   return [g.done ? `${g.done} ${s.doneN}` : '', g.running ? `${g.running} ${s.isRunning}` : '', g.failed ? `${g.failed} ${s.failedN}` : '', g.fails ? `${g.fails} FAIL` : ''].filter(Boolean).join(' · ') || `0 ${s.doneN}`
 }
 
+// Your usage as two small meters, each named: "5h ▮▮▯▯ 45% ↻ 27m    7d ▮▯▯▯ 40%". The bar fills with the share used
+// and turns amber from 70% and red from 90%; the reset time belongs to the 5-hour window. Empty off a subscription.
+const limitMeters = (W: number, lim: readonly Limit[], nowMs: number): { source: string; width: number } => {
+  const items = WINDOWS.flatMap(([kind, short]) => {
+    const l = lim.find(x => x.kind === kind)
+    if (!l || !Number.isFinite(l.percentUsed)) return []
+    const at = l.resetsAt ? Date.parse(l.resetsAt) : Number.NaN
+    const reset = kind === 'five_hour' && nowMs && Number.isFinite(at) && at > nowMs ? `↻ ${timeLeft(at - nowMs)}` : ''
+    return [{ short, pct: Math.max(0, Math.min(100, Math.round(l.percentUsed))), reset }]
+  })
+  if (!items.length) return { source: '', width: 0 }
+  const BAR = 34
+  const placed = []
+  let x = 0
+  for (const [k, it] of items.entries()) {
+    if (k) x += 16
+    const pctText = `${it.pct}%`
+    const labelW = textWidth(it.short, 11.5)
+    const pctW = textWidth(pctText, 11.5)
+    placed.push({ ...it, pctText, x, barX: x + labelW + 5, pctX: x + labelW + 5 + BAR + 5, resetX: x + labelW + 5 + BAR + 5 + pctW + 10 })
+    x = (it.reset ? placed[placed.length - 1].resetX + textWidth(it.reset, 11) : placed[placed.length - 1].pctX + pctW)
+  }
+  const x0 = W - GP - x
+  const out = placed.map(it => {
+    const color = it.pct >= 90 ? C_FAIL : it.pct >= 70 ? C_RUN : C_DONE
+    const fill = Math.max(it.pct ? 3 : 0, Math.round((BAR * it.pct) / 100))
+    return `${T(W, 's', x0 + it.x, 21, 11.5, 500, it.short, 'start')}<rect class="k" x="${mx(W, x0 + it.barX, BAR)}" y="14" width="${BAR}" height="6" rx="3"/>${fill ? `<rect x="${mx(W, x0 + it.barX, fill)}" y="14" width="${fill}" height="6" rx="3" fill="${color}"/>` : ''}${T(W, 't', x0 + it.pctX, 21, 11.5, 600, it.pctText, 'start', ' font-variant-numeric="tabular-nums"')}${it.reset ? T(W, 'm', x0 + it.resetX, 21, 11, 400, it.reset, 'start', ' font-variant-numeric="tabular-nums"') : ''}`
+  })
+  return { source: out.join(''), width: Math.ceil(x) }
+}
+
 // The top of the pane: what the job is, how far it is and what your limit is.
 export const statusSvg = (
   W: number,
@@ -1556,7 +1587,9 @@ export const statusSvg = (
   const t = totals(list, at)
   const wide = W - GP * 2
   const lt = limitTile(lim, nowMs)
-  const right = lt ? `${lt.label} ${lt.value}${lt.reset ? ` · ↻ ${lt.reset}` : ''}` : `≈${fmtCost(t.cost)}`
+  const meters = limitMeters(W, lim, nowMs)
+  const cost = `≈${fmtCost(t.cost)}`
+  const rightW = meters.width || textWidth(cost, 12)
   const sub = [`${tl.finished}/${total} ${s.doneN}`, tl.running ? `${tl.running} ${s.isRunning}` : '', tl.failed ? `${tl.failed} ${s.failedN}` : '', list.length ? fmtSpan(t.time) : '', runUse].filter(Boolean).join(' · ')
   const height = 60
   const wd = Math.round((wide * tl.done) / Math.max(1, total))
@@ -1567,8 +1600,8 @@ export const statusSvg = (
     source: svg(
       W,
       height,
-      `${T(W, 's', W - GP, 21, 12, 400, fitText(right, 12, Math.max(60, wide * 0.5)), 'end', ' font-variant-numeric="tabular-nums"')}
-${T(W, 't', GP, 22, 16, 700, fitText(title || s.pane, 16, Math.max(60, wide - textWidth(right, 12) - 12)), 'start')}
+      `${lt?.tip ? `<title>${xml(lt.tip)}</title>` : ''}${meters.width ? meters.source : T(W, 's', W - GP, 21, 12, 400, cost, 'end', ' font-variant-numeric="tabular-nums"')}
+${T(W, 't', GP, 22, 16, 700, fitText(title || s.pane, 16, Math.max(60, wide - rightW - 12)), 'start')}
 ${T(W, 'm', GP, 42, 12, 400, fitText(sub, 12, wide), 'start')}
 <rect class="k" x="${GP}" y="48" width="${wide}" height="6" rx="3"/>${seg(0, wd, C_DONE)}${seg(wd, wr, C_RUN)}${seg(wd + wr, wf, C_FAIL)}`,
     ),

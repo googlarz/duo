@@ -127,7 +127,8 @@ test('statusSvg: the job, how far it is, what is running, the time and the limit
   expect(source).toContain('2/5 done')
   expect(source).toContain('1 running')
   expect(source).toContain('1 failed')
-  expect(source).toContain('5h 27%')
+  expect(source).toContain('>5h<')
+  expect(source).toContain('>27%<')
 })
 
 const PLAN = { title: 'Plan', total: 3, done: 0, running: 0, phase: 'delegate', isFinished: false, tasks: [{ title: 'Map', tier: 'duo-low', after: [] }, { title: 'Build', tier: 'duo-high', after: [1] }, { title: 'Check', tier: 'duo-verifier', after: [1, 2] }] } as Parameters<typeof taskRowsOf>[0]
@@ -273,6 +274,13 @@ test('planSvg: control characters in a title are dropped, not drawn', () => {
   const { source } = planSvg(480, taskRowsOf(null, [mk({ id: 'c', description: 'bad\u0001char\u000b here' })]), 5)
   expect(source).toContain('badchar here')
   expect(source).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/)
+})
+
+test('statusSvg: each usage window is a named meter that turns amber from 70% and red from 90%', () => {
+  const at = (pct5: number, pct7: number) => statusSvg(640, [], 0, 'J', 0, [{ kind: 'five_hour', percentUsed: pct5 }, { kind: 'seven_day', percentUsed: pct7 }]).source
+  expect(at(10, 10)).toContain('#3FB68B')
+  expect(at(75, 10)).toContain('#F5B44A')
+  expect(at(95, 10)).toContain('#E5484D')
 })
 
 test('titleLines: a title that fits stays on one line, a long one breaks at a space, the second line is cut', () => {

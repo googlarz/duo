@@ -36,8 +36,7 @@ const noAgents: AgentRun[] = []
 
 test('status: with a reading the limit is on top; without, the cost', () => {
   const withLimit = statusSvg(480, noAgents, 0, '', 0, [{ kind: 'five_hour', percentUsed: 9 }, { kind: 'seven_day', percentUsed: 31 }]).source
-  expect(withLimit).toContain('5h · 7d')
-  expect(withLimit).toContain('9% · 31%')
+  for (const part of ['>5h<', '>9%<', '>7d<', '>31%<']) expect(withLimit).toContain(part) // each window named, with its own percentage
   expect(withLimit).not.toContain('≈$')
   expect(statusSvg(480, noAgents, 0, '', 0, []).source).toContain('≈$0.00')
 })
