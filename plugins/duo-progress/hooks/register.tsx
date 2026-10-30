@@ -285,8 +285,14 @@ async function detectLang($: EngineInterface, option: unknown): Promise<Lang> {
   return langOf(locale)
 }
 
+// The name a flow has until the orchestrator names the job; it is never shown.
+const DEFAULT_TITLE = 'duo-flow'
+
+// What the panel and the bar call the job: the orchestrator's name for it, or else the project folder.
+export const shownTitle = (title: string, project: string): string => (title && title !== DEFAULT_TITLE ? title : project)
+
 const blank = (): Flow => ({
-  title: 'duo-flow',
+  title: DEFAULT_TITLE,
   total: 0,
   done: 0,
   running: 0,
@@ -1490,7 +1496,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const status = !a ? 'planned' : isQuiet ? 'stalled' : a.status
     const edge = status === 'failed' ? C_FAIL : status === 'running' ? C_RUN : status === 'stalled' ? C_CHECK : status === 'done' ? C_DONE : '#9a9a96'
     const pips = a && a.status === 'running' && a.stepTotal && a.stepTotal <= 10 ? a.stepTotal : 0
-    const sub = pips ? '' : !a ? tierWord(tier) : a.status === 'failed' ? s.failed : isQuiet ? `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : a.status === 'running' ? (a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : (a.action ?? fmtTime(elapsed(a, at)))) : fmtTime(elapsed(a, at))
+    const sub = pips ? '' : !a ? tierWord(tier) : a.status === 'failed' ? (a.result ? `${s.failed} · ${a.result}` : s.failed) : isQuiet ? `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : a.status === 'running' ? (a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : (a.action ?? fmtTime(elapsed(a, at)))) : fmtTime(elapsed(a, at))
     // Which model does the task: the one that ran it, or the one it is planned for. A dot in its colour; the name when there is room.
     const modelText = a ? runModel(a) : tierModel(tier)
     const dotColor = modelColor(a ? modelName(a.model) : modelText)
@@ -1613,6 +1619,16 @@ async function autoOpen($: EngineInterface, key: string): Promise<void> {
   if (p.autoOpenedFor === key) return
   await update($, panel, prev => ({ ...prev, autoOpenedFor: key }))
   void $.ui.open({ id: PANE, title: tr().pane })
+}
+
+// The folder the session works in: a fair name for a job the orchestrator did not name.
+async function projectName($: EngineInterface): Promise<string> {
+  try {
+    const dir = (await $.env.get('PWD')) ?? ''
+    return baseName(dir.replace(/[\\/]+$/, ''))
+  } catch {
+    return ''
+  }
 }
 
 // The host's reading now, else the last one the panel saw.
@@ -2110,7 +2126,7 @@ export const register: Register = (on, options) => {
     const five = runDelta(await read($, runBase), lim).find(d => d.short === '5h')
     const runUse = five && list.length > 0 && list.every(a => a.status !== 'running') ? `${s.thisRun}: ${five.pct > 0 ? fmtPct(five.pct) : '<1%'} 5h` : ''
     // The pane's title says "Agents"; inside, only the flow's own name.
-    const title = f && !f.isImplicit ? f.title : ''
+    const title = f && !f.isImplicit ? shownTitle(f.title, await projectName($)) : ''
 
     // The grouped view has its own switch, closed by default: its point is to avoid the long list.
     const isGroupedView = p.view ? p.view === 'grouped' : isGrouped(list.length)
@@ -2333,6 +2349,8 @@ export const register: Register = (on, options) => {
     const isWorking = list.some(a => a.status === 'running')
     const crewLabel = `${crew} ${agentsWord(crew)}`
     const crewButton = <Button key="duo-agents" label={crewLabel} plain onPress={() => void togglePane($)} />
+    // The job's name for the bar: never the placeholder.
+    const named = { ...f, title: shownTitle(f.title, await projectName($)) || tr().pane }
     const percent = `${Math.round(ratio(f) * 100)}%`
     const usage = usageShort(await freshLimits($), f.isFinished ? await read($, runBase) : null)
     const looks = needsOf(list, await read($, now)).length
@@ -2356,7 +2374,7 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column">
           <Box flexDirection={isRtl() ? 'row-reverse' : 'row'} alignItems="center" gap={1}>
-            <Svg source={rowSvg(f, width, isWorking, usage, alert)} alt={`${f.title}: ${label(f)}, ${percent}`} width={width} height={H} />
+            <Svg source={rowSvg(named, width, isWorking, usage, alert)} alt={`${named.title}: ${label(f)}, ${percent}`} width={width} height={H} />
             {crewButton}
             {dismiss}
           </Box>
@@ -2366,14 +2384,14 @@ export const register: Register = (on, options) => {
     }
 
     const cols = e.props.bodyColumns
-    const titleW = Math.max(8, Math.min(30, f.title.length + 2, Math.floor(cols / 3)))
+    const titleW = Math.max(8, Math.min(30, named.title.length + 2, Math.floor(cols / 3)))
     const width = Math.max(6, Math.min(40, cols - titleW - 32))
     return (
       <Box flexDirection="column">
         <Box flexDirection="row" gap={2}>
           <Box width={titleW} flexShrink={0}>
             <Text color={f.isFinished ? DONE : ACCENT}>● </Text>
-            <Text wrap="truncate-end">{f.title}</Text>
+            <Text wrap="truncate-end">{named.title}</Text>
           </Box>
           <Text color={f.isFinished ? DONE : ACCENT}>{barText(f, width)}</Text>
           <Text bold>{label(f)}</Text>

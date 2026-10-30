@@ -19,7 +19,7 @@ Task from the user: $ARGUMENTS
 ## Progress bar
 
 If the tool `mcp__duo-progress__progress` appears among your tools, including as a deferred tool, it is available: a deferred tool only needs loading first with ToolSearch (`select:mcp__duo-progress__progress`). Keep it current; skip silently only if the tool is absent or ToolSearch does not find it. Call it:
-- after presenting the plan: `title` (a few words), `total` (number of worker tasks), `tasks` (`[{ title, tier, after }]` in plan order; `tier` without the `duo-flow-` prefix, `after` the numbers of the tasks it waits for), `phase: "delegate"` (or `"design"` while in section 2);
+- after presenting the plan: `title` (a few words naming the user's task or project, for example "Fix German metadata"; never "duo flow"; the panel shows it above the agents), `total` (number of worker tasks), `tasks` (`[{ title, tier, after }]` in plan order; `tier` without the `duo-flow-` prefix, `after` the numbers of the tasks it waits for), `phase: "delegate"` (or `"design"` while in section 2);
 - each time a task is accepted in review: `done` (accepted so far); switch `phase` to `"review"` while reviewing;
 - if re-planning changes the tasks: the new `tasks` and `total`;
 - once at close: `finished: true`.

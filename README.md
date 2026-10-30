@@ -1,10 +1,10 @@
 # duo: see every AI agent Claude spawns for you
 
 <p align="center">
-  <img src="assets/duo-panel-plan.jpg" alt="The agents panel for a plan of fourteen tasks in four stages: a card with its own crab per task, arrows from what each task waits for, green for done, amber for running, red for a failed task, dashed for tasks still waiting; each card names its model with a dot in the model's colour and shows the effort as rising bars; on top, the job's name, how far it is and a progress bar" width="709">
+  <img src="assets/duo-panel-plan-2.jpg" alt="The agents panel for a plan of fourteen tasks in four stages: a card with its own crab per task, arrows from what each task waits for, green for done, amber for running, red for a failed task, dashed for tasks still waiting; each card names its model with a dot in the model's colour and shows the effort as rising bars; on top, the job's name, how far it is and a progress bar, and the limit; a failed card gives its reason, a running one what it is reading" width="709">
 </p>
 
-<p align="center"><em>The panel on a sample plan of 14 tasks (rendered from test data, not a live run).</em></p>
+<p align="center"><em>The panel on a sample plan of 14 tasks (rendered from simulated events, not a live run: the times, the limit and the agents' actions are made up).</em></p>
 
 On a big job, Claude Code starts helper agents by itself. By default you can't see what they are doing, which model each one runs on, or what they cost you. **duo shows every one of them live**: its task, model, effort, steps and tokens, plus how much of your usage limit you have used. You don't create or steer the agents; you watch.
 

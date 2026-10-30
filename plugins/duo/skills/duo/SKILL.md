@@ -21,7 +21,7 @@ If the task above is empty, reply in 2-3 lines with one example (for example `/d
 
 ## Progress bar
 
-If `mcp__duo-progress__progress` is among your tools (including deferred; load with ToolSearch `select:mcp__duo-progress__progress`), keep it current: after the plan `title`, `total`, `tasks` (`[{ title, tier, why, after }]`, tier = the agent name, e.g. `duo-high`, `duo-opus`, `duo-reviewer`; `why` = one short sentence on why that tier fits the task, for example "known cause, two files"; the panel shows it as your reason), `phase: "delegate"`; `done` as tasks are accepted, `phase: "review"` while reviewing; `finished: true` at close. Pass each task's `title` verbatim as the Agent `description`. If the tool is absent, carry on, and say once in the plan and once in the final report that the live panel is not available here.
+If `mcp__duo-progress__progress` is among your tools (including deferred; load with ToolSearch `select:mcp__duo-progress__progress`), keep it current: after the plan `title` (a few words naming the user's task or project, for example "Fix German metadata"; never "duo" or "duo flow"; the panel shows it above the agents), `total`, `tasks` (`[{ title, tier, why, after }]`, tier = the agent name, e.g. `duo-high`, `duo-opus`, `duo-reviewer`; `why` = one short sentence on why that tier fits the task, for example "known cause, two files"; the panel shows it as your reason), `phase: "delegate"`; `done` as tasks are accepted, `phase: "review"` while reviewing; `finished: true` at close. Pass each task's `title` verbatim as the Agent `description`. If the tool is absent, carry on, and say once in the plan and once in the final report that the live panel is not available here.
 
 ## User rules
 

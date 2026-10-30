@@ -102,7 +102,7 @@ test('isStalled: only a running agent with no sign of life past the threshold', 
 })
 
 // ---- needs attention ----
-import { cardCostume, effortBars, layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
+import { cardCostume, effortBars, shownTitle, layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
 
 const mk = (o: Partial<AgentRun>): AgentRun =>
   ({ id: 'x', type: 'general-purpose', description: 'Job', model: 'claude-sonnet-5-5', status: 'running', startedAt: 0, lastAt: 0, contextTokens: 0, contextMax: 1, tokens: 0, costUsd: 0, steps: 0, round: 1, ...o }) as AgentRun
@@ -201,6 +201,28 @@ test('planSvg: the card shows the effort as bars, from the run or from the plan'
   const rows = taskRowsOf(PLAN, [mk({ id: 'm', description: 'Map', model: 'claude-opus-5-5', effort: 'xhigh' })])
   const { source } = planSvg(480, rows, 5)
   expect(source).toContain('<title>') // a hover name for the effort
+})
+
+test('planSvg: a failed card gives the reason the agent reported, not only "error"', () => {
+  const rows = taskRowsOf(null, [mk({ id: 'f', description: 'Link-map audit', status: 'failed', result: 'build.js: 3 META entries missing' })])
+  expect(planSvg(480, rows, 5).source).toContain('error · build.js: 3 META entries missing')
+  expect(planSvg(480, taskRowsOf(null, [mk({ id: 'g', status: 'failed' })]), 5).source).toContain('>error<')
+})
+
+test('shownTitle: the orchestrator\'s name for the job, never the placeholder; the project folder when there is none', () => {
+  expect(shownTitle('Fix German metadata', 'WWW')).toBe('Fix German metadata')
+  expect(shownTitle('duo-flow', 'WWW')).toBe('WWW')
+  expect(shownTitle('', 'WWW')).toBe('WWW')
+  expect(shownTitle('duo-flow', '')).toBe('')
+})
+
+test('band: a flow nobody has named does not show the placeholder', async ($, on) => {
+  setup(on)
+  await $.tool.call({ tool: 'mcp__duo-progress__progress', phase: 'delegate', total: 2 } as never) // no title
+  const props = { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100, scroll: { offset: 0, bodyRows: 4 }, view: {} }
+  const bar = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'AbovePrompt', props } as never)
+  const drawn = (await bar.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
+  expect(drawn).not.toContain('duo-flow')
 })
 
 test('titleLines: a title that fits stays on one line, a long one breaks at a space, the second line is cut', () => {
