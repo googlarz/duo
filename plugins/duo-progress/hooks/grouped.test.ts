@@ -111,6 +111,16 @@ for (const surface of ['terminal', 'desktop'] as const) {
   }
 }
 
+test('desktop: the grouped view keeps the header tiles (usage or cost, tokens, time) above its own summary', async ($, on) => {
+  await spawnMany($, on, 12)
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
+  const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source))
+  const header = drawn.findIndex(src => src.includes('Tokens') && src.includes('Time'))
+  const grouped = drawn.findIndex(src => src.includes('STAGES'))
+  expect(header).toBeGreaterThanOrEqual(0)
+  expect(header).toBeLessThan(grouped)
+})
+
 test('terminal: grouped lines never exceed the columns', async ($, on) => {
   await spawnMany($, on, 12)
   const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'terminal', component: 'Pane', requestId: 'duo-agents', props: { ...pane, bodyColumns: 30 } })

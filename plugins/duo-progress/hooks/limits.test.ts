@@ -100,3 +100,45 @@ test('usageShort: with a base the band adds what the run used', () => {
   expect(usageShort(at(13, 32), baseOf(at(13, 32)))).toBe('5h 13%')
   expect(usageShort(at(13, 32))).toBe('5h 13%')
 })
+
+// ---- reset countdown ----
+import { timeLeft } from './register'
+
+test('timeLeft: days, hours and minutes, never a negative or empty string', () => {
+  expect(timeLeft(4 * 3_600_000 + 36 * 60_000)).toBe('4h 36m')
+  expect(timeLeft(36 * 60_000)).toBe('36m')
+  expect(timeLeft(20_000)).toBe('<1m')
+  expect(timeLeft(91 * 3_600_000 + 36 * 60_000)).toBe('3d 19h')
+})
+
+const iso = (ms: number) => new Date(ms).toISOString()
+const NOW = Date.parse('2026-10-30T12:00:00Z')
+
+test('limitTile: the 5-hour reset is shown and both resets are in the tip', () => {
+  const t = limitTile(
+    [
+      { kind: 'five_hour', percentUsed: 3, resetsAt: iso(NOW + 4 * 3_600_000 + 36 * 60_000) },
+      { kind: 'seven_day', percentUsed: 35, resetsAt: iso(NOW + 91 * 3_600_000) },
+    ],
+    NOW,
+  )
+  expect(t?.reset).toBe('4h 36m')
+  expect(t?.tip).toContain('5h resets in 4h 36m')
+  expect(t?.tip).toContain('7d resets in 3d 19h')
+})
+
+test('limitTile: without a clock or a reset time there is no countdown', () => {
+  expect(limitTile([{ kind: 'five_hour', percentUsed: 3, resetsAt: iso(NOW + 3_600_000) }])?.reset).toBeUndefined()
+  expect(limitTile([{ kind: 'five_hour', percentUsed: 3 }], NOW)?.reset).toBeUndefined()
+  expect(limitTile([{ kind: 'five_hour', percentUsed: 3, resetsAt: iso(NOW - 1000) }], NOW)?.reset).toBeUndefined()
+})
+
+test('header: a wide tile shows the countdown, a narrow one leaves it to the hover text', () => {
+  const lim = [{ kind: 'five_hour', percentUsed: 3, resetsAt: iso(NOW + 4 * 3_600_000 + 36 * 60_000) }]
+  const wide = headerSvg(640, '', totalsOf, lim, NOW)
+  expect(wide).toContain('↻ 4h 36m')
+  expect(wide).toContain('<title>5h resets in 4h 36m')
+  const narrow = headerSvg(300, '', totalsOf, lim, NOW)
+  expect(narrow).not.toContain('↻')
+  expect(narrow).toContain('<title>5h resets in 4h 36m')
+})

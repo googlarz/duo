@@ -109,6 +109,7 @@ const STRINGS = {
     timeWord: 'Time',
     stepsWord: 'Steps',
     nowWord: 'Now',
+    resetsIn: 'resets in',
     whyWord: 'Why this tier',
     resultWord: 'Result',
     verdictWord: 'Verdict',
@@ -168,6 +169,7 @@ const STRINGS = {
     timeWord: 'Время',
     stepsWord: 'Шаги',
     nowWord: 'Сейчас',
+    resetsIn: 'сброс через',
     whyWord: 'Почему этот уровень',
     resultWord: 'Результат',
     verdictWord: 'Вердикт',
@@ -227,6 +229,7 @@ const STRINGS = {
     timeWord: 'זמן',
     stepsWord: 'שלבים',
     nowWord: 'כעת',
+    resetsIn: 'איפוס בעוד',
     whyWord: 'למה הרמה הזו',
     resultWord: 'תוצאה',
     verdictWord: 'מסקנה',
@@ -1196,12 +1199,30 @@ const WINDOWS: readonly (readonly [string, string])[] = [['five_hour', '5h'], ['
 
 // The usage tile: the label names the windows, the value their percentages; null off a
 // subscription or before the host has a reading.
-export const limitTile = (list: readonly Limit[]): { label: string; value: string } | null => {
+// "4h 36m", "36m", or "<1m": the time left until `ms`.
+export const timeLeft = (left: number): string => {
+  const h = Math.floor(left / 3_600_000)
+  const m = Math.floor((left % 3_600_000) / 60_000)
+  return h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m` : '<1m'
+}
+
+// `reset`: when the 5-hour window resets; `tip`: both windows, for a hover. Given the time `nowMs`.
+export const limitTile = (list: readonly Limit[], nowMs = 0): { label: string; value: string; reset?: string; tip?: string } | null => {
   const rows = WINDOWS.flatMap(([kind, short]) => {
     const l = list.find(x => x.kind === kind)
-    return l && Number.isFinite(l.percentUsed) ? [{ short, pct: Math.round(l.percentUsed) }] : []
+    if (!l || !Number.isFinite(l.percentUsed)) return []
+    const at = l.resetsAt ? Date.parse(l.resetsAt) : Number.NaN
+    return [{ short, pct: Math.round(l.percentUsed), left: nowMs && Number.isFinite(at) && at > nowMs ? at - nowMs : 0, at }]
   })
-  return rows.length ? { label: rows.map(r => r.short).join(' · '), value: rows.map(r => `${r.pct}%`).join(' · ') } : null
+  if (!rows.length) return null
+  const five = rows.find(r => r.short === '5h')
+  const tips = rows.filter(r => r.left).map(r => `${r.short} ${tr().resetsIn} ${timeLeft(r.left)} (${new Date(r.at).toTimeString().slice(0, 5)})`)
+  return {
+    label: rows.map(r => r.short).join(' · '),
+    value: rows.map(r => `${r.pct}%`).join(' · '),
+    ...(five?.left ? { reset: timeLeft(five.left) } : {}),
+    ...(tips.length ? { tip: tips.join(' · ') } : {}),
+  }
 }
 
 // What a tool call was doing, in a few words, for the one-line status.
@@ -1256,11 +1277,17 @@ export const usageReport = (list: readonly Limit[]): string => {
 }
 
 // The pane's own title already says "Agents": the header names the flow, if any.
-export const headerSvg = (W: number, title: string, t: ReturnType<typeof totals>, lim: readonly Limit[] = []): string => {
+export const headerSvg = (W: number, title: string, t: ReturnType<typeof totals>, lim: readonly Limit[] = [], nowMs = 0): string => {
   const s = tr()
   const gap = 6
   const tw = (W - gap * 2) / 3
   const top = title ? 28 : 0
+  const lt = limitTile(lim, nowMs)
+  // The reset countdown sits in the tile's top corner when the tile is wide enough to hold it beside the label.
+  const resetText =
+    lt?.reset && tw >= 170
+      ? `<text class="m" ${endText(W, tw - 9, top + 16)} font-family="${FONT}" font-size="10.5" font-variant-numeric="tabular-nums">↻ ${xml(lt.reset)}</text>`
+      : ''
   const tile = (i: number, k: string, v: string) =>
     `<rect class="tile" x="${mx(W, i * (tw + gap), tw)}" y="${top}" width="${tw}" height="40" rx="8"/>
 <text class="s" ${startText(W, i * (tw + gap) + 9, top + 16)} font-family="${FONT}" font-size="11">${k}</text>
@@ -1268,8 +1295,8 @@ export const headerSvg = (W: number, title: string, t: ReturnType<typeof totals>
   return svg(
     W,
     headerHeight(title),
-    `${title ? `<text class="t" ${startText(W, 0, 15)} font-family="${FONT}" font-size="14" font-weight="600">${xml(fitText(title, 14, W))}</text>` : ''}
-${tile(0, ...(limitTile(lim) ? [`${s.limit} ${limitTile(lim)!.label}`, limitTile(lim)!.value] : [s.cost, '≈' + fmtCost(t.cost)]) as [string, string])}${tile(1, s.tokens, fmtTokens(t.tokens))}${tile(2, s.time, fmtTime(t.time))}`,
+    `${lt?.tip ? `<title>${xml(lt.tip)}</title>` : ''}${title ? `<text class="t" ${startText(W, 0, 15)} font-family="${FONT}" font-size="14" font-weight="600">${xml(fitText(title, 14, W))}</text>` : ''}
+${tile(0, ...(lt ? [`${s.limit} ${lt.label}`, lt.value] : [s.cost, '≈' + fmtCost(t.cost)]) as [string, string])}${resetText}${tile(1, s.tokens, fmtTokens(t.tokens))}${tile(2, s.time, fmtTime(t.time))}`,
   )
 }
 
@@ -2162,6 +2189,7 @@ export const register: Register = (on, options) => {
     const planned = plannedOf(f, list)
     const t = totals(list, at)
     const lim = await freshLimits($)
+    const nowMs = await $.clock.now().catch(() => 0)
     // The pane's title says "Agents"; inside, only the flow's own name.
     const title = f && !f.isFinished ? f.title : ''
 
@@ -2233,13 +2261,14 @@ export const register: Register = (on, options) => {
         const g = groupedSvg(W, list, at, title || s.pane, planned)
         const fin = finClosed || finished.length === 0 ? null : finishedCached(W, finished, at)
         const more = finished.length - finishedRows(finished).length
-        const gridH = g.height + 2 * LINE_H + (finished.length > 0 ? 22 : 0) + (fin ? fin.height : 0) + (fin && more > 0 ? LINE_H : 0)
+        const gridH = headerHeight('') + g.height + 2 * LINE_H + (finished.length > 0 ? 22 : 0) + (fin ? fin.height : 0) + (fin && more > 0 ? LINE_H : 0)
         return (
           <Box flexDirection="column">
             {gridTiles(gridH).map((tileH, i) => (
               <Svg key={`grid-${i}`} source={gridSvg(W, tileH)} alt="dotted grid" width={W} height={tileH} />
             ))}
             <Box flexDirection="column" position="absolute" top={0} left={0} right={0} alignItems={align}>
+              <Svg source={headerSvg(W, '', t, lim, nowMs)} alt={summary} width={W} height={headerHeight('')} />
               <Svg source={g.source} alt={`${title || s.pane}: ${summary}`} width={W} height={g.height} />
               {finished.length > 0 && toggleDone}
               {fin && <Svg source={fin.source} alt={`${s.finished} · ${finished.length}`} width={W} height={fin.height} />}
@@ -2262,7 +2291,7 @@ export const register: Register = (on, options) => {
             <Svg key={`grid-${i}`} source={gridSvg(W, tileH)} alt="dotted grid" width={W} height={tileH} />
           ))}
           <Box flexDirection="column" position="absolute" top={0} left={0} right={0} alignItems={align}>
-            <Svg source={headerSvg(W, title, t, lim)} alt={title ? `${title}: ${summary}` : summary} width={W} height={headerHeight(title)} />
+            <Svg source={headerSvg(W, title, t, lim, nowMs)} alt={title ? `${title}: ${summary}` : summary} width={W} height={headerHeight(title)} />
             {toggleCompact}
             {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && section('h-run', `${s.running} · ${running.length}`)}
