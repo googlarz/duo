@@ -93,7 +93,7 @@ const spawnMany = async ($: Engine, on: On, n: number, isSetUp = false) => {
   on('agent.spawn', (_$, e) => ({ model: 'claude-sonnet-5-5', agentId: e.tool_use_id }))
   }
   for (let i = 0; i < n; i++) {
-    await $.agent.spawn({ tool_use_id: `t${i}`, prompt: 'p', description: `truth:A${i}`, subagentType: 'workflow-subagent', provider: 'engine', parentModel: 'claude-sonnet-5-5', background: false, fork: false } as never)
+    await $.agent.spawn({ tool_use_id: `t${i}`, prompt: 'p', description: `${i % 2 ? 'truth' : 'scan'}:A${i}`, subagentType: 'workflow-subagent', provider: 'engine', parentModel: 'claude-sonnet-5-5', background: false, fork: false } as never)
   }
 }
 
@@ -133,20 +133,19 @@ test('desktop: the grouped view keeps the header tiles (usage or cost, tokens, t
   expect(header).toBeLessThan(grouped)
 })
 
-test('desktop: both views share the same top (header tiles, counts, models); only the body differs', async ($, on) => {
+test('desktop: one model draws no Models block; the counts line and the header stay', async ($, on) => {
   await spawnMany($, on, 3)
   const detailed = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
   const d = (await detailed.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(d).toContain('MODELS')
+  expect(d).not.toContain('MODELS')
   expect(d).toContain('started so far')
   expect(d).not.toContain('STAGES')
 })
 
-test('desktop: the grouped view has the same top and adds the stages', async ($, on) => {
+test('desktop: twelve agents in two stages add the Stages block', async ($, on) => {
   await spawnMany($, on, 12)
   const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
   const all = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(all).toContain('MODELS')
   expect(all).toContain('STAGES')
 })
 

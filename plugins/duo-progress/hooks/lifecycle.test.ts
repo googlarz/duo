@@ -280,10 +280,12 @@ test('groupedSvg: the top piece holds the summary, the bottom piece the stages, 
   const at = 5000
   const list = Array.from({ length: 10 }, (_, i) => mk({ id: `g${i}`, description: `scan:Job ${i}`, lastAt: at, startedAt: 0 }))
   const g = groupedSvg(480, list, at, 'Big job')
-  expect(g.top.source).toContain('MODELS')
+  expect(g.top.source).not.toContain('MODELS') // one model: nothing for a bar to show
   expect(g.top.source).not.toContain('STAGES')
   expect(g.bottom.source).toContain('STAGES')
-  expect(g.bottom.source).not.toContain('MODELS')
+  const mixed = groupedSvg(480, [...list.slice(0, 5), ...list.slice(5).map(a => ({ ...a, model: 'claude-opus-5-5' }))], at, 'Big job')
+  expect(mixed.top.source).toContain('MODELS')
+  expect(mixed.bottom.source).not.toContain('MODELS')
   expect(Math.abs(g.top.height + g.bottom.height - g.height)).toBeLessThanOrEqual(1)
 })
 
@@ -318,9 +320,9 @@ test('verdictCounts and the summary line: PASS and FAIL counts and this run\'s u
 })
 
 // ---- a failed check is not green ----
-import { groupAgents, hasMore, STAGES_FROM } from './register'
+import { crabWallSvg, failedChecksOf, groupAgents, hasMore, STAGES_FROM } from './register'
 
-test('attentionOf: a finished agent whose checker said FAIL is pinned, after errors and before the stalled', () => {
+test('attentionOf leaves a FAIL answer out (a finding, not a broken agent); failedChecksOf collects it', () => {
   const at = 10 * 60_000
   const list = [
     mk({ id: 'quiet', lastAt: at - 9 * 60_000 }),
@@ -328,7 +330,8 @@ test('attentionOf: a finished agent whose checker said FAIL is pinned, after err
     mk({ id: 'pass', status: 'done', verdict: 'pass' }),
     mk({ id: 'err', status: 'failed' }),
   ]
-  expect(attentionOf(list, at).map(a => a.id)).toEqual(['err', 'fail', 'quiet'])
+  expect(attentionOf(list, at).map(a => a.id)).toEqual(['err', 'quiet'])
+  expect(failedChecksOf(list).map(a => a.id)).toEqual(['fail'])
 })
 
 test('groupAgents and the stage row: a stage with a FAIL verdict says so and is not dimmed green', () => {
@@ -349,4 +352,18 @@ test('hasMore: only files, steps or a stated reason are worth a Details switch; 
   expect(hasMore(mk({ status: 'done', stepTotal: 2 }))).toBe(true)
   expect(hasMore(mk({ status: 'done', why: 'cheap tier' }))).toBe(true)
   expect(STAGES_FROM).toBeGreaterThan(8)
+})
+
+test('verdictOf: an agent that corrects itself is read by its last PASS or FAIL line', () => {
+  expect(verdictOf('FAIL. the header only says what it does.\n\nCorrection: it does say why.\n\nPASS: it gives a reason.')).toBe('pass')
+  expect(verdictOf('PASS\nbut later\nFAIL: broke')).toBe('fail')
+})
+
+test('crabWallSvg: one crab per finished agent; amber for a FAIL answer, red only for a broken agent', () => {
+  const list = [mk({ id: 'a', status: 'done', verdict: 'pass' }), mk({ id: 'b', status: 'done', verdict: 'fail' }), mk({ id: 'c', status: 'failed' })]
+  const wall = crabWallSvg(480, list)
+  expect(wall.source).toContain('#D4A24C')
+  expect(wall.source).toContain('#E5484D')
+  expect(wall.source).toContain('#3FB68B')
+  expect(wall.height).toBeGreaterThan(30)
 })

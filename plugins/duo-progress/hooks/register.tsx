@@ -113,6 +113,8 @@ const STRINGS = {
     filesWord: 'Files',
     stalled: 'stalled',
     attention: 'Needs attention',
+    checkFailed1: 'check answered FAIL',
+    checkFailedN: 'checks answered FAIL',
     groupModels: 'Models',
     groupStages: 'Stages',
     runningNow: 'Running now',
@@ -172,6 +174,8 @@ const STRINGS = {
     filesWord: 'Файлы',
     stalled: 'завис',
     attention: 'Требуют внимания',
+    checkFailed1: 'проверка ответила FAIL',
+    checkFailedN: 'проверок ответили FAIL',
     groupModels: 'Модели',
     groupStages: 'Этапы',
     runningNow: 'Сейчас работают',
@@ -231,6 +235,8 @@ const STRINGS = {
     filesWord: 'קבצים',
     stalled: 'תקוע',
     attention: 'דורשים תשומת לב',
+    checkFailed1: 'בדיקה ענתה FAIL',
+    checkFailedN: 'בדיקות ענו FAIL',
     groupModels: 'מודלים',
     groupStages: 'שלבי עבודה',
     runningNow: 'פועלים עכשיו',
@@ -688,15 +694,17 @@ export const nextView = (current: 'detail' | 'grouped' | undefined, count: numbe
 }
 
 // The agents that need a look: failed ones first, then running ones with no sign of life, the longest quiet first.
-export const MAX_ATTENTION = 5
+export const MAX_ATTENTION = 3
 export const attentionOf = (list: readonly AgentRun[], at: number): AgentRun[] => {
   const quiet = (a: AgentRun): number => at - (a.lastAt ?? a.startedAt)
   const failed = list.filter(a => a.status === 'failed')
-  // Finished, but a checker said FAIL: the work is done and it did not pass.
-  const failedChecks = list.filter(a => a.status === 'done' && a.verdict === 'fail')
   const stalled = list.filter(a => isStalled(a, at)).sort((a, b) => quiet(b) - quiet(a))
-  return [...failed, ...failedChecks, ...stalled]
+  return [...failed, ...stalled]
 }
+
+// Finished, and the answer was FAIL: the agent did its job and reported a finding, which is not an error.
+// Shown as one amber line, apart from the agents that broke.
+export const failedChecksOf = (list: readonly AgentRun[]): AgentRun[] => list.filter(a => a.status === 'done' && a.verdict === 'fail')
 
 // 'truth:A10' -> 'truth'. No usable prefix -> 'other'.
 export const groupKey = (description: string): string => {
@@ -1262,9 +1270,12 @@ export const describeAction = (tool: string, input: Record<string, unknown>): st
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
 
+// The last line that opens with PASS or FAIL wins, so an agent that corrects itself is read by its final word.
 export const verdictOf = (answer: unknown): 'pass' | 'fail' | undefined => {
-  const m = typeof answer === 'string' ? /^[\s*_#>`"'-]*(pass|fail)\b/i.exec(answer) : null
-  return m ? (m[1].toLowerCase() as 'pass' | 'fail') : undefined
+  if (typeof answer !== 'string') return undefined
+  const all = [...answer.matchAll(/^[\s*_#>`"'-]*(pass|fail)\b/gim)]
+  const last = all[all.length - 1]
+  return last ? (last[1].toLowerCase() as 'pass' | 'fail') : undefined
 }
 
 // Running with no sign of life for STALL_MS.
@@ -1433,6 +1444,8 @@ ${statusMark(mx(W, W - 8), 16, 'planned', color)}
 const C_DONE = '#3FB68B'
 const C_RUN = '#F5B44A'
 const C_FAIL = '#E5484D'
+// A checker's FAIL: a finding, not a broken agent.
+const C_CHECK = '#D4A24C'
 const GP = 6
 const STAGE_CRAB = 1.2
 const MAX_SQUARES = 40
@@ -1441,6 +1454,8 @@ const MAX_FINISHED_ROWS = 60
 const MAX_RUNNING_ROWS = 6
 // The Stages block pays off when many agents share a few stages; for a handful it only repeats the list below.
 export const STAGES_FROM = 12
+// From this many finished agents the pane shows them as a wall of crabs and folds the list.
+export const WALL_FROM = 4
 // A finished row has more to open when it has files, steps or a stated reason; its result is already on the row.
 export const hasMore = (a: AgentRun): boolean => !!(a.files?.length || a.stepTotal || a.stepLog?.length || a.why)
 
@@ -1517,12 +1532,13 @@ export const groupedSvg = (
   // Needs attention: failed and stalled agents, named, with the reason and the last thing they did.
   let y = 88
   const needs = attentionOf(list, at)
-  if (needs.length) {
-    out.push(sectionLabel(W, y, `${s.attention} · ${needs.length}`))
+  const checks = failedChecksOf(list)
+  if (needs.length || checks.length) {
+    out.push(sectionLabel(W, y, `${s.attention} · ${needs.length + (checks.length ? 1 : 0)}`))
     y += 10
     for (const a of needs.slice(0, MAX_ATTENTION)) {
-      const why = a.status === 'failed' ? s.failed : a.verdict === 'fail' ? 'FAIL' : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`
-      const detail = a.status === 'failed' || a.verdict === 'fail' ? a.result || a.action || '' : a.action || a.stepNote || ''
+      const why = a.status === 'failed' ? s.failed : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`
+      const detail = a.status === 'failed' ? a.result || a.action || '' : a.action || a.stepNote || ''
       const rw = textWidth(why, 12)
       out.push(crabAt(W, GP + 2, y + 5, agentCostume(a), 0.73, false))
       out.push(T(W, 't', GP + 2 + 22 + 10, y + 20, 13, 600, fitText(a.description || a.type, 13, Math.max(40, W - GP * 2 - 34 - rw - 14)), 'start'))
@@ -1534,14 +1550,25 @@ export const groupedSvg = (
       out.push(T(W, 's', GP + 34, y + 14, 12, 400, `+${needs.length - MAX_ATTENTION}`, 'start'))
       y += 24
     }
+    // Every FAIL a checker gave, as one amber line: the checks found something, the agents did not break.
+    if (checks.length) {
+      out.push(`<circle cx="${mx(W, GP + 12, 10)}" cy="${y + 15}" r="5" fill="${C_CHECK}"/>`)
+      out.push(T(W, 't', GP + 34, y + 20, 13, 600, fitText(`${checks.length} ${checks.length === 1 ? s.checkFailed1 : s.checkFailedN}`, 13, Math.max(40, wide - 34)), 'start', ` fill="${C_CHECK}"`))
+      y += 30
+    }
     y += 6
     out.push(rule(y))
     y += 22
   }
 
-  // Models
-  out.push(sectionLabel(W, y, s.groupModels))
+  // Models: one model says nothing a bar can show, so it is left out.
   const mix = modelMix(list)
+  const oneModel = mix.rows.length <= 1
+  if (oneModel) {
+    y = needs.length || checks.length ? y - 22 : 70
+    if (!(needs.length || checks.length)) out.push(rule(y))
+  } else out.push(sectionLabel(W, y, s.groupModels))
+  if (!oneModel) {
   const narrow = W < 480
   const barW = narrow ? wide : Math.min(210, Math.round(W * 0.38))
   const bar = (by: number) => {
@@ -1578,6 +1605,7 @@ export const groupedSvg = (
     y = Math.max(rowsEnd, rowsY + 10) + 14
   }
   out.push(rule(y))
+  }
   const splitIdx = out.length
   const splitY = Math.ceil(y + 8)
 
@@ -1632,7 +1660,7 @@ export const groupedSvg = (
     }
     const cy = y + (active && rowH > 56 && place(0).x === textX ? 28 : rowH / 2)
     const crabY = cy - Math.round(28 * STAGE_CRAB) / 2
-    const kind = active ? 'running' : g.failed || g.fails ? 'failed' : 'done'
+    const kind = active ? 'running' : g.failed ? 'failed' : 'done'
     const body = `${crabAt(W, GP + 2, crabY, costume, STAGE_CRAB, active)}${stageBadge(mx(W, GP + 2 + cw - 3), crabY + Math.round(28 * STAGE_CRAB) - 3, kind)}
 ${T(W, 't', textX, cy - 4, 14, 700, fitText(name, 14, nameMax), 'start')}${T(W, 's', textX, cy + 12, 11.5, 400, fitText(g.model, 11.5, nameMax), 'start')}${sq.join('')}${T(W, 's', W - GP, cy + 4, 12, 400, counts, 'end')}`
     out.push(active || g.fails ? `<g>${body}</g>` : `<g opacity="0.62">${body}</g>`)
@@ -1688,6 +1716,24 @@ export const footerSvg = (W: number, finished: AgentRun[]): string => {
   return svg(W, 22, `<text class="s" ${endText(W, W - GP, 15, true)} font-family="${FONT}" font-size="12" font-variant-numeric="tabular-nums">${xml(`${fmtTokens(tokens)} ${s.tokensWord}`)}<tspan class="m"> · ≈${xml(fmtCost(cost))} ${xml(s.apiEq)}</tspan></text>`)
 }
 
+// The finished agents as a wall of crabs: one glance says who passed (green), who answered FAIL (amber) and who broke (red).
+const GRID_CELL = 30
+const GRID_SCALE = 0.7
+export const crabWallRows = (W: number, n: number): number => Math.max(1, Math.ceil(n / Math.max(1, Math.floor((W - GP * 2) / GRID_CELL))))
+export const crabWallHeight = (W: number, n: number): number => crabWallRows(W, n) * GRID_CELL + 8
+export const crabWallSvg = (W: number, list: AgentRun[]): { source: string; height: number } => {
+  const per = Math.max(1, Math.floor((W - GP * 2) / GRID_CELL))
+  const cw = crabWidth(GRID_SCALE)
+  const out = list.map((a, i) => {
+    const x = GP + (i % per) * GRID_CELL + 2
+    const y = 4 + Math.floor(i / per) * GRID_CELL
+    const mark = a.status === 'failed' ? C_FAIL : a.verdict === 'fail' ? C_CHECK : C_DONE
+    return `${crabAt(W, x, y + 2, agentCostume(a), GRID_SCALE, false)}<circle cx="${mx(W, x + cw - 1, 0)}" cy="${y + 22}" r="4" fill="${mark}"/>`
+  })
+  const height = crabWallHeight(W, list.length)
+  return { source: svg(W, height, out.join('')), height }
+}
+
 // The pane redraws every second while anything runs; a finished row does not change, so its drawing is kept.
 const rowMemo = new Map<string, { source: string; height: number }>()
 const finishedRowCached = (W: number, a: AgentRun, at: number): { source: string; height: number } => {
@@ -1718,7 +1764,7 @@ const finishedRowBody = (W: number, a: AgentRun, at: number, y: number): string 
     ? (() => {
         const word = a.verdict.toUpperCase()
         const w = Math.round(textWidth(word, 9.5) + 10)
-        const fill = a.verdict === 'pass' ? DONE : C_FAIL
+        const fill = a.verdict === 'pass' ? DONE : C_CHECK
         return `<rect x="${mx(W, after, w)}" y="${y + 8}" width="${w}" height="14" rx="7" fill="${fill}"/><text ${startText(W, after + 5, y + 18.5, false)} font-family="${FONT}" font-size="9.5" font-weight="700" fill="${inkOn(fill)}">${word}</text>`
       })()
     : ''
@@ -2273,7 +2319,8 @@ export const register: Register = (on, options) => {
     const isGroupedView = p.view ? p.view === 'grouped' : isGrouped(list.length)
     // On the desktop one layout serves every count; the Finished list is open for a small run and folded for a big one.
     const isDesktop = e.surface !== 'terminal' && 'Svg' in ui
-    const finClosed = isDesktop ? !(p.isFinishedOpen ?? finished.length <= GROUP_THRESHOLD) : isGroupedView ? !p.isFinishedOpen : p.isDoneCollapsed
+    const hasWall = isDesktop && finished.length >= WALL_FROM
+    const finClosed = isDesktop ? !(p.isFinishedOpen ?? finished.length < WALL_FROM) : isGroupedView ? !p.isFinishedOpen : p.isDoneCollapsed
     const toggleDone = (
       <Button
         key="done"
@@ -2323,7 +2370,7 @@ export const register: Register = (on, options) => {
       // (from three agents on), the agents at work as full rows, the finished ones as compact rows, what is planned.
       const sum = list.length ? groupedSvg(W, list, at, title || s.pane, planned, runUse) : null
       const headTitle = sum ? '' : title
-      const showStages = sum !== null && list.length >= STAGES_FROM
+      const showStages = sum !== null && list.length >= STAGES_FROM && groupAgents(list).length >= 2
       const runRows = running.slice(0, MAX_RUNNING_ROWS)
       const runMore = running.length - runRows.length
       const finRows = finClosed || finished.length === 0 ? [] : finishedRows(finished)
@@ -2334,7 +2381,7 @@ export const register: Register = (on, options) => {
       const gridH =
         headerHeight(headTitle) + (sum ? sum.top.height : 0) + (showStages && sum ? sum.stages.height : 0) + LINE_H +
         (isEmpty ? LINE_H : 0) + (running.length > 0 ? LINE_H : 0) + runRows.length * (66 + LINE_H) + openH(runRows) + (runMore > 0 ? LINE_H : 0) +
-        (finished.length > 0 ? LINE_H + 22 : 0) + finH + (finRows.length > 0 && moreFin > 0 ? LINE_H : 0) +
+        (hasWall ? crabWallHeight(W, finishedRows(finished).length) : 0) + (finished.length > 0 ? LINE_H + 22 : 0) + finH + (finRows.length > 0 && moreFin > 0 ? LINE_H : 0) +
         (planned.length > 0 ? LINE_H : 0) + planned.length * 46
       return (
         <Box flexDirection="column">
@@ -2357,6 +2404,10 @@ export const register: Register = (on, options) => {
               </Box>
             ))}
             {runMore > 0 && <Text dimColor>+{runMore} {s.moreRunning}</Text>}
+            {hasWall && (() => {
+              const wall = crabWallSvg(W, finishedRows(finished))
+              return <Svg source={wall.source} alt={`${s.finished} · ${finished.length}`} width={W} height={wall.height} />
+            })()}
             {finished.length > 0 && toggleDone}
             {finRows.map(a => {
               const row = finishedRowCached(W, a, at)
@@ -2431,10 +2482,15 @@ export const register: Register = (on, options) => {
             {cut(`${tl.running} ${s.isRunning} · ${tl.done} ${s.doneN}${tl.failed ? ` · ${tl.failed} ${s.failedN}` : ''} · ${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`)}
           </Text>
           {attentionOf(list, at).slice(0, MAX_ATTENTION).map(a => (
-            <Text key={`att-${a.id}`} color={a.status === 'failed' || a.verdict === 'fail' ? '#E5484D' : '#D4A24C'} wrap="truncate-end">
-              {cut(`${a.status === 'failed' || a.verdict === 'fail' ? '✗' : '⏸'} ${a.description || a.type} · ${a.status === 'failed' ? s.failed : a.verdict === 'fail' ? 'FAIL' : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`}${a.action ? ` · ${a.action}` : ''}`)}
+            <Text key={`att-${a.id}`} color={a.status === 'failed' ? '#E5484D' : '#D4A24C'} wrap="truncate-end">
+              {cut(`${a.status === 'failed' ? '✗' : '⏸'} ${a.description || a.type} · ${a.status === 'failed' ? s.failed : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`}${a.action ? ` · ${a.action}` : ''}`)}
             </Text>
           ))}
+          {failedChecksOf(list).length > 0 && (
+            <Text color="#D4A24C" wrap="truncate-end">
+              {cut(`● ${failedChecksOf(list).length} ${failedChecksOf(list).length === 1 ? s.checkFailed1 : s.checkFailedN}`)}
+            </Text>
+          )}
           <Text dimColor wrap="truncate-end">
             {cut(mix.rows.map(r => `${clip(r.name, MODEL_NAME_MAX)} ${r.agents} · ${fmtTokens(r.tokens)}`).join('  ') + (mix.isMixed && mix.top ? `  ${mix.top.pct}% ${s.shareOn} ${clip(mix.top.name.split(' ')[0] ?? '', 14)}` : ''))}
           </Text>
@@ -2533,7 +2589,8 @@ export const register: Register = (on, options) => {
     const percent = `${Math.round(ratio(f) * 100)}%`
     const usage = usageShort(await freshLimits($), f.isFinished ? await read($, runBase) : null)
     const needs = attentionOf(list, await read($, now))
-    const alert = needs.length ? `⚠ ${needs.length}` : ''
+    const looks = needs.length + (failedChecksOf(list).length ? 1 : 0)
+    const alert = looks ? `⚠ ${looks}` : ''
     const dismiss = (
       <Button
         key="savvy-dismiss"
