@@ -26,7 +26,7 @@
       "name": "duo-progress",
       "source": "./plugins/duo-progress",
       "description": "Mod: live agents panel with animated costume crabs; groups big fan-outs by stage, shows the model behind every agent; made for duo, shows any subagents.",
-      "version": "1.11.0",
+      "version": "1.11.1",
       "category": "mod"
     },
     {
