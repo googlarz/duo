@@ -60,6 +60,9 @@ export type AgentRun = {
   result?: string
   /** For a checker or reviewer: whether its answer opens with PASS or FAIL. */
   verdict?: 'pass' | 'fail'
+  // Lines the agent ended its answer with: what it needs decided, and what should happen next.
+  decision?: string
+  next?: string
 }
 
 export type Panel = {

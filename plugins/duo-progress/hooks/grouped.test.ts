@@ -106,47 +106,47 @@ for (const [n, grouped] of [[GROUP_THRESHOLD, false], [GROUP_THRESHOLD + 1, true
   })
 }
 
-test('desktop: up to eleven agents draw no Stages block; the agents at work are full rows', async ($, on) => {
+const desktop = async ($: Engine) => {
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
+  return { ui, drawn: (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('') }
+}
+
+test('desktop: eight agents at work are full rows, with no Stages block', async ($, on) => {
   await spawnMany($, on, 8)
-  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
-  const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(drawn.includes('STAGES')).toBe(false)
-  expect(await ui.find({ key: 'open-t7' })).toBeDefined() // the newest running agent has its row and its switch
+  const { ui, drawn } = await desktop($)
+  expect(drawn).not.toContain('STAGES')
+  expect(await ui.find({ key: 'open-t7' })).toBeDefined()
 })
 
-test('desktop: from twelve agents the Stages block appears and the agents at work are capped, the rest counted', async ($, on) => {
+test('desktop: twelve agents at work are the same layout: the six newest are full rows, the rest counted', async ($, on) => {
   await spawnMany($, on, 12)
-  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
-  const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(drawn.includes('STAGES')).toBe(true)
+  const { ui, drawn } = await desktop($)
+  expect(drawn).not.toContain('STAGES')
+  expect(drawn).not.toContain('MODELS')
   expect(await ui.find({ key: 'open-t11' })).toBeDefined()
-  expect(await ui.find({ key: 'open-t0' })).toBeUndefined() // only the six newest are full rows
+  expect(await ui.find({ key: 'open-t0' })).toBeUndefined()
 })
 
-test('desktop: the grouped view keeps the header tiles (usage or cost, tokens, time) above its own summary', async ($, on) => {
-  await spawnMany($, on, 12)
-  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
-  const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source))
-  const header = drawn.findIndex(src => src.includes('Tokens') && src.includes('Time'))
-  const grouped = drawn.findIndex(src => src.includes('STAGES'))
-  expect(header).toBeGreaterThanOrEqual(0)
-  expect(header).toBeLessThan(grouped)
-})
-
-test('desktop: one model draws no Models block; the counts line and the header stay', async ($, on) => {
+test('desktop: the top says whether anything waits on the user and shows the limit, not tiles', async ($, on) => {
   await spawnMany($, on, 3)
-  const detailed = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
-  const d = (await detailed.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(d).not.toContain('MODELS')
-  expect(d).toContain('started so far')
-  expect(d).not.toContain('STAGES')
+  const { drawn } = await desktop($)
+  expect(drawn).toContain('Nothing needed from you')
+  expect(drawn).toContain('0/3 done')
+  expect(drawn).not.toContain('Tokens')
 })
 
-test('desktop: twelve agents in two stages add the Stages block', async ($, on) => {
-  await spawnMany($, on, 12)
-  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
-  const all = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(all).toContain('STAGES')
+test('desktop: a big run folds the routine rows; the ones with a decision stay, and the switch counts the rest', async ($, on) => {
+  on('turn.complete', () => ({ text: 'ok' }) as never)
+  await spawnMany($, on, 10)
+  for (let i = 0; i < 8; i++) await $.turn.complete({ agentId: `t${i}`, reason: 'answer', answer: i === 0 ? 'Rewrote the page.\nDECISION: overwrite the old copy?' : `did job ${i}` } as never)
+  const { ui, drawn } = await desktop($)
+  expect(drawn).toContain('1 needs you')
+  expect(drawn).toContain('overwrite the old copy?')
+  expect(drawn).not.toContain('did job 3')
+  expect(String((await ui.find({ key: 'done' }))?.props.label)).toMatch(/^▸ 7 routine, all fine/)
+  await ui.press({ key: 'done' })
+  const open = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
+  expect(open).toContain('did job 3')
 })
 
 test('terminal: grouped lines never exceed the columns', async ($, on) => {

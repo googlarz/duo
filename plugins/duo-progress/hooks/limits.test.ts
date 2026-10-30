@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { AgentRun } from '../types'
-import { baseOf, headerSvg, limitTile, rowSvg, runDelta, runSentence, stepsDone, usageReport, usageShort } from './register'
+import { baseOf, limitTile, statusSvg, rowSvg, runDelta, runSentence, stepsDone, usageReport, usageShort } from './register'
 
 test('limitTile: both windows, label names them, value their rounded percentages', () => {
   expect(limitTile([{ kind: 'five_hour', percentUsed: 9.4 }, { kind: 'seven_day', percentUsed: 31 }])).toEqual({ label: '5h · 7d', value: '9% · 31%' })
@@ -32,16 +32,14 @@ test('stepsDone: a finished run without a plan keeps its count', () => {
   expect(stepsDone(run({ status: 'done', stepTotal: undefined, stepDone: 3 }))).toBe(3)
 })
 
-const totalsOf = { cost: 0.39, tokens: 319000, time: 31 } as Parameters<typeof headerSvg>[2]
+const noAgents: AgentRun[] = []
 
-test('header: with a reading the first tile is the limit; without, the cost', () => {
-  const withLimit = headerSvg(320, '', totalsOf, [{ kind: 'five_hour', percentUsed: 9 }, { kind: 'seven_day', percentUsed: 31 }])
-  expect(withLimit).toContain('Usage 5h · 7d')
+test('status: with a reading the limit is on top; without, the cost', () => {
+  const withLimit = statusSvg(480, noAgents, 0, '', [{ kind: 'five_hour', percentUsed: 9 }, { kind: 'seven_day', percentUsed: 31 }]).source
+  expect(withLimit).toContain('5h · 7d')
   expect(withLimit).toContain('9% · 31%')
-  expect(withLimit).not.toContain('≈$0.39')
-  const without = headerSvg(320, '', totalsOf, [])
-  expect(without).toContain('Cost')
-  expect(without).toContain('≈$0.39')
+  expect(withLimit).not.toContain('≈$')
+  expect(statusSvg(480, noAgents, 0, '', []).source).toContain('≈$0.00')
 })
 
 test('usageReport: the usage file shape, reset in epoch seconds', () => {
@@ -133,12 +131,8 @@ test('limitTile: without a clock or a reset time there is no countdown', () => {
   expect(limitTile([{ kind: 'five_hour', percentUsed: 3, resetsAt: iso(NOW - 1000) }], NOW)?.reset).toBeUndefined()
 })
 
-test('header: a wide tile shows the countdown, a narrow one leaves it to the hover text', () => {
+test('status: the reset countdown sits beside the limit', () => {
   const lim = [{ kind: 'five_hour', percentUsed: 3, resetsAt: iso(NOW + 4 * 3_600_000 + 36 * 60_000) }]
-  const wide = headerSvg(640, '', totalsOf, lim, NOW)
-  expect(wide).toContain('↻ 4h 36m')
-  expect(wide).toContain('<title>5h resets in 4h 36m')
-  const narrow = headerSvg(300, '', totalsOf, lim, NOW)
-  expect(narrow).not.toContain('↻')
-  expect(narrow).toContain('<title>5h resets in 4h 36m')
+  expect(statusSvg(640, noAgents, 0, '', lim, NOW).source).toContain('↻ 4h 36m')
+  expect(statusSvg(640, noAgents, 0, '', lim).source).not.toContain('↻')
 })

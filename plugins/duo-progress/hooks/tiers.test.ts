@@ -133,6 +133,11 @@ const briefed = async ($: Engine, on: On, subagentType: string) => {
 test('brief: the step request is appended to workers but not to advisor or reviewer', async ($, on) => {
   expect(await briefed($, on, 'duo:duo-high')).toContain(STEP)
 })
+test('brief: workers are asked to end with DECISION and NEXT lines only when there is one', async ($, on) => {
+  const brief = await briefed($, on, 'duo:duo-high')
+  expect(brief).toContain('DECISION:')
+  expect(brief).toContain('NEXT:')
+})
 test('brief: advisor (plugin-prefixed) gets no step request', async ($, on) => {
   expect(await briefed($, on, 'duo:duo-advisor')).not.toContain(STEP)
 })

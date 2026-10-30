@@ -102,41 +102,48 @@ test('isStalled: only a running agent with no sign of life past the threshold', 
 })
 
 // ---- needs attention ----
-import { attentionOf, groupedSvg, rowSvg } from './register'
+import { needsOf, rowSvg, statusSvg } from './register'
 
 const mk = (o: Partial<AgentRun>): AgentRun =>
   ({ id: 'x', type: 'general-purpose', description: 'Job', model: 'claude-sonnet-5-5', status: 'running', startedAt: 0, lastAt: 0, contextTokens: 0, contextMax: 1, tokens: 0, costUsd: 0, steps: 0, round: 1, ...o }) as AgentRun
 
-test('attentionOf: failed first, then the longest-quiet stalled; healthy and finished agents are left out', () => {
+test('needsOf: a decision first, then broken, then quiet (longest first), then a proposed next step; the rest are left out', () => {
   const at = 10 * 60_000
   const list = [
     mk({ id: 'ok', lastAt: at - 1000 }),
     mk({ id: 'quiet5', lastAt: at - 5 * 60_000 }),
     mk({ id: 'quiet9', lastAt: at - 9 * 60_000 }),
     mk({ id: 'bad', status: 'failed' }),
+    mk({ id: 'next', status: 'done', next: 'deploy the page' }),
+    mk({ id: 'ask', status: 'done', decision: 'overwrite the old file?', next: 'x' }),
     mk({ id: 'done', status: 'done' }),
+    mk({ id: 'fail', status: 'done', verdict: 'fail' }),
   ]
-  expect(attentionOf(list, at).map(a => a.id)).toEqual(['bad', 'quiet9', 'quiet5'])
+  expect(needsOf(list, at).map(n => [n.a.id, n.kind])).toEqual([['ask', 'decision'], ['bad', 'failed'], ['quiet9', 'stalled'], ['quiet5', 'stalled'], ['next', 'next']])
 })
 
-test('groupedSvg: a Needs attention block names the stalled and failed agents with their last action', () => {
+test('statusSvg: nothing waits -> says so; items are named with the agent\'s own words', () => {
   const at = 20 * 60_000
-  const list = Array.from({ length: 12 }, (_, i) => mk({ id: `h${i}`, description: `truth:H${i}`, lastAt: at - 1000 }))
-  list.push(mk({ id: 's1', description: 'truth:Stuck one', lastAt: at - 6 * 60_000, action: 'running: python3 slow.py' }))
-  list.push(mk({ id: 'f1', description: 'truth:Broken one', status: 'failed', result: 'the build failed', endedAt: at }))
-  const { source } = groupedSvg(480, list, at, 'Big job')
-  expect(source).toContain('NEEDS ATTENTION · 2')
-  expect(source).toContain('Stuck one')
+  const calm = [mk({ id: 'a', status: 'done', result: 'renamed 14 files' })]
+  expect(statusSvg(480, calm, at, 'Big job').source).toContain('Nothing needed from you')
+  const list = [
+    mk({ id: 'h', lastAt: at - 1000 }),
+    mk({ id: 's1', description: 'Stuck one', lastAt: at - 6 * 60_000, action: 'running: python3 slow.py' }),
+    mk({ id: 'f1', description: 'Broken one', status: 'failed', result: 'the build failed', endedAt: at }),
+    mk({ id: 'd1', description: 'Press page', status: 'done', decision: 'overwrite the old EN text?' }),
+  ]
+  const { source } = statusSvg(480, list, at, 'Big job')
+  expect(source).toContain('3 need you')
+  expect(source).toContain('overwrite the old EN text?')
+  expect(source).toContain('decision')
   expect(source).toContain('stalled 6')
   expect(source).toContain('running: python3 slow.py')
-  expect(source).toContain('Broken one')
   expect(source).toContain('the build failed')
+  expect(source).not.toContain('Nothing needed')
 })
 
-test('groupedSvg: with every agent healthy there is no attention block', () => {
-  const at = 5000
-  const list = Array.from({ length: 10 }, (_, i) => mk({ id: `h${i}`, lastAt: at }))
-  expect(groupedSvg(480, list, at, 'Big job').source).not.toContain('NEEDS ATTENTION')
+test('statusSvg: a checker\'s FAIL alone is not something waiting on the user', () => {
+  expect(statusSvg(480, [mk({ id: 'a', status: 'done', verdict: 'fail', result: 'FAIL: no comment' })], 5000, '').source).toContain('Nothing needed from you')
 })
 
 test('band: a warning count shows beside the usage', () => {
@@ -233,7 +240,7 @@ test('contrast: the colours the band and the panel really use meet 4.5:1', () =>
   expect(band.dark).toMatch(/^#/)
   expect(contrast(band.light, '#ffffff')).toBeGreaterThanOrEqual(4.5)
   expect(contrast(band.dark, '#1e1e1e')).toBeGreaterThanOrEqual(4.5)
-  const panel = muted(groupedSvg(480, [mk({ status: 'done' })], 0, 'x').source)
+  const panel = muted(statusSvg(480, [mk({ status: 'done' })], 0, 'x').source)
   expect(panel.light).toMatch(/^#/)
   expect(panel.dark).toMatch(/^#/)
   expect(contrast(panel.light, '#ffffff')).toBeGreaterThanOrEqual(4.5)
@@ -276,19 +283,6 @@ test('nextView: grouped above the threshold, and back to detailed only at five o
   expect(nextView('grouped', 0)).toBe('detail')
 })
 
-test('groupedSvg: the top piece holds the summary, the bottom piece the stages, and together they are the whole', () => {
-  const at = 5000
-  const list = Array.from({ length: 10 }, (_, i) => mk({ id: `g${i}`, description: `scan:Job ${i}`, lastAt: at, startedAt: 0 }))
-  const g = groupedSvg(480, list, at, 'Big job')
-  expect(g.top.source).not.toContain('MODELS') // one model: nothing for a bar to show
-  expect(g.top.source).not.toContain('STAGES')
-  expect(g.bottom.source).toContain('STAGES')
-  const mixed = groupedSvg(480, [...list.slice(0, 5), ...list.slice(5).map(a => ({ ...a, model: 'claude-opus-5-5' }))], at, 'Big job')
-  expect(mixed.top.source).toContain('MODELS')
-  expect(mixed.bottom.source).not.toContain('MODELS')
-  expect(Math.abs(g.top.height + g.bottom.height - g.height)).toBeLessThanOrEqual(1)
-})
-
 // ---- what happened, at a glance ----
 import { finishedRowHeight, finishedRowSvg, verdictCounts } from './register'
 
@@ -310,48 +304,20 @@ test('finishedRowSvg: result text from an agent cannot break the drawing', () =>
   expect(row.source).toContain('&lt;script&gt;')
 })
 
-test('verdictCounts and the summary line: PASS and FAIL counts and this run\'s usage', () => {
-  const list = [mk({ id: 'a', status: 'done', verdict: 'pass' }), mk({ id: 'b', status: 'done', verdict: 'pass' }), mk({ id: 'c', status: 'done', verdict: 'fail' }), ...Array.from({ length: 8 }, (_, i) => mk({ id: `z${i}`, status: 'done' }))]
+test('verdictCounts: PASS and FAIL counted; the run\'s usage rides on the status line', () => {
+  const list = [mk({ id: 'a', status: 'done', verdict: 'pass' }), mk({ id: 'b', status: 'done', verdict: 'pass' }), mk({ id: 'c', status: 'done', verdict: 'fail' })]
   expect(verdictCounts(list)).toEqual({ pass: 2, fail: 1 })
-  const g = groupedSvg(640, list, 9000, 'Job', [], 'this run: 1% 5h')
-  expect(g.top.source).toContain('2 PASS')
-  expect(g.top.source).toContain('1 FAIL')
-  expect(g.top.source).toContain('this run: 1% 5h')
+  expect(statusSvg(640, list, 9000, 'Job', [], 0, 'this run: 1% 5h').source).toContain('this run: 1% 5h')
 })
 
-// ---- a failed check is not green ----
-import { crabWallSvg, failedChecksOf, groupAgents, hasMore, STAGES_FROM } from './register'
+// ---- open items and flagged rows ----
+import { FOLD_FROM, hasMore, isFlagged, openItemsOf } from './register'
 
-test('attentionOf leaves a FAIL answer out (a finding, not a broken agent); failedChecksOf collects it', () => {
-  const at = 10 * 60_000
-  const list = [
-    mk({ id: 'quiet', lastAt: at - 9 * 60_000 }),
-    mk({ id: 'fail', status: 'done', verdict: 'fail', result: 'FAIL: three folders, not seven' }),
-    mk({ id: 'pass', status: 'done', verdict: 'pass' }),
-    mk({ id: 'err', status: 'failed' }),
-  ]
-  expect(attentionOf(list, at).map(a => a.id)).toEqual(['err', 'quiet'])
-  expect(failedChecksOf(list).map(a => a.id)).toEqual(['fail'])
-})
-
-test('groupAgents and the stage row: a stage with a FAIL verdict says so and is not dimmed green', () => {
-  const list = [
-    mk({ id: 'a', description: 'truth:A', status: 'done', verdict: 'pass', endedAt: 5 }),
-    mk({ id: 'b', description: 'truth:B', status: 'done', verdict: 'fail', endedAt: 5 }),
-    ...Array.from({ length: 10 }, (_, i) => mk({ id: `s${i}`, description: `scan:S${i}`, status: 'done', endedAt: 5 })),
-  ]
-  expect(groupAgents(list).find(g => g.key === 'truth')?.fails).toBe(1)
-  const g = groupedSvg(480, list, 9000, 'Job')
-  expect(g.stages.source).toContain('1 FAIL')
-  expect(g.top.source).toContain('NEEDS ATTENTION')
-})
-
-test('hasMore: only files, steps or a stated reason are worth a Details switch; STAGES_FROM is a count of agents', () => {
+test('hasMore: only files, steps or a stated reason are worth a Details switch', () => {
   expect(hasMore(mk({ status: 'done', result: 'x' }))).toBe(false)
   expect(hasMore(mk({ status: 'done', files: ['/a'] }))).toBe(true)
   expect(hasMore(mk({ status: 'done', stepTotal: 2 }))).toBe(true)
   expect(hasMore(mk({ status: 'done', why: 'cheap tier' }))).toBe(true)
-  expect(STAGES_FROM).toBeGreaterThan(8)
 })
 
 test('verdictOf: an agent that corrects itself is read by its last PASS or FAIL line', () => {
@@ -359,11 +325,28 @@ test('verdictOf: an agent that corrects itself is read by its last PASS or FAIL 
   expect(verdictOf('PASS\nbut later\nFAIL: broke')).toBe('fail')
 })
 
-test('crabWallSvg: one crab per finished agent; amber for a FAIL answer, red only for a broken agent', () => {
-  const list = [mk({ id: 'a', status: 'done', verdict: 'pass' }), mk({ id: 'b', status: 'done', verdict: 'fail' }), mk({ id: 'c', status: 'failed' })]
-  const wall = crabWallSvg(480, list)
-  expect(wall.source).toContain('#D4A24C')
-  expect(wall.source).toContain('#E5484D')
-  expect(wall.source).toContain('#3FB68B')
-  expect(wall.height).toBeGreaterThan(30)
+test('openItemsOf: DECISION and NEXT lines are taken out of the answer; the first of each wins', () => {
+  const r = openItemsOf('Renamed 14 files, build OK.\nDECISION: overwrite the old sheet?\n**NEXT:** deploy\nnext: later')
+  expect(r.decision).toBe('overwrite the old sheet?')
+  expect(r.next).toBe('deploy')
+  expect(r.rest).toBe('Renamed 14 files, build OK.')
+  expect(openItemsOf('PASS: fine')).toEqual({ rest: 'PASS: fine' })
+  expect(openItemsOf(undefined).rest).toBe('')
+})
+
+test('isFlagged: an open item, a broken agent or a FAIL answer; FOLD_FROM is a count of agents', () => {
+  expect(isFlagged(mk({ status: 'done', decision: 'x' }))).toBe(true)
+  expect(isFlagged(mk({ status: 'done', verdict: 'fail' }))).toBe(true)
+  expect(isFlagged(mk({ status: 'failed' }))).toBe(true)
+  expect(isFlagged(mk({ status: 'done', verdict: 'pass' }))).toBe(false)
+  expect(FOLD_FROM).toBeGreaterThan(3)
+})
+
+test('lifecycle: DECISION and NEXT lines in the answer reach the agent run, not its result', async ($, on) => {
+  setup(on)
+  await spawn($, 'q1')
+  await $.turn.complete({ agentId: 'q1', reason: 'answer', answer: 'Did it.\nDECISION: ship now?\nNEXT: run the deploy' } as never)
+  const md = await receipt($)
+  expect(md).toContain('Did it.')
+  expect(md).not.toContain('DECISION')
 })
