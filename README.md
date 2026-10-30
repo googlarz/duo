@@ -135,10 +135,10 @@ Every agent in the panel is a small animated pixel crab, and its costume follows
   <img src="assets/duo-task.svg" alt="Each task: brief, built by Sonnet, checked by a fresh checker, reviewed by Opus, accepted. Failures go back with a defect list, max two attempts, Opus as a worker only with your approval" width="100%">
 </p>
 
-Sonnet does the volume and Opus is a gate. Up to 2 tasks skip both Opus calls; 3 to 4 low-risk tasks skip the plan check and keep one final review. Two attempts per task, a checker that did not write the code, and Opus as a worker only if you say yes. For big fan-outs the panel switches to a grouped view (illustration with example tasks):
+Sonnet does the volume and Opus is a gate. Up to 2 tasks skip both Opus calls; 3 to 4 low-risk tasks skip the plan check and keep one final review. Two attempts per task, a checker that did not write the code, and Opus as a worker only if you say yes. For big fan-outs the panel switches to a grouped view, here while four of fifteen agents were still running (a real screenshot taken before the header tiles and the current-run counts were added, so its totals include earlier agents):
 
 <p align="center">
-  <img src="assets/duo-panel.svg" alt="Illustration of the grouped panel view for a big fan-out: the model mix, one row per stage, finished agents folded away" width="100%">
+  <img src="assets/duo-panel-grouped.png" alt="The grouped panel view with fifteen agents, four still running: the model mix, one row per stage (other, scan, map, truth, wait) with its crab and counts, a Running now list, and the Finished list folded away" width="737">
 </p>
 
 | Effort | Used for |
