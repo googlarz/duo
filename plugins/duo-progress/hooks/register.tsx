@@ -378,7 +378,7 @@ const CELL = 3
 const FONT = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif"
 
 const xml = (s: string): string =>
-  s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
+  s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
 
 const clip = (s: string, max: number): string => (s.length > max ? s.slice(0, Math.max(1, max - 1)) + '…' : s)
 
@@ -779,20 +779,6 @@ export const modelMix = (list: AgentRun[]): { rows: ModelRow[]; isMixed: boolean
     }))
     .sort((a, b) => b.tokens - a.tokens || b.agents - a.agents)
   return { rows, isMixed: rows.length > 1, top: rows[0] }
-}
-
-// Segment widths of the model share bar: at least 2px each, the last takes the rest, never negative;
-// when the minimums alone overflow, the others shrink so the segments still fill the bar exactly.
-export const barWidths = (pcts: number[], barW: number): number[] => {
-  if (!pcts.length) return []
-  const head = pcts.slice(0, -1).map(p => Math.max(2, Math.round((barW * p) / 100)))
-  const sum = head.reduce((n, w) => n + w, 0)
-  if (sum > barW) {
-    const scaled = head.map(w => Math.floor((w * barW) / sum))
-    scaled[0] = (scaled[0] ?? 0) + barW - scaled.reduce((n, w) => n + w, 0)
-    return [...scaled, 0]
-  }
-  return [...head, barW - sum]
 }
 
 // Stage keyword -> costume; a key matches a keyword or starts with it ("reviewer", "truth2").
@@ -1417,14 +1403,19 @@ export const layersOf = (rows: readonly TaskRow[]): number[] => {
   const byN = new Map<number, TaskRow[]>()
   for (const r of rows) if (r.n) byN.set(r.n, [...(byN.get(r.n) ?? []), r])
   const memo = new Map<number, number>()
-  const depth = (n: number, seen: number): number => {
+  // A dependency back into the search is part of a cycle: it counts as layer 0 and is not remembered.
+  const visiting = new Set<number>()
+  const depth = (n: number): number => {
     if (memo.has(n)) return memo.get(n) as number
     const r = byN.get(n)?.[0]
-    const d = !r || seen > 50 ? 0 : r.after.filter(x => x !== n && byN.has(x)).reduce((m, x) => Math.max(m, depth(x, seen + 1) + 1), 0)
+    if (!r || visiting.has(n)) return 0
+    visiting.add(n)
+    const d = r.after.filter(x => x !== n && byN.has(x)).reduce((m, x) => Math.max(m, depth(x) + 1), 0)
+    visiting.delete(n)
     memo.set(n, d)
     return d
   }
-  const planned = rows.map(r => (r.n ? depth(r.n, 0) : -1))
+  const planned = rows.map(r => (r.n ? depth(r.n) : -1))
   const last = Math.max(-1, ...planned)
   return planned.map(d => (d >= 0 ? d : last >= 0 ? last + 1 : 0))
 }
@@ -1478,10 +1469,11 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
   rows.forEach((r, i) => {
     const to = place.get(i)
     if (!to) return
-    for (const dep of r.after.slice(0, 8)) {
+    for (const dep of [...new Set(r.after)].slice(0, 8)) {
       const j = rows.findIndex(q => q.n === dep)
       const from = j >= 0 ? place.get(j) : undefined
-      if (!from || edges.length > 60) continue
+      // An arrow runs from a lower stage to a higher one: no arrow back to itself or around a cycle.
+      if (!from || edges.length >= 60 || (layers[j] ?? 0) >= (layers[i] ?? 0)) continue
       const sx = mx(W, from.x + cw / 2)
       const tx = mx(W, to.x + cw / 2)
       const sy = from.y + ch
@@ -1532,12 +1524,6 @@ const MAX_FINISHED_ROWS = 60
 const fmtSpan = (ms: number): string => {
   const m = Math.floor(Math.max(0, ms) / 60000)
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : m ? `${m}m ${Math.floor(ms / 1000) % 60}s` : fmtTime(ms)
-}
-
-// An agent type with its own crab keeps it; a plain worker takes its stage's.
-export const agentCostume = (a: AgentRun): string => {
-  const c = costumeOf(a.type)
-  return c !== 'other' ? c : stageCostume(groupKey(a.description))
 }
 
 const crabAt = (W: number, x: number, y: number, costume: string, scale: number, isWalking: boolean): string =>
@@ -1738,12 +1724,6 @@ async function syncView($: EngineInterface): Promise<void> {
     return v === p.view ? p : { ...p, view: v }
   })
 }
-
-// How many checkers said PASS and how many FAIL.
-export const verdictCounts = (list: readonly AgentRun[]): { pass: number; fail: number } => ({
-  pass: list.filter(a => a.verdict === 'pass').length,
-  fail: list.filter(a => a.verdict === 'fail').length,
-})
 
 // The agents of the current run: all of them, but for an implicit flow only those since its window began.
 export const inRun = (f: Flow | null, list: AgentRun[]): AgentRun[] => (f?.isImplicit ? list.filter(a => a.startedAt >= (f.since ?? 0)) : list)

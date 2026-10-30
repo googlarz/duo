@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { AgentRun } from '../types'
-import { agentsWord, barWidths, COSTUMES, COSTUME_ALIAS, GROUP_THRESHOLD, STAGE_COSTUME_NAMES, costumeOf, groupAgents, groupKey, modelMix, stageCostume, tally } from './register'
+import { agentsWord, COSTUMES, COSTUME_ALIAS, GROUP_THRESHOLD, STAGE_COSTUME_NAMES, costumeOf, groupAgents, groupKey, modelMix, stageCostume, tally } from './register'
 
 const run = (description: string, over: Partial<AgentRun> = {}): AgentRun => ({
   id: description + Math.random(), type: 'workflow-subagent', description, model: 'claude-opus-5-5', status: 'done', startedAt: 1000,
@@ -120,7 +120,7 @@ test('desktop: one picture of all the agents, whatever the count, with no switch
   expect(await ui.find({ key: 'open-t0' })).toBeUndefined()
 })
 
-test('desktop: the top says how far the job is and shows the limit, not tiles', async ($, on) => {
+test('desktop: the top says how far the job is and how many are running', async ($, on) => {
   await spawnMany($, on, 3)
   const { drawn } = await desktop($)
   expect(drawn).toContain('0/3 done')
@@ -155,14 +155,6 @@ test('desktop: a small run shows every row, finished ones included, with no swit
   expect(drawn).toContain('scan:A0')
   expect(drawn).toContain('3/10 done')
   expect(await ui.find({ key: 'done' })).toBeUndefined()
-})
-
-test('barWidths: the segments fill the bar exactly and the last never goes negative', () => {
-  expect(barWidths([90, 10], 200)).toEqual([180, 20])
-  const many = barWidths([97, 1, 1, 1], 6)
-  expect(many.every(w => w >= 0)).toBe(true)
-  expect(many.reduce((n, w) => n + w, 0)).toBe(6)
-  expect(barWidths([], 50)).toEqual([])
 })
 
 test('agentsWord: singular and plural', () => {

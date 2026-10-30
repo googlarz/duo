@@ -1,6 +1,6 @@
 {
   "name": "duo-flow",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "Orchestrated delivery flow: the session model plans, owns design and reviews; five tiered worker subagents implement. Pairs with the duo-progress mod for a live progress bar and agents panel.",
   "author": {
     "name": "johnnyvizz",

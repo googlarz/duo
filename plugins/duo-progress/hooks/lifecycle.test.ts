@@ -238,6 +238,43 @@ test('band: the bar counts the agents that really finished, whatever the orchest
   expect(drawn).toContain('Tasks 2/4') // two finished, one running, one waiting
 })
 
+const curves = (source: string): number => (source.match(/d="M[^"]*C/g) ?? []).length
+const flowOf = (tasks: { title: string; after: number[] }[]) => ({ title: 'T', total: tasks.length, done: 0, running: 0, phase: 'delegate', isFinished: false, tasks: tasks.map(x => ({ ...x, tier: 'duo-medium' })) }) as Parameters<typeof taskRowsOf>[0]
+
+test('layersOf: a cycle in the plan stays bounded instead of sinking fifty layers', () => {
+  const two = layersOf(taskRowsOf(flowOf([{ title: 'A', after: [2] }, { title: 'B', after: [1] }]), []))
+  expect(Math.max(...two)).toBeLessThanOrEqual(2)
+  const three = layersOf(taskRowsOf(flowOf([{ title: 'A', after: [3] }, { title: 'B', after: [1] }, { title: 'C', after: [2] }]), []))
+  expect(Math.max(...three)).toBeLessThanOrEqual(3)
+})
+
+test('planSvg: no arrow to itself or back around a cycle; a repeated dependency is one arrow', () => {
+  expect(curves(planSvg(480, taskRowsOf(flowOf([{ title: 'A', after: [1] }]), []), 5).source)).toBe(0)
+  const cycle = planSvg(480, taskRowsOf(flowOf([{ title: 'A', after: [2] }, { title: 'B', after: [1] }]), []), 5)
+  expect(curves(cycle.source)).toBe(1) // one of the two, never both
+  expect(curves(planSvg(480, taskRowsOf(flowOf([{ title: 'A', after: [] }, { title: 'B', after: [1, 1, 1] }]), []), 5).source)).toBe(1)
+})
+
+test('planSvg: the worst plans still draw under the engine\'s 131072 characters', () => {
+  const size = (n: number, W: number, deps: number, tier: string): number => {
+    const tasks = Array.from({ length: n }, (_, i) => ({ title: `Task number ${i} with a long title that needs two lines on a narrow pane`, tier, after: Array.from({ length: deps }, (_, k) => k + 1).filter(d => d !== i + 1) }))
+    const agents = tasks.map((x, i) => mk({ id: `a${i}`, description: x.title, type: `duo:${tier}`, model: 'claude-opus-5-5', effort: 'xhigh', stepTotal: 10, stepDone: 5, lastAt: 5 }))
+    const f = { title: 'T', total: n, done: 0, running: 0, phase: 'delegate', isFinished: false, tasks } as Parameters<typeof taskRowsOf>[0]
+    return planSvg(W, taskRowsOf(f, agents), 5).source.length
+  }
+  for (const W of [240, 480, 900]) {
+    expect(size(10, W, 8, 'duo-medium')).toBeLessThan(131072) // the most costume crabs
+    expect(size(40, W, 20, 'duo-medium')).toBeLessThan(131072) // the most cards, plain crabs, the most arrows
+    expect(size(200, W, 8, 'duo-low')).toBeLessThan(131072) // a plan past the cap
+  }
+})
+
+test('planSvg: control characters in a title are dropped, not drawn', () => {
+  const { source } = planSvg(480, taskRowsOf(null, [mk({ id: 'c', description: 'bad\u0001char\u000b here' })]), 5)
+  expect(source).toContain('badchar here')
+  expect(source).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/)
+})
+
 test('titleLines: a title that fits stays on one line, a long one breaks at a space, the second line is cut', () => {
   expect(titleLines('Short title', 12, 300)).toEqual(['Short title'])
   const two = titleLines('Translate every alt text and aria label on the German pages', 12, 120)
@@ -397,11 +434,8 @@ test('nextView: grouped above the threshold, and back to detailed only at five o
 })
 
 // ---- what happened, at a glance ----
-import { verdictCounts } from './register'
-
-test('verdictCounts: PASS and FAIL counted; the run\'s usage rides on the status line', () => {
-  const list = [mk({ id: 'a', status: 'done', verdict: 'pass' }), mk({ id: 'b', status: 'done', verdict: 'pass' }), mk({ id: 'c', status: 'done', verdict: 'fail' })]
-  expect(verdictCounts(list)).toEqual({ pass: 2, fail: 1 })
+test('statusSvg: what the run used of the window rides on the status line', () => {
+  const list = [mk({ id: 'a', status: 'done' }), mk({ id: 'b', status: 'done' }), mk({ id: 'c', status: 'done' })]
   expect(statusSvg(640, list, 9000, 'Job', 3, [], 0, 'this run: 1% 5h').source).toContain('this run: 1% 5h')
 })
 
