@@ -15,7 +15,7 @@ Under each running or finished agent row a `▸ Details · <model>` button opens
 
 ## The current run
 
-The panel and the bar show the current run. For agents Claude starts outside a duo flow, a run is the agents started since its window began (agents that follow each other within five minutes belong to the same run); earlier ones leave the panel and stay in the run receipts (`/duo:receipt`). So the header counts and the grouped view are about what you are watching now, not the whole session. There is no collapse button: the grouped view and the `Finished` toggle keep long lists short.
+The panel and the bar show the job you are watching now, not the whole session. For agents Claude starts outside a duo flow, agents that follow each other within five minutes count as one job; when a later agent starts after a longer pause, a new job begins and the earlier agents leave the panel. They are not lost: `/duo:receipt` prints the receipt of the current or last job, and the panel keeps the last ten. So the header counts and the grouped view are about what you are watching now, not the whole session. There is no collapse button: the grouped view and the `Finished` toggle keep long lists short.
 
 ## Needs attention
 
@@ -44,6 +44,6 @@ Cost is a rough estimate from token counts and a built-in per-model price table 
 { "pluginConfigs": { "duo-progress": { "options": { "language": "ru" } } } }
 ```
 
-`autoOpen`: `savvy` (default) or `any`. With `savvy` the panel opens by itself when a `duo-flow-*` or `duo-*` worker (or a legacy `savvy-*` one) starts or a plan is reported. With `any` it also opens, once per session, when any other subagent starts. `/agents-info` toggles it either way.
+`autoOpen`: `flow` (default) or `any`. With `flow` the panel opens by itself when a `duo-flow-*` or `duo-*` worker (or a legacy `savvy-*` one) starts or a plan is reported. With `any` it also opens, once per session, when any other subagent starts. `/agents-info` toggles it either way.
 
 Install instructions are in the [repository README](../../README.md).
