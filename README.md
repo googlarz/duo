@@ -72,10 +72,16 @@ The agents run in parallel where they can, within guardrails: **two attempts per
 ### Visibility: open any agent
 
 <p align="center">
-  <img src="assets/duo-panel.svg" alt="The agents panel: each task with the model it ran on, its step count, and an expandable list of steps" width="100%">
+  <img src="assets/duo-panel-real.png" alt="The real agents panel after a duo run: the Usage tile shows 12% of the 5-hour window and 32% of the weekly window, each task shows its model and effort, and Details lists the steps the agent planned with the ones done" width="592">
 </p>
 
-Every task row shows the model and effort that ran it. When many agents run at once (more than 8), the panel switches to a grouped view: a summary, the model mix, one row per stage, only the few running agents in view, and the finished ones folded away. Press Details under a task to see the steps the agent planned and which are done. *(Illustration with example tasks.)*
+*A real run, not a mock-up.* The top tile shows **how much of your 5-hour and weekly limit you have used**. Every task row shows the model and effort that ran it, its context, tokens, an estimated cost and time. Press **Details** under a task to see its steps and which are done.
+
+When many agents run at once (more than 8), the panel switches to a grouped view: a summary, the model mix, one row per stage, only the few running agents in view, and the finished ones folded away. Illustration of that view, with example tasks:
+
+<p align="center">
+  <img src="assets/duo-panel.svg" alt="Illustration of the grouped panel view for a big fan-out: the model mix, one row per stage, finished agents folded away" width="100%">
+</p>
 
 ### Meet the crabs
 
