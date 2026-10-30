@@ -36,7 +36,7 @@ const totalsOf = { cost: 0.39, tokens: 319000, time: 31 } as Parameters<typeof h
 
 test('header: with a reading the first tile is the limit; without, the cost', () => {
   const withLimit = headerSvg(320, '', totalsOf, [{ kind: 'five_hour', percentUsed: 9 }, { kind: 'seven_day', percentUsed: 31 }])
-  expect(withLimit).toContain('Limit 5h · 7d')
+  expect(withLimit).toContain('Usage 5h · 7d')
   expect(withLimit).toContain('9% · 31%')
   expect(withLimit).not.toContain('≈$0.39')
   const without = headerSvg(320, '', totalsOf, [])

@@ -61,7 +61,7 @@ const STRINGS = {
   en: {
     pane: 'Agents',
     cost: 'Cost',
-    limit: 'Limit',
+    limit: 'Usage',
     tokens: 'Tokens',
     time: 'Time',
     collapse: 'Collapse',
@@ -113,7 +113,7 @@ const STRINGS = {
   ru: {
     pane: 'Агенты',
     cost: 'Стоимость',
-    limit: 'Лимит',
+    limit: 'Расход',
     tokens: 'Токены',
     time: 'Время',
     collapse: 'Свернуть',
@@ -165,7 +165,7 @@ const STRINGS = {
   he: {
     pane: 'סוכנים',
     cost: 'עלות',
-    limit: 'מגבלה',
+    limit: 'שימוש',
     tokens: 'טוקנים',
     time: 'זמן',
     collapse: 'כיווץ',
