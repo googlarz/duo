@@ -1666,6 +1666,11 @@ export const register: Register = (on, options) => {
       await update($, runBase, () => base)
     }
     const next = await update($, flow, p => merge(p, input))
+    // The band above the prompt read `flow` while it was empty and drew nothing; ask for a redraw so it
+    // appears with the plan, not after the next message.
+    try {
+      $.ui.invalidate('ui.render')
+    } catch {}
     if (next && input.tasks?.length) await autoOpen($, next.title)
     const note = next?.isFinished && !prev?.isFinished ? runSentence(runDelta(await read($, runBase), await currentLimits($))) : ''
     return { result: `ok: ${label(next ?? blank())}${note}` }
