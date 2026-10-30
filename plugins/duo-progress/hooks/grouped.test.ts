@@ -157,6 +157,20 @@ test('grouped: the Finished list starts closed, shows the count, and opens with 
   expect(String((await ui.find({ key: 'done' }))?.props.label)).toMatch(/^▾ Finished · 3/)
 })
 
+test('desktop grouped: an open Finished list has a Details switch under every row', async ($, on) => {
+  on('turn.complete', () => ({ text: 'ok' }) as never)
+  await spawnMany($, on, 10)
+  for (let i = 0; i < 3; i++) await $.turn.complete({ agentId: `t${i}`, reason: 'answer', answer: 'PASS: all good' } as never)
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
+  expect(await ui.find({ key: 'open-t0' })).toBeUndefined() // closed: no rows
+  await ui.press({ key: 'done' })
+  expect(await ui.find({ key: 'open-t0' })).toBeDefined()
+  expect(await ui.find({ key: 'open-t2' })).toBeDefined()
+  const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
+  expect(drawn).toContain('>PASS<')
+  expect(drawn).toContain('PASS: all good')
+})
+
 test('barWidths: the segments fill the bar exactly and the last never goes negative', () => {
   expect(barWidths([90, 10], 200)).toEqual([180, 20])
   const many = barWidths([97, 1, 1, 1], 6)

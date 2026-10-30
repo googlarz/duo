@@ -286,3 +286,33 @@ test('groupedSvg: the top piece holds the summary, the bottom piece the stages, 
   expect(g.bottom.source).not.toContain('MODELS')
   expect(Math.abs(g.top.height + g.bottom.height - g.height)).toBeLessThanOrEqual(1)
 })
+
+// ---- what happened, at a glance ----
+import { finishedRowHeight, finishedRowSvg, verdictCounts } from './register'
+
+test('finishedRowSvg: a verdict badge and the start of the result; a row with a result is taller', () => {
+  const pass = mk({ status: 'done', verdict: 'pass', result: 'PASS: the file holds exactly two lines', endedAt: 9000, tokens: 5000 })
+  const plain = mk({ status: 'done', endedAt: 9000 })
+  const row = finishedRowSvg(480, pass, 9000)
+  expect(row.source).toContain('>PASS</text>')
+  expect(row.source).toContain('the file holds exactly two lines')
+  expect(row.height).toBe(finishedRowHeight(pass))
+  expect(finishedRowHeight(pass)).toBeGreaterThan(finishedRowHeight(plain))
+  const fail = finishedRowSvg(480, mk({ status: 'done', verdict: 'fail' }), 9000)
+  expect(fail.source).toContain('>FAIL</text>')
+})
+
+test('finishedRowSvg: result text from an agent cannot break the drawing', () => {
+  const row = finishedRowSvg(480, mk({ status: 'done', result: 'x<y & "z" </text><script>', endedAt: 5 }), 5)
+  expect(row.source).not.toContain('<script>')
+  expect(row.source).toContain('&lt;script&gt;')
+})
+
+test('verdictCounts and the summary line: PASS and FAIL counts and this run\'s usage', () => {
+  const list = [mk({ id: 'a', status: 'done', verdict: 'pass' }), mk({ id: 'b', status: 'done', verdict: 'pass' }), mk({ id: 'c', status: 'done', verdict: 'fail' }), ...Array.from({ length: 8 }, (_, i) => mk({ id: `z${i}`, status: 'done' }))]
+  expect(verdictCounts(list)).toEqual({ pass: 2, fail: 1 })
+  const g = groupedSvg(640, list, 9000, 'Job', [], 'this run: 1% 5h')
+  expect(g.top.source).toContain('2 PASS')
+  expect(g.top.source).toContain('1 FAIL')
+  expect(g.top.source).toContain('this run: 1% 5h')
+})

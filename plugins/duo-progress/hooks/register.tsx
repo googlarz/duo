@@ -106,6 +106,7 @@ const STRINGS = {
     timeWord: 'Time',
     stepsWord: 'Steps',
     nowWord: 'Now',
+    thisRun: 'this run',
     resetsIn: 'resets in',
     whyWord: 'Why this tier',
     resultWord: 'Result',
@@ -164,6 +165,7 @@ const STRINGS = {
     timeWord: 'Время',
     stepsWord: 'Шаги',
     nowWord: 'Сейчас',
+    thisRun: 'этот запуск',
     resetsIn: 'сброс через',
     whyWord: 'Почему этот уровень',
     resultWord: 'Результат',
@@ -222,6 +224,7 @@ const STRINGS = {
     timeWord: 'זמן',
     stepsWord: 'שלבים',
     nowWord: 'כעת',
+    thisRun: 'ההרצה',
     resetsIn: 'איפוס בעוד',
     whyWord: 'למה הרמה הזו',
     resultWord: 'תוצאה',
@@ -1471,6 +1474,7 @@ export const groupedSvg = (
   at: number,
   title: string,
   planned: Planned[] = [],
+  runUse = '',
 ): { source: string; height: number; top: { source: string; height: number }; bottom: { source: string; height: number } } => {
   const s = tr()
   const out: string[] = []
@@ -1487,10 +1491,13 @@ export const groupedSvg = (
   const wd = Math.round((wide * tl.done) / tl.total)
   const wr = Math.round((wide * tl.running) / tl.total)
   out.push(`<rect class="k" x="${GP}" y="34" width="${wide}" height="8" rx="4"/>${seg(0, tl.done, C_DONE)}${seg(wd, tl.running, C_RUN)}${seg(wd + wr, tl.failed, C_FAIL)}`)
-  out.push(T(W, 's', GP, 62, 12, 400, `${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`, 'start'))
+  // What happened, in one line: how many started and finished, what the checkers said, what the run cost in limit.
+  const vc = verdictCounts(list)
+  const leftText = `${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}${vc.pass ? ` · ${vc.pass} PASS` : ''}${vc.fail ? ` · ${vc.fail} FAIL` : ''}${runUse ? ` · ${runUse}` : ''}`
   const right = `${fmtSpan(t.time)} ${s.totalWord} · ${fmtTokens(t.tokens)} ${s.tokensWord}`
-  const leftW = textWidth(`${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`, 12)
-  out.push(T(W, 's', W - GP, 62, 12, 400, fitText(right, 12, Math.max(40, wide - leftW - 12)), 'end'))
+  const left = fitText(leftText, 12, Math.max(80, wide - textWidth(right, 12) - 12))
+  out.push(T(W, 's', GP, 62, 12, 400, left, 'start'))
+  out.push(T(W, 's', W - GP, 62, 12, 400, fitText(right, 12, Math.max(40, wide - textWidth(left, 12) - 12)), 'end'))
 
   // Needs attention: failed and stalled agents, named, with the reason and the last thing they did.
   let y = 88
@@ -1661,27 +1668,58 @@ export const footerSvg = (W: number, finished: AgentRun[]): string => {
   return svg(W, 22, `<text class="s" ${endText(W, W - GP, 15, true)} font-family="${FONT}" font-size="12" font-variant-numeric="tabular-nums">${xml(`${fmtTokens(tokens)} ${s.tokensWord}`)}<tspan class="m"> · ≈${xml(fmtCost(cost))} ${xml(s.apiEq)}</tspan></text>`)
 }
 
-// Compact rows: still crab, label, model, tokens, time. Capped, newest first.
-// The pane redraws every second while anything runs; finished rows do not change, so the last drawing is kept.
-let finishedMemo = { key: '', out: { source: '', height: 0 } }
-const finishedCached = (W: number, list: AgentRun[], at: number): { source: string; height: number } => {
-  const key = `${W}|${lang}|${finishedRows(list).map(a => `${a.id}${a.status}${a.tokens}`).join(',')}`
-  if (finishedMemo.key !== key) finishedMemo = { key, out: finishedSvg(W, list, at) }
-  return finishedMemo.out
+// The pane redraws every second while anything runs; a finished row does not change, so its drawing is kept.
+const rowMemo = new Map<string, { source: string; height: number }>()
+const finishedRowCached = (W: number, a: AgentRun, at: number): { source: string; height: number } => {
+  const key = `${W}|${lang}|${a.id}|${a.status}|${a.tokens}|${a.verdict ?? ''}|${a.result ?? ''}`
+  let hit = rowMemo.get(key)
+  if (!hit) {
+    if (rowMemo.size > 400) rowMemo.clear()
+    hit = finishedRowSvg(W, a, at)
+    rowMemo.set(key, hit)
+  }
+  return hit
 }
 export const FINISHED_ROW = 30
 export const finishedRows = (list: AgentRun[]): AgentRun[] => list.slice(0, MAX_FINISHED_ROWS)
-export const finishedSvg = (W: number, list: AgentRun[], at: number): { source: string; height: number } => {
+// A row with a result is a line taller: the start of what the agent answered, muted, under its name.
+export const finishedRowHeight = (a: AgentRun): number => (a.result ? FINISHED_ROW + 14 : FINISHED_ROW)
+
+const finishedRowBody = (W: number, a: AgentRun, at: number, y: number): string => {
   const s = tr()
-  const rows = finishedRows(list)
-  const out = rows.map((a, i) => {
-    const y = i * FINISHED_ROW
-    const right = `${modelName(a.model)} · ${fmtTokens(a.tokens)} · ${fmtTime(elapsed(a, at))}`
-    const rw = textWidth(right, 11.5)
-    const label = fitText(a.description || a.type, 12.5, Math.max(40, W - GP * 2 - 30 - rw - 12))
-    return `${crabAt(W, GP + 2, y + 6, agentCostume(a), 0.6, false)}${T(W, a.status === 'failed' ? 'f' : 't', GP + 2 + 18 + 10, y + 19, 12.5, 500, label, 'start')}${T(W, 's', W - GP, y + 19, 11.5, 400, right, 'end', ' font-variant-numeric="tabular-nums"')}${a.status === 'failed' ? `<text class="f" ${startText(W, GP + 2 + 18 + 10 + textWidth(label, 12.5) + 6, y + 19, false)} font-family="${FONT}" font-size="10.5">${xml(s.failed)}</text>` : ''}`
+  const right = `${modelName(a.model)} · ${fmtTokens(a.tokens)} · ${fmtTime(elapsed(a, at))}`
+  const rw = textWidth(right, 11.5)
+  const label = fitText(a.description || a.type, 12.5, Math.max(40, W - GP * 2 - 30 - rw - 12 - (a.verdict ? 44 : 0)))
+  const x0 = GP + 2 + 18 + 10
+  let after = x0 + textWidth(label, 12.5) + 6
+  const failedMark = a.status === 'failed' ? `<text class="f" ${startText(W, after, y + 19, false)} font-family="${FONT}" font-size="10.5">${xml(s.failed)}</text>` : ''
+  if (a.status === 'failed') after += textWidth(s.failed, 10.5) + 6
+  const badge = a.verdict
+    ? (() => {
+        const word = a.verdict.toUpperCase()
+        const w = Math.round(textWidth(word, 9.5) + 10)
+        const fill = a.verdict === 'pass' ? DONE : C_FAIL
+        return `<rect x="${mx(W, after, w)}" y="${y + 8}" width="${w}" height="14" rx="7" fill="${fill}"/><text ${startText(W, after + 5, y + 18.5, false)} font-family="${FONT}" font-size="9.5" font-weight="700" fill="${inkOn(fill)}">${word}</text>`
+      })()
+    : ''
+  const result = a.result ? T(W, 'm', x0, y + 35, 11, 400, fitText(a.result, 11, Math.max(40, W - GP * 2 - 34)), 'start') : ''
+  return `${crabAt(W, GP + 2, y + 6, agentCostume(a), 0.6, false)}${T(W, a.status === 'failed' ? 'f' : 't', x0, y + 19, 12.5, 500, label, 'start')}${failedMark}${badge}${T(W, 's', W - GP, y + 19, 11.5, 400, right, 'end', ' font-variant-numeric="tabular-nums"')}${result}`
+}
+
+export const finishedRowSvg = (W: number, a: AgentRun, at: number): { source: string; height: number } => {
+  const height = finishedRowHeight(a)
+  return { source: svg(W, height, `<style>.f{fill:#E5484D}</style>${finishedRowBody(W, a, at, 0)}`), height }
+}
+
+// All the finished rows in one drawing (kept for callers that want one picture).
+export const finishedSvg = (W: number, list: AgentRun[], at: number): { source: string; height: number } => {
+  let y = 0
+  const out = finishedRows(list).map(a => {
+    const row = finishedRowBody(W, a, at, y)
+    y += finishedRowHeight(a)
+    return row
   })
-  const height = Math.max(1, rows.length) * FINISHED_ROW
+  const height = Math.max(1, y)
   return { source: svg(W, height, `<style>.f{fill:#E5484D}</style>${out.join('')}`), height }
 }
 
@@ -1821,6 +1859,12 @@ async function syncView($: EngineInterface): Promise<void> {
     return v === p.view ? p : { ...p, view: v }
   })
 }
+
+// How many checkers said PASS and how many FAIL.
+export const verdictCounts = (list: readonly AgentRun[]): { pass: number; fail: number } => ({
+  pass: list.filter(a => a.verdict === 'pass').length,
+  fail: list.filter(a => a.verdict === 'fail').length,
+})
 
 // The agents of the current run: all of them, but for an implicit flow only those since its window began.
 export const inRun = (f: Flow | null, list: AgentRun[]): AgentRun[] => (f?.isImplicit ? list.filter(a => a.startedAt >= (f.since ?? 0)) : list)
@@ -2199,6 +2243,9 @@ export const register: Register = (on, options) => {
     const t = totals(list, at)
     const lim = await freshLimits($)
     const nowMs = await $.clock.now().catch(() => 0)
+    // What the run cost in limit, once nothing runs any more.
+    const five = runDelta(await read($, runBase), lim).find(d => d.short === '5h')
+    const runUse = five && list.length > 0 && list.every(a => a.status !== 'running') ? `${s.thisRun}: ${five.pct > 0 ? fmtPct(five.pct) : '<1%'} 5h` : ''
     // The pane's title says "Agents"; inside, only the flow's own name.
     const title = f && !f.isFinished ? f.title : ''
 
@@ -2251,10 +2298,12 @@ export const register: Register = (on, options) => {
       // In Hebrew the column hugs the right edge: section heads and buttons right-aligned.
       const align = isRtl() ? 'flex-end' : undefined
       if (isGroupedView) {
-        const g = groupedSvg(W, list, at, title || s.pane, planned)
-        const fin = finClosed || finished.length === 0 ? null : finishedCached(W, finished, at)
+        const g = groupedSvg(W, list, at, title || s.pane, planned, runUse)
+        // Each finished row is its own drawing with a Details switch under it, as in the detailed view.
+        const finRows = finClosed || finished.length === 0 ? [] : finishedRows(finished)
         const more = finished.length - finishedRows(finished).length
-        const gridH = headerHeight('') + g.height + 2 * LINE_H + (finished.length > 0 ? 22 : 0) + (fin ? fin.height : 0) + (fin && more > 0 ? LINE_H : 0)
+        const finH = finRows.reduce((n, a) => n + finishedRowHeight(a) + LINE_H + (isOpen(p, a) ? detailLineCount(a, at, (e.props.bodyColumns || 40) - 4) * LINE_H : 0), 0)
+        const gridH = headerHeight('') + g.height + 2 * LINE_H + (finished.length > 0 ? 22 : 0) + finH + (finRows.length && more > 0 ? LINE_H : 0)
         return (
           <Box flexDirection="column">
             {gridTiles(gridH).map((tileH, i) => (
@@ -2264,15 +2313,24 @@ export const register: Register = (on, options) => {
               <Svg source={headerSvg(W, '', t, lim, nowMs)} alt={summary} width={W} height={headerHeight('')} />
               <Svg source={g.source} alt={`${title || s.pane}: ${summary}`} width={W} height={g.height} />
               {finished.length > 0 && toggleDone}
-              {fin && <Svg source={fin.source} alt={`${s.finished} · ${finished.length}`} width={W} height={fin.height} />}
-              {fin && more > 0 && <Text dimColor>+{more}</Text>}
+              {finRows.map(a => {
+                const row = finishedRowCached(W, a, at)
+                return (
+                  <Box key={`fin-${a.id}`} flexDirection="column" alignItems={align}>
+                    <Svg source={row.source} alt={`${a.description || a.type}: ${a.verdict ? a.verdict.toUpperCase() : s.isFinished}`} width={W} height={row.height} />
+                    {toggleRow(a)}
+                    {detailsBlock(a)}
+                  </Box>
+                )
+              })}
+              {finRows.length > 0 && more > 0 && <Text dimColor>+{more}</Text>}
               {finished.length > 0 && <Svg source={footerSvg(W, finished)} alt={s.finished} width={W} height={22} />}
             </Box>
           </Box>
         )
       }
       // The same top as the grouped view (title, counts, models, what needs attention); only the body below differs.
-      const sum = list.length ? groupedSvg(W, list, at, title || s.pane, planned) : null
+      const sum = list.length ? groupedSvg(W, list, at, title || s.pane, planned, runUse) : null
       const headTitle = sum ? '' : title
       const shownDone = p.isDoneCollapsed ? 0 : finished.length
       const lines = 1 + (isEmpty ? 1 : 0) + (running.length > 0 ? 1 : 0) + (finished.length > 0 ? 1 : 0) + (planned.length > 0 ? 1 : 0)
