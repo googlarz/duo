@@ -36,7 +36,7 @@ Restart Claude Code, then give it a task:
 
 - **A live panel** with every agent: task, **model and effort**, progress, steps (open *Details* under a task), context, tokens, an estimated cost and time. With many agents at once (more than 8) it groups them by stage and shows the model mix.
 - **Your usage:** the first tile shows how much of your 5-hour and weekly window you have used, and when the 5-hour one resets ("↻ 4h 36m"; hover for both), read from Claude Code itself (no setup). It stays at the top of the grouped view too. When a run ends it says how much that run used.
-- **Who needs a look.** An agent that fails, or that shows no sign of life for three minutes, is flagged (asleep crab, "stalled 4m") and, once there are many agents, pinned in a **Needs attention** block at the top of the grouped view with what it was doing. The bar above the prompt shows a count (⚠ 2).
+- **Who needs a look.** An agent that fails, or that shows no sign of life for three minutes, is flagged (asleep crab, "stalled 4m") and pinned in a **Needs attention** block at the top of the panel with what it was doing. So is a checker that finished with **FAIL**: a failed check is on top and marks its stage red, not green, without opening anything. The bar above the prompt shows a count (⚠ 2).
 - **What happened when it is over.** The Finished list shows a PASS or FAIL badge for each checker and the start of what every agent answered, a `Details` switch opens the rest, and one line above it says how many PASS and FAIL and what the run used of your limit.
 - **What each agent is doing now** ("editing cart.py", "running: python3"), what it returned, whether the checker said PASS or FAIL, which files it edited, and, when the orchestrator says so, why it picked that tier.
 - **A bar above the prompt** that shows the flow's progress and your usage, and appears together with the plan. It also follows agents Claude starts outside a duo flow.
@@ -51,14 +51,14 @@ Skip it for a one-file fix: the agents add overhead and plain Claude is simpler.
 
 ## What is tested
 
-In our own runs in the desktop app, duo works from the task to the report: Sonnet workers, a fresh checker, the panel with model, effort, steps and usage, and the bar above the prompt. **Not tested live yet:** the Opus plan check and review, the 80% and 95% limit behaviour, the grouped view with a real fan-out, and the newest additions (the Needs attention block, the one-line status, the run receipt and the "why" line), which have unit tests but have not been seen in a real run.
+In our own runs in the desktop app, duo works from the task to the report: Sonnet workers, a fresh checker, the panel with model, effort, steps and usage, and the bar above the prompt. **Not tested live yet:** the Opus plan check and review, the 80% and 95% limit behaviour, the Stages block with a real fan-out, and the newest additions (the Needs attention block, the one-line status, the run receipt and the "why" line), which have unit tests but have not been seen in a real run.
 
 <details>
 <summary><b>The full list</b></summary>
 
 Tested live (desktop app): the whole `/duo:duo` flow, the panel (model, effort, steps, usage tile), the bar above the prompt, the per-run usage line, the history file, `/duo:setup`. In a terminal the status-line helper wrote the usage file. Automated tests: 119 for the panel (`cd plugins/duo-progress && claude plugin test .`, including the agent lifecycle, the receipt and contrast checks) and 16 for the helper scripts (`plugins/duo/scripts/selftest.sh`); a GitHub Actions workflow runs both and the plugin validation on every push (green on the last two pushes).
 
-Not tested live: the Opus plan check and review (no run has needed them), the 80% and 95% limit behaviour, the hook for a real limit, the cost forecast beyond tiny tasks, learning from past runs, resuming after a reset, a bare `/duo` (use `/duo:duo`), the grouped view with a real fan-out of more than 8 agents, and narrow terminals. The panel uses Claude Code's early-access hooks and may change between releases.
+Not tested live: the Opus plan check and review (no run has needed them), the 80% and 95% limit behaviour, the hook for a real limit, the cost forecast beyond tiny tasks, learning from past runs, resuming after a reset, a bare `/duo` (use `/duo:duo`), the Stages block with a real fan-out of twelve or more agents, and narrow terminals. The panel uses Claude Code's early-access hooks and may change between releases.
 
 </details>
 
@@ -69,7 +69,7 @@ duo is a fork of **claude-kit** by JohnnyVizz ([JohnnyVizz/claude-kit](https://g
 | In claude-kit | In duo | What is new in duo |
 | --- | --- | --- |
 | `savvy-flow` (the orchestrated flow, Opus and Fable workers) | [`duo-flow`](plugins/duo-flow), the same flow renamed | nothing; it stays as the original |
-| `savvy-progress` (the agents panel) | [`duo-progress`](plugins/duo-progress), renamed and extended | usage tile and per-run usage, grouped view for big fan-outs, more costumes, a bar with usage |
+| `savvy-progress` (the agents panel) | [`duo-progress`](plugins/duo-progress), renamed and extended | usage tile and per-run usage, a Stages block for big fan-outs, more costumes, a bar with usage |
 | `session-band` | [`session-band`](plugins/session-band), unchanged | |
 | | [`duo`](plugins/duo) | the Sonnet-based flow: nine agents (workers by effort, an advisor, a reviewer, a verifier), a usage guard, a run history |
 
