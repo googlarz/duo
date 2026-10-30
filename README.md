@@ -36,8 +36,7 @@ Restart Claude Code, then give it a task:
 
 - **A live panel** with every agent: task, **model and effort**, progress, steps (open *Details* under a task), context, tokens, an estimated cost and time. With many agents at once (more than 8) it groups them by stage and shows the model mix.
 - **Your usage:** the first tile shows how much of your 5-hour and weekly window you have used, and when the 5-hour one resets ("↻ 4h 36m"; hover for both), read from Claude Code itself (no setup). It stays at the top of the grouped view too. When a run ends it says how much that run used.
-- **Does anything wait on you?** The first line says "Nothing needed from you" or "2 need you", beside your limit. Under it, each item is named with the agent's own words: a decision it needs, an agent that failed or has shown no sign of life for three minutes (asleep crab, "stalled 4m"), a next step it proposes. The agents are asked to end with a `DECISION:` or `NEXT:` line only when there is one; you answer in the chat. The bar above the prompt shows a count (⚠ 2).
-- **What happened when it is over.** One row per agent with what it answered, how many files it edited and how long it took. In a big run the routine rows fold ("7 routine, all fine") and the ones with something for you stay. A checker's PASS or FAIL is a badge on its row, and the status line says what the run used of your limit.
+- **The plan and the work, as a picture.** One card with a crab per task: green and ticked when done, amber with a pulsing dot while running (with what it is doing), dashed while it waits, red when it broke, asleep when it has shown no sign of life for three minutes. A bar on each card fills with its progress, and arrows show what waits for what. Above it: the job, your limit, how far it is and what the run took of it. The bar above the prompt shows a count of what broke or went quiet (⚠ 2).
 - **What each agent is doing now** ("editing cart.py", "running: python3"), what it returned, whether the checker said PASS or FAIL, which files it edited, and, when the orchestrator says so, why it picked that tier.
 - **A bar above the prompt** that shows the flow's progress and your usage, and appears together with the plan. It also follows agents Claude starts outside a duo flow.
 - **A run receipt:** `/duo:receipt` prints a markdown receipt of the run (every agent, model, steps, tokens, estimated cost, verdicts, files), built by the panel from what the agents did, not written by a model. Paste it into a pull request or keep it; the panel keeps the last ten finished runs.
@@ -51,7 +50,7 @@ Skip it for a one-file fix: the agents add overhead and plain Claude is simpler.
 
 ## What is tested
 
-In our own runs in the desktop app, duo works from the task to the report: Sonnet workers, a fresh checker, the panel with model, effort, steps and usage, and the bar above the prompt. **Not tested live yet:** the Opus plan check and review, the 80% and 95% limit behaviour, and the newest additions (the status line with the items that wait on you, the DECISION and NEXT lines, the run receipt and the "why" line), which have unit tests but have not been seen in a real run.
+In our own runs in the desktop app, duo works from the task to the report: Sonnet workers, a fresh checker, the panel with model, effort, steps and usage, and the bar above the prompt. **Not tested live yet:** the Opus plan check and review, the 80% and 95% limit behaviour, and the newest additions (the plan picture with its arrows, the run receipt and the "why" line), which have unit tests but have not been seen in a real run.
 
 <details>
 <summary><b>The full list</b></summary>
@@ -69,7 +68,7 @@ duo is a fork of **claude-kit** by JohnnyVizz ([JohnnyVizz/claude-kit](https://g
 | In claude-kit | In duo | What is new in duo |
 | --- | --- | --- |
 | `savvy-flow` (the orchestrated flow, Opus and Fable workers) | [`duo-flow`](plugins/duo-flow), the same flow renamed | nothing; it stays as the original |
-| `savvy-progress` (the agents panel) | [`duo-progress`](plugins/duo-progress), renamed and extended | a status line with your limit and what waits on you, per-run usage, more costumes, a bar with usage |
+| `savvy-progress` (the agents panel) | [`duo-progress`](plugins/duo-progress), renamed and extended | a picture of the plan and the work (cards, arrows, progress), your limit, per-run usage, more costumes, a bar with usage |
 | `session-band` | [`session-band`](plugins/session-band), unchanged | |
 | | [`duo`](plugins/duo) | the Sonnet-based flow: nine agents (workers by effort, an advisor, a reviewer, a verifier), a usage guard, a run history |
 

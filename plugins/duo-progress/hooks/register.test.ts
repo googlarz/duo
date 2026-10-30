@@ -52,7 +52,8 @@ for (const surface of ['terminal', 'desktop'] as const) {
     expect((await bar.find({ key: 'duo-agents' }))?.props.label).toBe('200 agents')
 
     const ui = await $.ui.mount({ plugin: PLUGIN, surface, component: 'Pane', requestId: 'duo-agents', props: pane })
-    expect(await ui.find({ text: /Planned · 200/ })).toBeDefined()
+    if (surface === 'terminal') expect(await ui.find({ text: /Planned · 200/ })).toBeDefined()
+    else expect((await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')).toContain('+160 agents') // the plan picture caps its cards and counts the rest
     const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
     expect(drawn).not.toContain('native code')
     expect(drawn).not.toContain('[object')

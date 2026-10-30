@@ -111,42 +111,21 @@ const desktop = async ($: Engine) => {
   return { ui, drawn: (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('') }
 }
 
-test('desktop: eight agents at work are full rows, with no Stages block', async ($, on) => {
-  await spawnMany($, on, 8)
-  const { ui, drawn } = await desktop($)
-  expect(drawn).not.toContain('STAGES')
-  expect(await ui.find({ key: 'open-t7' })).toBeDefined()
-})
-
-test('desktop: twelve agents at work are the same layout: the six newest are full rows, the rest counted', async ($, on) => {
+test('desktop: one picture of all the agents, whatever the count, with no switches', async ($, on) => {
   await spawnMany($, on, 12)
   const { ui, drawn } = await desktop($)
   expect(drawn).not.toContain('STAGES')
-  expect(drawn).not.toContain('MODELS')
-  expect(await ui.find({ key: 'open-t11' })).toBeDefined()
+  expect((await ui.findAll({ type: 'Svg' })).length).toBe(3) // grid, status line, the plan picture
+  expect(drawn).toContain('truth:A11')
   expect(await ui.find({ key: 'open-t0' })).toBeUndefined()
 })
 
-test('desktop: the top says whether anything waits on the user and shows the limit, not tiles', async ($, on) => {
+test('desktop: the top says how far the job is and shows the limit, not tiles', async ($, on) => {
   await spawnMany($, on, 3)
   const { drawn } = await desktop($)
-  expect(drawn).toContain('Nothing needed from you')
   expect(drawn).toContain('0/3 done')
+  expect(drawn).toContain('3 running')
   expect(drawn).not.toContain('Tokens')
-})
-
-test('desktop: a big run folds the routine rows; the ones with a decision stay, and the switch counts the rest', async ($, on) => {
-  on('turn.complete', () => ({ text: 'ok' }) as never)
-  await spawnMany($, on, 10)
-  for (let i = 0; i < 8; i++) await $.turn.complete({ agentId: `t${i}`, reason: 'answer', answer: i === 0 ? 'Rewrote the page.\nDECISION: overwrite the old copy?' : `did job ${i}` } as never)
-  const { ui, drawn } = await desktop($)
-  expect(drawn).toContain('1 needs you')
-  expect(drawn).toContain('overwrite the old copy?')
-  expect(drawn).not.toContain('did job 3')
-  expect(String((await ui.find({ key: 'done' }))?.props.label)).toMatch(/^▸ 7 routine, all fine/)
-  await ui.press({ key: 'done' })
-  const open = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(open).toContain('did job 3')
 })
 
 test('terminal: grouped lines never exceed the columns', async ($, on) => {
@@ -168,19 +147,14 @@ test('grouped: the Finished list starts closed, shows the count, and opens with 
   expect(String((await ui.find({ key: 'done' }))?.props.label)).toMatch(/^▾ Finished · 3/)
 })
 
-test('desktop: the Finished list is open for a small run and shows each verdict and result without a click', async ($, on) => {
+test('desktop: a small run shows every row, finished ones included, with no switch', async ($, on) => {
   on('turn.complete', () => ({ text: 'ok' }) as never)
   await spawnMany($, on, 10)
   for (let i = 0; i < 3; i++) await $.turn.complete({ agentId: `t${i}`, reason: 'answer', answer: 'PASS: all good' } as never)
-  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
-  const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(drawn).toContain('>PASS<')
-  expect(drawn).toContain('PASS: all good')
-  // Nothing more to open on those rows (no files, steps or stated reason), so no Details switch either.
-  expect(await ui.find({ key: 'open-t0' })).toBeUndefined()
-  await ui.press({ key: 'done' }) // the switch folds it
-  const folded = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(folded).not.toContain('PASS: all good')
+  const { ui, drawn } = await desktop($)
+  expect(drawn).toContain('scan:A0')
+  expect(drawn).toContain('3/10 done')
+  expect(await ui.find({ key: 'done' })).toBeUndefined()
 })
 
 test('barWidths: the segments fill the bar exactly and the last never goes negative', () => {

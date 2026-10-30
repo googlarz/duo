@@ -24,13 +24,10 @@ const USAGE_TOOL = 'mcp__duo-progress__usage'
 const RECEIPT_TOOL = 'mcp__duo-progress__receipt'
 // Added to the end of each duo-flow or duo worker's brief. Their system prompt words step
 // reporting as a condition ("if the step tool appears among your tools") and they
-// skip it even with the tool listed; the same request in the brief is followed. The panel reads the
-// DECISION and NEXT lines of the answer (openItemsOf).
+// skip it even with the tool listed; the same request in the brief is followed.
 const STEP_BRIEF = `
 
-Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps), optionally \`plan\` (an array of their titles, a few words each) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.
-
-When you finish, open your answer with one plain sentence on what you did and where (files, results). Add a line \`DECISION: <the question>\` only if the user must decide something, and a line \`NEXT: <the step>\` only if one clear next step remains; leave both out otherwise.`
+Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps), optionally \`plan\` (an array of their titles, a few words each) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
 const PANE = 'duo-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
 const DUO_TIERS = ['duo-low', 'duo-medium', 'duo-high', 'duo-xhigh', 'duo-max', 'duo-opus', 'duo-advisor', 'duo-reviewer', 'duo-verifier'] as const
@@ -116,12 +113,6 @@ const STRINGS = {
     filesWord: 'Files',
     stalled: 'stalled',
     attention: 'Needs attention',
-    nothingNeeded: 'Nothing needed from you',
-    needsYou1: 'needs you',
-    needsYouN: 'need you',
-    decisionWord: 'decision',
-    nextWord: 'next',
-    fineN: 'routine, all fine',
     groupModels: 'Models',
     groupStages: 'Stages',
     runningNow: 'Running now',
@@ -181,12 +172,6 @@ const STRINGS = {
     filesWord: 'Файлы',
     stalled: 'завис',
     attention: 'Требуют внимания',
-    nothingNeeded: 'От вас ничего не требуется',
-    needsYou1: 'ждёт вас',
-    needsYouN: 'ждут вас',
-    decisionWord: 'решение',
-    nextWord: 'дальше',
-    fineN: 'обычных, всё в порядке',
     groupModels: 'Модели',
     groupStages: 'Этапы',
     runningNow: 'Сейчас работают',
@@ -246,12 +231,6 @@ const STRINGS = {
     filesWord: 'קבצים',
     stalled: 'תקוע',
     attention: 'דורשים תשומת לב',
-    nothingNeeded: 'לא נדרש ממך דבר',
-    needsYou1: 'ממתין לך',
-    needsYouN: 'ממתינים לך',
-    decisionWord: 'החלטה',
-    nextWord: 'הבא',
-    fineN: 'שגרתיים, הכל תקין',
     groupModels: 'מודלים',
     groupStages: 'שלבי עבודה',
     runningNow: 'פועלים עכשיו',
@@ -708,20 +687,15 @@ export const nextView = (current: 'detail' | 'grouped' | undefined, count: numbe
   return count <= GROUP_LEAVE ? 'detail' : 'grouped'
 }
 
-// What waits on the user: an open decision, an agent that broke or went quiet, a next step an agent proposed.
-// One item per agent, the most pressing first. A checker's FAIL is a finding, not an item.
-export type Need = { a: AgentRun; kind: 'decision' | 'failed' | 'stalled' | 'next'; text: string }
+// The agents that need a look: failed ones first, then running ones with no sign of life, the longest quiet first.
+export const MAX_NEEDS = 3
+export type Need = { a: AgentRun; kind: 'failed' | 'stalled' }
 export const needsOf = (list: readonly AgentRun[], at: number): Need[] => {
   const quiet = (a: AgentRun): number => at - (a.lastAt ?? a.startedAt)
-  const decisions = list.filter(a => a.status === 'done' && a.decision).map((a): Need => ({ a, kind: 'decision', text: a.decision ?? '' }))
-  const failed = list.filter(a => a.status === 'failed').map((a): Need => ({ a, kind: 'failed', text: a.result || a.action || '' }))
-  const stalled = list.filter(a => isStalled(a, at)).sort((x, y) => quiet(y) - quiet(x)).map((a): Need => ({ a, kind: 'stalled', text: a.action || a.stepNote || '' }))
-  const next = list.filter(a => a.status === 'done' && a.next && !a.decision).map((a): Need => ({ a, kind: 'next', text: a.next ?? '' }))
-  return [...decisions, ...failed, ...stalled, ...next]
+  const failed = list.filter(a => a.status === 'failed').map((a): Need => ({ a, kind: 'failed' }))
+  const stalled = list.filter(a => isStalled(a, at)).sort((x, y) => quiet(y) - quiet(x)).map((a): Need => ({ a, kind: 'stalled' }))
+  return [...failed, ...stalled]
 }
-
-// Something the user should look at on a finished row: a need, or a checker's FAIL.
-export const isFlagged = (a: AgentRun): boolean => !!(a.decision || a.next) || a.status === 'failed' || a.verdict === 'fail'
 
 // 'truth:A10' -> 'truth'. No usable prefix -> 'other'.
 export const groupKey = (description: string): string => {
@@ -1295,18 +1269,6 @@ export const verdictOf = (answer: unknown): 'pass' | 'fail' | undefined => {
   return last ? (last[1].toLowerCase() as 'pass' | 'fail') : undefined
 }
 
-// An agent's last lines may say what it needs decided ("DECISION: ...") and what should happen next ("NEXT: ...").
-export const openItemsOf = (answer: unknown): { decision?: string; next?: string; rest: string } => {
-  if (typeof answer !== 'string') return { rest: '' }
-  const re = /^[\s*_#>`"'-]*(decision|next)\s*:\s*(.+)$/gim
-  const out: { decision?: string; next?: string } = {}
-  for (const m of answer.matchAll(re)) {
-    const k = m[1].toLowerCase() as 'decision' | 'next'
-    if (!out[k]) out[k] = clip(m[2].replace(/^[*_\s]+/, '').trim().replace(/\s+/g, ' '), MAX_RESULT)
-  }
-  return { ...out, rest: answer.replace(re, '').trim() }
-}
-
 // Running with no sign of life for STALL_MS.
 export const isStalled = (a: AgentRun, at: number): boolean => a.status === 'running' && at - (a.lastAt ?? a.startedAt) > (a.busy ? STALL_BUSY_MS : STALL_MS)
 
@@ -1391,56 +1353,114 @@ const padCols = (t: string, cols: number): string => t + ' '.repeat(Math.max(0, 
 const detailLineCount = (a: AgentRun, at: number, cols: number): number =>
   detailLines(a, at).reduce((n, l) => n + Math.max(1, Math.ceil(wideLen(l) / Math.max(20, cols))), 0)
 
-const agentSvg = (W: number, a: AgentRun, at: number): string => {
+// The plan and the work in one list: a row per planned task in plan order (a task that has not started is
+// waiting, with what it waits for), then the agents that belong to no task. A row keeps its place while its
+// state changes, so nothing jumps.
+export type TaskRow = { n?: number; title: string; tier: string; after: number[]; a?: AgentRun }
+export const taskRowsOf = (f: Flow | null, list: AgentRun[]): TaskRow[] => {
+  const tasks = f && !f.isFinished ? (f.tasks ?? []) : []
+  const used = new Set<string>()
+  const rows: TaskRow[] = []
+  tasks.forEach((t, i) => {
+    const mine = list.filter(a => norm(a.description) === norm(t.title))
+    if (!mine.length) rows.push({ n: i + 1, title: t.title, tier: t.tier, after: t.after })
+    for (const a of mine) {
+      used.add(a.id)
+      rows.push({ n: i + 1, title: t.title, tier: t.tier, after: t.after, a })
+    }
+  })
+  for (const a of list) if (!used.has(a.id)) rows.push({ title: a.description || a.type, tier: tierOf(a.type), after: [], a })
+  return rows
+}
+
+// The plan as a picture: a card with a crab per task, arrows from what a task waits for, layer by layer (a task
+// sits one layer below everything it waits for). A card keeps its place while its colour and bar change, so nothing
+// jumps; tasks with no plan (agents Claude started on its own) form one wrapping grid.
+const CARD_GAP = 10
+const LAYER_GAP = 24
+
+export const layersOf = (rows: readonly TaskRow[]): number[] => {
+  const byN = new Map<number, TaskRow[]>()
+  for (const r of rows) if (r.n) byN.set(r.n, [...(byN.get(r.n) ?? []), r])
+  const memo = new Map<number, number>()
+  const depth = (n: number, seen: number): number => {
+    if (memo.has(n)) return memo.get(n) as number
+    const r = byN.get(n)?.[0]
+    const d = !r || seen > 50 ? 0 : r.after.filter(x => x !== n && byN.has(x)).reduce((m, x) => Math.max(m, depth(x, seen + 1) + 1), 0)
+    memo.set(n, d)
+    return d
+  }
+  const planned = rows.map(r => (r.n ? depth(r.n, 0) : -1))
+  const last = Math.max(-1, ...planned)
+  return planned.map(d => (d >= 0 ? d : last >= 0 ? last + 1 : 0))
+}
+
+// The engine refuses a drawing past 128 KB, so a very long plan shows the cards that matter most (the ones not done
+// yet, in plan order) and counts the rest.
+// A costume crab is up to 9 KB of drawing, a plain one under 1 KB: costumes up to FULL_CRABS cards.
+export const MAX_CARDS = 40
+export const FULL_CRABS = 10
+export const planSvg = (W: number, all: readonly TaskRow[], at: number): { source: string; height: number } => {
   const s = tr()
-  const tier = tierOf(a.type)
-  const color = colorOf(tier)
-  const ctx = ctxOf(a)
-  const textW = W - 42 - 22
-  const meta = [runModel(a)]
-  if (a.round > 1) meta.push(`${s.round} ${a.round}`)
-  if (a.status === 'failed') meta.push(s.failed)
-  const isQuiet = isStalled(a, at)
-  if (isQuiet) meta.push(`${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`)
-  const barW = textW
-  const progress = progressOf(a)
-  const stats = `${s.ctx} ${ctx}% · ${fmtTokens(a.contextTokens)}  ≈${fmtCost(a.costUsd)}  ${fmtTime(elapsed(a, at))}`
-  // Reported steps, else what the agent's last tool call was doing.
-  const steps = a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}` : a.status === 'running' ? (a.action ?? '') : ''
-  const stepsW = Math.max(0, barW - textWidth(stats, 11) - 12)
-  // Without reported steps the bar falls back to the context, drawn grey.
-  const fillW = Math.round(barW * (progress ?? ctx / 100))
-  return svg(
-    W,
-    66,
-    `${rowCrab(W, 0, 14, costumeOf(a.type), isQuiet, a.status === 'running' && !isQuiet)}
-<text class="t" ${startText(W, 42, 18)} font-family="${FONT}" font-size="13" font-weight="600">${xml(fitText(a.description || a.type, 13, textW))}</text>
-<text ${startText(W, 42, 34)} font-family="${FONT}" font-size="11"><tspan fill="${color}">${xml(tier === 'other' ? a.type : tierWord(tier))}</tspan><tspan class="t" font-weight="500">  ${xml(meta.join('  ·  '))}</tspan></text>
-${steps && stepsW > 30 ? `<text class="t" ${startText(W, 42, 49)} font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${xml(fitText(steps, 11, stepsW))}</text>` : ''}
-<text class="s" ${endText(W, 42 + barW, 49, true)} font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${stats}</text>
-<rect class="k" x="${mx(W, 42, barW)}" y="55" width="${barW}" height="4" rx="2"/><rect${progress === null ? ' class="m"' : ''} x="${mx(W, 42, fillW)}" y="55" width="${fillW}" height="4" rx="2"${progress === null ? '' : ` fill="${color}"`}/>
-${statusMark(mx(W, W - 8), 16, a.status, color)}
-<line class="ln" x1="0" y1="65.5" x2="${W}" y2="65.5"/>`,
-  )
+  const keep = all.length <= MAX_CARDS ? null : new Set([...all.keys()].sort((x, y) => Number(all[x].a?.status === 'done') - Number(all[y].a?.status === 'done') || x - y).slice(0, MAX_CARDS))
+  const rows = keep ? all.filter((_, i) => keep.has(i)) : all
+  const omitted = all.length - rows.length
+  const wide = W - GP * 2
+  const compact = rows.length > 24
+  const rich = rows.length <= FULL_CRABS
+  const ch = compact ? 46 : 58
+  const base = compact ? 100 : 150
+  const perRow = Math.max(1, Math.floor((wide + CARD_GAP) / (base + CARD_GAP)))
+  const cw = Math.floor((wide - (perRow - 1) * CARD_GAP) / perRow)
+  const layers = layersOf(rows)
+  const depth = Math.max(0, ...layers)
+  const place = new Map<number, { x: number; y: number }>()
+  let y = 6
+  for (let l = 0; l <= depth; l++) {
+    const idx = rows.map((_, i) => i).filter(i => layers[i] === l)
+    if (!idx.length) continue
+    idx.forEach((i, k) => place.set(i, { x: GP + (k % perRow) * (cw + CARD_GAP), y: y + Math.floor(k / perRow) * (ch + CARD_GAP) }))
+    y += Math.ceil(idx.length / perRow) * (ch + CARD_GAP) - CARD_GAP + LAYER_GAP
+  }
+  const height = Math.ceil(y - LAYER_GAP + 10) + (omitted ? 22 : 0)
+  const edges: string[] = []
+  const cards: string[] = []
+  rows.forEach((r, i) => {
+    const to = place.get(i)
+    if (!to) return
+    for (const dep of r.after.slice(0, 8)) {
+      const j = rows.findIndex(q => q.n === dep)
+      const from = j >= 0 ? place.get(j) : undefined
+      if (!from || edges.length > 60) continue
+      const sx = mx(W, from.x + cw / 2)
+      const tx = mx(W, to.x + cw / 2)
+      const sy = from.y + ch
+      const ty = to.y
+      const done = rows[j]?.a?.status === 'done'
+      const mid = (sy + ty) / 2
+      edges.push(`<path d="M${sx} ${sy}C${sx} ${mid} ${tx} ${mid} ${tx} ${ty - 2}" fill="none" stroke="${done ? C_DONE : '#9a9a96'}" stroke-opacity="${done ? 0.9 : 0.5}" stroke-width="1.6"/><path d="M${tx - 3.5} ${ty - 6}L${tx} ${ty - 1}L${tx + 3.5} ${ty - 6}" fill="none" stroke="${done ? C_DONE : '#9a9a96'}" stroke-opacity="${done ? 0.9 : 0.5}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`)
+    }
+    const a = r.a
+    const tier = a ? tierOf(a.type) : r.tier in TIER_COLOR ? r.tier : 'other'
+    const isQuiet = a ? isStalled(a, at) : false
+    const status = !a ? 'planned' : isQuiet ? 'stalled' : a.status
+    const edge = status === 'failed' ? C_FAIL : status === 'running' ? C_RUN : status === 'stalled' ? C_CHECK : status === 'done' ? C_DONE : '#9a9a96'
+    const sub = !a ? tierWord(tier) : a.status === 'failed' ? s.failed : isQuiet ? `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : a.status === 'running' ? (a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : (a.action ?? fmtTime(elapsed(a, at)))) : fmtTime(elapsed(a, at))
+    const pct = !a ? 0 : a.status === 'done' ? 1 : a.status === 'failed' ? 1 : (progressOf(a) ?? 0)
+    const bx = to.x + 8
+    const bw = cw - 16
+    const dim = status === 'planned' ? ' opacity="0.7"' : ''
+    cards.push(`<g${dim}><rect class="tile" x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8"/>
+<rect x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8" fill="none" stroke="${edge}" stroke-width="${status === 'planned' ? 1 : 1.6}"${status === 'planned' ? ' stroke-dasharray="4 3"' : ''}/>
+${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? (a ? agentCostume(a) : tier) : 'other', !a, status === 'running')}
+${T(W, 't', to.x + 44, to.y + (compact ? 19 : 22), 12, 600, fitText(`${r.n ? `${r.n}. ` : ''}${r.title}`, 12, Math.max(30, cw - 50)), 'start')}
+${T(W, 'm', to.x + 44, to.y + (compact ? 33 : 38), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50)), 'start')}
+<rect class="k" x="${mx(W, bx, bw)}" y="${to.y + ch - 7}" width="${bw}" height="3" rx="1.5"/><rect x="${mx(W, bx, Math.round(bw * pct))}" y="${to.y + ch - 7}" width="${Math.round(bw * pct)}" height="3" rx="1.5" fill="${edge}"/>
+${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' : status, edge)}</g>`)
+  })
+  const more = omitted ? T(W, 's', GP, height - 8, 12, 400, `+${omitted} ${agentsWord(omitted)}`, 'start') : ''
+  return { source: svg(W, height, `${edges.join('')}${cards.join('\n')}${more}`), height }
 }
-
-const plannedSvg = (W: number, p: Planned): string => {
-  const tier = p.tier in TIER_COLOR ? p.tier : 'other'
-  const color = colorOf(tier)
-  const textW = W - 42 - 22
-  const meta = [tierModel(tier)]
-  if (p.after.length) meta.push(`${tr().after} ${p.after.join(', ')}`)
-  return svg(
-    W,
-    46,
-    `${rowCrab(W, 0, 6, tier, true)}
-<text class="s" ${startText(W, 42, 18)} font-family="${FONT}" font-size="13" font-weight="600">${xml(fitText(`${p.n}. ${p.title}`, 13, textW))}</text>
-<text ${startText(W, 42, 34)} font-family="${FONT}" font-size="11"><tspan fill="${color}">${xml(tierWord(tier))}</tspan><tspan class="m">  ${xml(meta.filter(Boolean).join('  ·  '))}</tspan></text>
-${statusMark(mx(W, W - 8), 16, 'planned', color)}
-<line class="ln" x1="0" y1="45.5" x2="${W}" y2="45.5"/>`,
-  )
-}
-
 
 // --- desktop drawings of the grouped view.
 
@@ -1451,12 +1471,6 @@ const C_FAIL = '#E5484D'
 const C_CHECK = '#D4A24C'
 const GP = 6
 const MAX_FINISHED_ROWS = 60
-// Agents at work are drawn as full rows up to this many; the rest are counted.
-const MAX_RUNNING_ROWS = 6
-// A run with more finished agents than this folds the routine ones; the flagged ones stay in view.
-export const FOLD_FROM = 6
-// A finished row has more to open when it has files, steps or a stated reason; its result is already on the row.
-export const hasMore = (a: AgentRun): boolean => !!(a.files?.length || a.stepTotal || a.stepLog?.length || a.why)
 
 const fmtSpan = (ms: number): string => {
   const m = Math.floor(Math.max(0, ms) / 60000)
@@ -1483,116 +1497,43 @@ const countsText = (g: { done: number; running: number; failed: number; fails?: 
   return [g.done ? `${g.done} ${s.doneN}` : '', g.running ? `${g.running} ${s.isRunning}` : '', g.failed ? `${g.failed} ${s.failedN}` : '', g.fails ? `${g.fails} FAIL` : ''].filter(Boolean).join(' · ') || `0 ${s.doneN}`
 }
 
-// The top of the pane in one drawing: whether anything waits on the user, the limit, and the items that do.
-export const MAX_NEEDS = 5
+// The top of the pane: what the job is, how far it is and what your limit is.
 export const statusSvg = (
   W: number,
   list: AgentRun[],
   at: number,
   title: string,
+  total: number,
   lim: readonly Limit[] = [],
   nowMs = 0,
   runUse = '',
 ): { source: string; height: number } => {
   const s = tr()
-  const out: string[] = []
   const tl = tally(list)
   const t = totals(list, at)
-  const needs = needsOf(list, at)
   const wide = W - GP * 2
-  const rule = (y: number) => `<rect class="k" x="${GP}" y="${y}" width="${wide}" height="1"/>`
-
-  // Line one: is anything waiting on me, and how much of the limit is left.
-  const head = needs.length ? `${needs.length} ${needs.length === 1 ? s.needsYou1 : s.needsYouN}` : s.nothingNeeded
-  out.push(`<circle cx="${mx(W, GP + 6, 0)}" cy="16" r="5" fill="${needs.length ? C_CHECK : C_DONE}"/>`)
   const lt = limitTile(lim, nowMs)
   const right = lt ? `${lt.label} ${lt.value}${lt.reset ? ` · ↻ ${lt.reset}` : ''}` : `≈${fmtCost(t.cost)}`
-  out.push(T(W, 's', W - GP, 21, 12, 400, fitText(right, 12, Math.max(60, wide * 0.5)), 'end', ' font-variant-numeric="tabular-nums"'))
-  out.push(T(W, 't', GP + 20, 22, 16, 700, fitText(head, 16, Math.max(60, wide - 20 - textWidth(right, 12) - 12)), 'start'))
-  // Line two: how far along, how long, what this run took of the window.
-  const sub = [title, `${tl.finished}/${tl.total} ${s.doneN}`, tl.running ? `${tl.running} ${s.isRunning}` : '', fmtSpan(t.time), runUse].filter(Boolean).join(' · ')
-  out.push(T(W, 'm', GP + 20, 42, 12, 400, fitText(sub, 12, Math.max(60, wide - 20)), 'start'))
-  let y = 54
-  out.push(rule(y))
-  y += 6
-
-  // What waits on the user, named, with the agent's own words.
-  const tag = (n: Need): string => (n.kind === 'decision' ? s.decisionWord : n.kind === 'failed' ? s.failed : n.kind === 'next' ? s.nextWord : `${s.stalled} ${fmtTime(at - (n.a.lastAt ?? n.a.startedAt))}`)
-  for (const n of needs.slice(0, MAX_NEEDS)) {
-    const word = tag(n)
-    const rw = textWidth(word, 12)
-    out.push(crabAt(W, GP + 2, y + 5, agentCostume(n.a), 0.73, false))
-    out.push(T(W, 't', GP + 34, y + 20, 13, 600, fitText(n.a.description || n.a.type, 13, Math.max(40, wide - 34 - rw - 14)), 'start'))
-    out.push(T(W, 's', W - GP, y + 20, 12, 600, word, 'end'))
-    if (n.text) out.push(T(W, 'm', GP + 34, y + 35, 11.5, 400, fitText(n.text, 11.5, Math.max(40, wide - 34)), 'start'))
-    y += n.text ? 42 : 30
+  const sub = [`${tl.finished}/${total} ${s.doneN}`, tl.running ? `${tl.running} ${s.isRunning}` : '', tl.failed ? `${tl.failed} ${s.failedN}` : '', list.length ? fmtSpan(t.time) : '', runUse].filter(Boolean).join(' · ')
+  const height = 60
+  const wd = Math.round((wide * tl.done) / Math.max(1, total))
+  const wr = Math.round((wide * tl.running) / Math.max(1, total))
+  const wf = Math.round((wide * tl.failed) / Math.max(1, total))
+  const seg = (from: number, w: number, color: string) => (w ? `<rect x="${mx(W, GP + from, w)}" y="48" width="${w}" height="6" rx="3" fill="${color}"/>` : '')
+  return {
+    source: svg(
+      W,
+      height,
+      `${T(W, 's', W - GP, 21, 12, 400, fitText(right, 12, Math.max(60, wide * 0.5)), 'end', ' font-variant-numeric="tabular-nums"')}
+${T(W, 't', GP, 22, 16, 700, fitText(title || s.pane, 16, Math.max(60, wide - textWidth(right, 12) - 12)), 'start')}
+${T(W, 'm', GP, 42, 12, 400, fitText(sub, 12, wide), 'start')}
+<rect class="k" x="${GP}" y="48" width="${wide}" height="6" rx="3"/>${seg(0, wd, C_DONE)}${seg(wd, wr, C_RUN)}${seg(wd + wr, wf, C_FAIL)}`,
+    ),
+    height,
   }
-  if (needs.length > MAX_NEEDS) {
-    out.push(T(W, 's', GP + 34, y + 14, 12, 400, `+${needs.length - MAX_NEEDS}`, 'start'))
-    y += 24
-  }
-  if (needs.length) {
-    y += 6
-    out.push(rule(y))
-  }
-  const height = Math.ceil(y + 4)
-  return { source: svg(W, height, out.join('\n')), height }
 }
 
-// The pane redraws every second while anything runs; a finished row does not change, so its drawing is kept.
-const rowMemo = new Map<string, { source: string; height: number }>()
-const finishedRowCached = (W: number, a: AgentRun, at: number): { source: string; height: number } => {
-  const key = `${W}|${lang}|${a.id}|${a.status}|${a.tokens}|${a.verdict ?? ''}|${a.result ?? ''}`
-  let hit = rowMemo.get(key)
-  if (!hit) {
-    if (rowMemo.size > 400) rowMemo.clear()
-    hit = finishedRowSvg(W, a, at)
-    rowMemo.set(key, hit)
-  }
-  return hit
-}
-export const FINISHED_ROW = 30
 export const finishedRows = (list: AgentRun[]): AgentRun[] => list.slice(0, MAX_FINISHED_ROWS)
-// A row with a result is a line taller: the start of what the agent answered, muted, under its name.
-export const finishedRowHeight = (a: AgentRun): number => FINISHED_ROW + (a.result ? 14 : 0)
-
-const finishedRowBody = (W: number, a: AgentRun, at: number, y: number): string => {
-  const s = tr()
-  const right = `${a.files?.length ? `${a.files.length} ${s.filesWord.toLowerCase()} · ` : ''}${fmtTime(elapsed(a, at))}`
-  const rw = textWidth(right, 11.5)
-  const label = fitText(a.description || a.type, 12.5, Math.max(40, W - GP * 2 - 30 - rw - 12 - (a.verdict ? 44 : 0)))
-  const x0 = GP + 2 + 18 + 10
-  let after = x0 + textWidth(label, 12.5) + 6
-  const failedMark = a.status === 'failed' ? `<text class="f" ${startText(W, after, y + 19, false)} font-family="${FONT}" font-size="10.5">${xml(s.failed)}</text>` : ''
-  if (a.status === 'failed') after += textWidth(s.failed, 10.5) + 6
-  const badge = a.verdict
-    ? (() => {
-        const word = a.verdict.toUpperCase()
-        const w = Math.round(textWidth(word, 9.5) + 10)
-        const fill = a.verdict === 'pass' ? DONE : C_CHECK
-        return `<rect x="${mx(W, after, w)}" y="${y + 8}" width="${w}" height="14" rx="7" fill="${fill}"/><text ${startText(W, after + 5, y + 18.5, false)} font-family="${FONT}" font-size="9.5" font-weight="700" fill="${inkOn(fill)}">${word}</text>`
-      })()
-    : ''
-  const result = a.result ? T(W, 'm', x0, y + 35, 11, 400, fitText(a.result, 11, Math.max(40, W - GP * 2 - 34)), 'start') : ''
-  return `${crabAt(W, GP + 2, y + 6, agentCostume(a), 0.6, false)}${T(W, a.status === 'failed' ? 'f' : 't', x0, y + 19, 12.5, 500, label, 'start')}${failedMark}${badge}${T(W, 's', W - GP, y + 19, 11.5, 400, right, 'end', ' font-variant-numeric="tabular-nums"')}${result}`
-}
-
-export const finishedRowSvg = (W: number, a: AgentRun, at: number): { source: string; height: number } => {
-  const height = finishedRowHeight(a)
-  return { source: svg(W, height, `<style>.f{fill:#E5484D}</style>${finishedRowBody(W, a, at, 0)}`), height }
-}
-
-// All the finished rows in one drawing (kept for callers that want one picture).
-export const finishedSvg = (W: number, list: AgentRun[], at: number): { source: string; height: number } => {
-  let y = 0
-  const out = finishedRows(list).map(a => {
-    const row = finishedRowBody(W, a, at, y)
-    y += finishedRowHeight(a)
-    return row
-  })
-  const height = Math.max(1, y)
-  return { source: svg(W, height, `<style>.f{fill:#E5484D}</style>${out.join('')}`), height }
-}
 
 // --- terminal drawing: the same rows in text.
 
@@ -2070,15 +2011,12 @@ export const register: Register = (on, options) => {
           if (a.agentId !== agentId) return a
           // A run whose steps went unseen still gets the turn's own sum.
           const fallback = a.steps === 0 && e.usage
-          const open = openItemsOf(e.answer)
           return {
             ...a,
             status: e.reason === 'answer' ? 'done' : 'failed',
             endedAt: at,
             lastAt: at,
-            ...(open.rest ? { result: clip(open.rest.replace(/\s+/g, ' '), MAX_RESULT) } : {}),
-            ...(open.decision ? { decision: open.decision } : {}),
-            ...(open.next ? { next: open.next } : {}),
+            ...(typeof e.answer === 'string' && e.answer.trim() ? { result: clip(e.answer.trim().replace(/\s+/g, ' '), MAX_RESULT) } : {}),
             ...(verdictOf(e.answer) ? { verdict: verdictOf(e.answer) } : {}),
             ...(fallback && e.usage
               ? {
@@ -2125,19 +2063,14 @@ export const register: Register = (on, options) => {
 
     // The grouped view has its own switch, closed by default: its point is to avoid the long list.
     const isGroupedView = p.view ? p.view === 'grouped' : isGrouped(list.length)
-    // On the desktop one layout serves every count; the Finished list is open for a small run and folded for a big one.
-    const isDesktop = e.surface !== 'terminal' && 'Svg' in ui
-    // Decisions first, then broken agents, then proposed next steps, then FAIL answers.
-    const rank = (a: AgentRun): number => (a.decision ? 0 : a.status === 'failed' ? 1 : a.next ? 2 : 3)
-    const flagged = finished.filter(isFlagged).sort((x, y) => rank(x) - rank(y))
-    const routine = finished.length - flagged.length
-    const finClosed = isDesktop ? !(p.isFinishedOpen ?? finished.length <= FOLD_FROM) : isGroupedView ? !p.isFinishedOpen : p.isDoneCollapsed
+    const taskRows = taskRowsOf(f, list)
+    const finClosed = isGroupedView ? !p.isFinishedOpen : p.isDoneCollapsed
     const toggleDone = (
       <Button
         key="done"
-        label={isDesktop && finClosed ? `${isRtl() ? '◂' : '▸'} ${routine} ${s.fineN}` : `${finClosed ? (isRtl() ? '◂' : '▸') : '▾'} ${s.finished} · ${finished.length}`}
+        label={`${finClosed ? (isRtl() ? '◂' : '▸') : '▾'} ${s.finished} · ${finished.length}`}
         plain
-        onPress={() => update($, panel, prev => (isDesktop ? { ...prev, isFinishedOpen: finClosed } : isGroupedView ? { ...prev, isFinishedOpen: !prev.isFinishedOpen } : { ...prev, isDoneCollapsed: !prev.isDoneCollapsed }))}
+        onPress={() => update($, panel, prev => (isGroupedView ? { ...prev, isFinishedOpen: !prev.isFinishedOpen } : { ...prev, isDoneCollapsed: !prev.isDoneCollapsed }))}
       />
     )
     const toggleRow = (a: AgentRun) => (
@@ -2169,31 +2102,12 @@ export const register: Register = (on, options) => {
     if (e.surface === 'desktop' && 'Svg' in ui) {
       const { Svg } = ui
       const W = Math.max(240, Math.min(900, (e.props.bodyColumns || 40) * 8 - 8))
-      const section = (key: string, text: string) => (
-        <Text key={key} dimColor>
-          {text}
-        </Text>
-      )
-
-      // In Hebrew the column hugs the right edge: section heads and buttons right-aligned.
+      // In Hebrew the column hugs the right edge: buttons right-aligned.
       const align = isRtl() ? 'flex-end' : undefined
-      // One body for every number of agents: whether anything waits on the user and the limit (with the items that
-      // do), the agents at work, the finished ones (flagged first; routine ones folded in a big run), what is planned.
-      const top = statusSvg(W, list, at, title, lim, nowMs, runUse)
-      const runRows = running.slice(0, MAX_RUNNING_ROWS)
-      const runMore = running.length - runRows.length
-      // Folded: only the flagged rows stay; open: all, flagged first.
-      const ordered = [...flagged, ...finished.filter(a => !isFlagged(a))]
-      const finRows = finished.length === 0 ? [] : finishedRows(finClosed ? flagged : ordered)
-      const moreFin = (finClosed ? flagged : ordered).length - finRows.length
-      const showToggle = finished.length > 0 && (!finClosed || routine > 0)
-      const cols = (e.props.bodyColumns || 40) - 4
-      const openH = (rows: AgentRun[]) => rows.filter(a => isOpen(p, a)).reduce((n, a) => n + detailLineCount(a, at, cols) * LINE_H, 0)
-      const finH = finRows.reduce((n, a) => n + finishedRowHeight(a) + (hasMore(a) ? LINE_H : 0), 0) + openH(finRows.filter(hasMore))
-      const gridH =
-        top.height + (isEmpty ? LINE_H : 0) + (running.length > 0 ? LINE_H : 0) + runRows.length * (66 + LINE_H) + openH(runRows) + (runMore > 0 ? LINE_H : 0) +
-        (showToggle ? LINE_H : 0) + finH + (moreFin > 0 ? LINE_H : 0) +
-        (planned.length > 0 ? LINE_H : 0) + planned.length * 46
+      // The plan and the work as one picture: a card per task with arrows from what it waits for.
+      const top = statusSvg(W, list, at, title, taskRows.length, lim, nowMs, runUse)
+      const plan = taskRows.length ? planSvg(W, taskRows, at) : null
+      const gridH = top.height + (isEmpty ? LINE_H : 0) + (plan?.height ?? 0)
       return (
         <Box flexDirection="column">
           {/* The grid sizes the pane; the content is placed over it, as an
@@ -2204,31 +2118,14 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column" position="absolute" top={0} left={0} right={0} alignItems={align}>
             <Svg source={top.source} alt={`${title || s.pane}: ${summary}`} width={W} height={top.height} />
             {isEmpty && <Text dimColor>{s.empty}</Text>}
-            {running.length > 0 && section('h-run', `${s.running} · ${running.length}`)}
-            {runRows.map(a => (
-              <Box key={a.id} flexDirection="column" alignItems={align}>
-                <Svg source={agentSvg(W, a, at)} alt={`${a.description}: ${modelName(a.model)}, ${s.isRunning}`} width={W} height={66} />
-                {toggleRow(a)}
-                {detailsBlock(a)}
-              </Box>
-            ))}
-            {runMore > 0 && <Text dimColor>+{runMore} {s.moreRunning}</Text>}
-            {finRows.map(a => {
-              const row = finishedRowCached(W, a, at)
-              return (
-                <Box key={`fin-${a.id}`} flexDirection="column" alignItems={align}>
-                  <Svg source={row.source} alt={`${a.description || a.type}: ${a.verdict ? a.verdict.toUpperCase() : s.isFinished}`} width={W} height={row.height} />
-                  {hasMore(a) && toggleRow(a)}
-                  {hasMore(a) && detailsBlock(a)}
-                </Box>
-              )
-            })}
-            {moreFin > 0 && <Text dimColor>+{moreFin}</Text>}
-            {showToggle && toggleDone}
-            {planned.length > 0 && section('h-plan', `${s.planned} · ${planned.length}`)}
-            {planned.map(pl => (
-              <Svg key={`plan-${pl.n}`} source={plannedSvg(W, pl)} alt={`${pl.n}. ${pl.title}: ${s.isPlanned}`} width={W} height={46} />
-            ))}
+            {plan && (
+              <Svg
+                source={plan.source}
+                alt={taskRows.map(r => `${r.n ? `${r.n}. ` : ''}${r.title}: ${r.a ? (r.a.status === 'running' ? s.isRunning : r.a.status === 'failed' ? s.failed : s.isFinished) : s.isPlanned}`).join('; ')}
+                width={W}
+                height={plan.height}
+              />
+            )}
           </Box>
         </Box>
       )
@@ -2287,7 +2184,7 @@ export const register: Register = (on, options) => {
           </Text>
           {needsOf(list, at).slice(0, MAX_NEEDS).map(n => (
             <Text key={`att-${n.a.id}`} color={n.kind === 'failed' ? '#E5484D' : '#D4A24C'} wrap="truncate-end">
-              {cut(`${n.kind === 'failed' ? '✗' : n.kind === 'stalled' ? '⏸' : '●'} ${n.a.description || n.a.type} · ${n.kind === 'decision' ? s.decisionWord : n.kind === 'failed' ? s.failed : n.kind === 'next' ? s.nextWord : `${s.stalled} ${fmtTime(at - (n.a.lastAt ?? n.a.startedAt))}`}${n.text ? ` · ${n.text}` : ''}`)}
+              {cut(`${n.kind === 'failed' ? '✗' : '⏸'} ${n.a.description || n.a.type} · ${n.kind === 'failed' ? s.failed : `${s.stalled} ${fmtTime(at - (n.a.lastAt ?? n.a.startedAt))}`}${n.a.action ? ` · ${n.a.action}` : ''}`)}
             </Text>
           ))}
           <Text dimColor wrap="truncate-end">

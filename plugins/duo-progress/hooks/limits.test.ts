@@ -35,11 +35,11 @@ test('stepsDone: a finished run without a plan keeps its count', () => {
 const noAgents: AgentRun[] = []
 
 test('status: with a reading the limit is on top; without, the cost', () => {
-  const withLimit = statusSvg(480, noAgents, 0, '', [{ kind: 'five_hour', percentUsed: 9 }, { kind: 'seven_day', percentUsed: 31 }]).source
+  const withLimit = statusSvg(480, noAgents, 0, '', 0, [{ kind: 'five_hour', percentUsed: 9 }, { kind: 'seven_day', percentUsed: 31 }]).source
   expect(withLimit).toContain('5h · 7d')
   expect(withLimit).toContain('9% · 31%')
   expect(withLimit).not.toContain('≈$')
-  expect(statusSvg(480, noAgents, 0, '', []).source).toContain('≈$0.00')
+  expect(statusSvg(480, noAgents, 0, '', 0, []).source).toContain('≈$0.00')
 })
 
 test('usageReport: the usage file shape, reset in epoch seconds', () => {
@@ -133,6 +133,6 @@ test('limitTile: without a clock or a reset time there is no countdown', () => {
 
 test('status: the reset countdown sits beside the limit', () => {
   const lim = [{ kind: 'five_hour', percentUsed: 3, resetsAt: iso(NOW + 4 * 3_600_000 + 36 * 60_000) }]
-  expect(statusSvg(640, noAgents, 0, '', lim, NOW).source).toContain('↻ 4h 36m')
-  expect(statusSvg(640, noAgents, 0, '', lim).source).not.toContain('↻')
+  expect(statusSvg(640, noAgents, 0, '', 0, lim, NOW).source).toContain('↻ 4h 36m')
+  expect(statusSvg(640, noAgents, 0, '', 0, lim).source).not.toContain('↻')
 })

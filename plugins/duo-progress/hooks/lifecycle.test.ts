@@ -102,48 +102,73 @@ test('isStalled: only a running agent with no sign of life past the threshold', 
 })
 
 // ---- needs attention ----
-import { needsOf, rowSvg, statusSvg } from './register'
+import { layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf } from './register'
 
 const mk = (o: Partial<AgentRun>): AgentRun =>
   ({ id: 'x', type: 'general-purpose', description: 'Job', model: 'claude-sonnet-5-5', status: 'running', startedAt: 0, lastAt: 0, contextTokens: 0, contextMax: 1, tokens: 0, costUsd: 0, steps: 0, round: 1, ...o }) as AgentRun
 
-test('needsOf: a decision first, then broken, then quiet (longest first), then a proposed next step; the rest are left out', () => {
+test('needsOf: failed first, then the longest-quiet stalled; healthy, finished and FAIL-answer agents are left out', () => {
   const at = 10 * 60_000
   const list = [
     mk({ id: 'ok', lastAt: at - 1000 }),
     mk({ id: 'quiet5', lastAt: at - 5 * 60_000 }),
     mk({ id: 'quiet9', lastAt: at - 9 * 60_000 }),
     mk({ id: 'bad', status: 'failed' }),
-    mk({ id: 'next', status: 'done', next: 'deploy the page' }),
-    mk({ id: 'ask', status: 'done', decision: 'overwrite the old file?', next: 'x' }),
     mk({ id: 'done', status: 'done' }),
     mk({ id: 'fail', status: 'done', verdict: 'fail' }),
   ]
-  expect(needsOf(list, at).map(n => [n.a.id, n.kind])).toEqual([['ask', 'decision'], ['bad', 'failed'], ['quiet9', 'stalled'], ['quiet5', 'stalled'], ['next', 'next']])
+  expect(needsOf(list, at).map(n => [n.a.id, n.kind])).toEqual([['bad', 'failed'], ['quiet9', 'stalled'], ['quiet5', 'stalled']])
 })
 
-test('statusSvg: nothing waits -> says so; items are named with the agent\'s own words', () => {
-  const at = 20 * 60_000
-  const calm = [mk({ id: 'a', status: 'done', result: 'renamed 14 files' })]
-  expect(statusSvg(480, calm, at, 'Big job').source).toContain('Nothing needed from you')
-  const list = [
-    mk({ id: 'h', lastAt: at - 1000 }),
-    mk({ id: 's1', description: 'Stuck one', lastAt: at - 6 * 60_000, action: 'running: python3 slow.py' }),
-    mk({ id: 'f1', description: 'Broken one', status: 'failed', result: 'the build failed', endedAt: at }),
-    mk({ id: 'd1', description: 'Press page', status: 'done', decision: 'overwrite the old EN text?' }),
-  ]
-  const { source } = statusSvg(480, list, at, 'Big job')
-  expect(source).toContain('3 need you')
-  expect(source).toContain('overwrite the old EN text?')
-  expect(source).toContain('decision')
-  expect(source).toContain('stalled 6')
-  expect(source).toContain('running: python3 slow.py')
-  expect(source).toContain('the build failed')
-  expect(source).not.toContain('Nothing needed')
+test('statusSvg: the job, how far it is, what is running, the time and the limit', () => {
+  const list = [mk({ id: 'a', status: 'done', endedAt: 30_000 }), mk({ id: 'b', lastAt: 29_000 }), mk({ id: 'c', status: 'failed', endedAt: 20_000 })]
+  const { source } = statusSvg(480, list, 30_000, 'Big job', 5, [{ kind: 'five_hour', percentUsed: 27 }])
+  expect(source).toContain('Big job')
+  expect(source).toContain('2/5 done')
+  expect(source).toContain('1 running')
+  expect(source).toContain('1 failed')
+  expect(source).toContain('5h 27%')
 })
 
-test('statusSvg: a checker\'s FAIL alone is not something waiting on the user', () => {
-  expect(statusSvg(480, [mk({ id: 'a', status: 'done', verdict: 'fail', result: 'FAIL: no comment' })], 5000, '').source).toContain('Nothing needed from you')
+const PLAN = { title: 'Plan', total: 3, done: 0, running: 0, phase: 'delegate', isFinished: false, tasks: [{ title: 'Map', tier: 'duo-low', after: [] }, { title: 'Build', tier: 'duo-high', after: [1] }, { title: 'Check', tier: 'duo-verifier', after: [1, 2] }] } as Parameters<typeof taskRowsOf>[0]
+
+test('taskRowsOf: plan order, a started task takes its agent, the rest wait; agents of no task follow', () => {
+  const list = [mk({ id: 'm', description: 'Map', status: 'done' }), mk({ id: 'x', description: 'Odd job' })]
+  const rows = taskRowsOf(PLAN, list)
+  expect(rows.map(r => [r.n, r.title, r.a?.id])).toEqual([[1, 'Map', 'm'], [2, 'Build', undefined], [3, 'Check', undefined], [undefined, 'Odd job', 'x']])
+  expect(taskRowsOf(null, list).map(r => r.title)).toEqual(['Map', 'Odd job'])
+  expect(taskRowsOf({ ...PLAN, isFinished: true }, list).map(r => r.title)).toEqual(['Map', 'Odd job'])
+})
+
+test('layersOf: a task sits one layer below everything it waits for; agents of no task come last', () => {
+  const rows = taskRowsOf(PLAN, [mk({ id: 'x', description: 'Odd job' })])
+  expect(layersOf(rows)).toEqual([0, 1, 2, 3])
+  expect(layersOf(taskRowsOf(null, [mk({ id: 'a' }), mk({ id: 'b', description: 'Other' })]))).toEqual([0, 0])
+})
+
+test('planSvg: a card per task with its tier colour, arrows from what it waits for, a bar per card', () => {
+  const rows = taskRowsOf(PLAN, [mk({ id: 'm', description: 'Map', status: 'done', endedAt: 5000 })])
+  const { source, height } = planSvg(480, rows, 6000)
+  expect(source).toContain('1. Map')
+  expect(source).toContain('3. Check')
+  expect(source.split('stroke-dasharray').length - 1).toBe(2) // the two tasks that have not started are dashed
+  expect(source).toContain('<path d="M') // arrows
+  expect(height).toBeGreaterThan(120)
+})
+
+test('planSvg: a failed card is red, a stalled one amber; text from an agent cannot break the drawing', () => {
+  const rows = taskRowsOf(null, [mk({ id: 'f', description: 'x<y & "z" </text><script>', status: 'failed' }), mk({ id: 's', description: 'Quiet', lastAt: 0 })])
+  const { source } = planSvg(480, rows, 10 * 60_000)
+  expect(source).toContain('#E5484D')
+  expect(source).toContain('#D4A24C')
+  expect(source).not.toContain('<script>')
+})
+
+test('planSvg: many agents without a plan wrap into a grid, smaller from twenty-five on', () => {
+  const few = planSvg(632, taskRowsOf(null, Array.from({ length: 12 }, (_, i) => mk({ id: `a${i}`, description: `Job ${i}` }))), 5)
+  const many = planSvg(632, taskRowsOf(null, Array.from({ length: 60 }, (_, i) => mk({ id: `a${i}`, description: `Job ${i}` }))), 5)
+  expect(few.height).toBeLessThan(400)
+  expect(many.height).toBeLessThan(60 * 20)
 })
 
 test('band: a warning count shows beside the usage', () => {
@@ -240,7 +265,7 @@ test('contrast: the colours the band and the panel really use meet 4.5:1', () =>
   expect(band.dark).toMatch(/^#/)
   expect(contrast(band.light, '#ffffff')).toBeGreaterThanOrEqual(4.5)
   expect(contrast(band.dark, '#1e1e1e')).toBeGreaterThanOrEqual(4.5)
-  const panel = muted(statusSvg(480, [mk({ status: 'done' })], 0, 'x').source)
+  const panel = muted(statusSvg(480, [mk({ status: 'done' })], 0, 'x', 1).source)
   expect(panel.light).toMatch(/^#/)
   expect(panel.dark).toMatch(/^#/)
   expect(contrast(panel.light, '#ffffff')).toBeGreaterThanOrEqual(4.5)
@@ -284,69 +309,15 @@ test('nextView: grouped above the threshold, and back to detailed only at five o
 })
 
 // ---- what happened, at a glance ----
-import { finishedRowHeight, finishedRowSvg, verdictCounts } from './register'
-
-test('finishedRowSvg: a verdict badge and the start of the result; a row with a result is taller', () => {
-  const pass = mk({ status: 'done', verdict: 'pass', result: 'PASS: the file holds exactly two lines', endedAt: 9000, tokens: 5000 })
-  const plain = mk({ status: 'done', endedAt: 9000 })
-  const row = finishedRowSvg(480, pass, 9000)
-  expect(row.source).toContain('>PASS</text>')
-  expect(row.source).toContain('the file holds exactly two lines')
-  expect(row.height).toBe(finishedRowHeight(pass))
-  expect(finishedRowHeight(pass)).toBeGreaterThan(finishedRowHeight(plain))
-  const fail = finishedRowSvg(480, mk({ status: 'done', verdict: 'fail' }), 9000)
-  expect(fail.source).toContain('>FAIL</text>')
-})
-
-test('finishedRowSvg: result text from an agent cannot break the drawing', () => {
-  const row = finishedRowSvg(480, mk({ status: 'done', result: 'x<y & "z" </text><script>', endedAt: 5 }), 5)
-  expect(row.source).not.toContain('<script>')
-  expect(row.source).toContain('&lt;script&gt;')
-})
+import { verdictCounts } from './register'
 
 test('verdictCounts: PASS and FAIL counted; the run\'s usage rides on the status line', () => {
   const list = [mk({ id: 'a', status: 'done', verdict: 'pass' }), mk({ id: 'b', status: 'done', verdict: 'pass' }), mk({ id: 'c', status: 'done', verdict: 'fail' })]
   expect(verdictCounts(list)).toEqual({ pass: 2, fail: 1 })
-  expect(statusSvg(640, list, 9000, 'Job', [], 0, 'this run: 1% 5h').source).toContain('this run: 1% 5h')
-})
-
-// ---- open items and flagged rows ----
-import { FOLD_FROM, hasMore, isFlagged, openItemsOf } from './register'
-
-test('hasMore: only files, steps or a stated reason are worth a Details switch', () => {
-  expect(hasMore(mk({ status: 'done', result: 'x' }))).toBe(false)
-  expect(hasMore(mk({ status: 'done', files: ['/a'] }))).toBe(true)
-  expect(hasMore(mk({ status: 'done', stepTotal: 2 }))).toBe(true)
-  expect(hasMore(mk({ status: 'done', why: 'cheap tier' }))).toBe(true)
+  expect(statusSvg(640, list, 9000, 'Job', 3, [], 0, 'this run: 1% 5h').source).toContain('this run: 1% 5h')
 })
 
 test('verdictOf: an agent that corrects itself is read by its last PASS or FAIL line', () => {
   expect(verdictOf('FAIL. the header only says what it does.\n\nCorrection: it does say why.\n\nPASS: it gives a reason.')).toBe('pass')
   expect(verdictOf('PASS\nbut later\nFAIL: broke')).toBe('fail')
-})
-
-test('openItemsOf: DECISION and NEXT lines are taken out of the answer; the first of each wins', () => {
-  const r = openItemsOf('Renamed 14 files, build OK.\nDECISION: overwrite the old sheet?\n**NEXT:** deploy\nnext: later')
-  expect(r.decision).toBe('overwrite the old sheet?')
-  expect(r.next).toBe('deploy')
-  expect(r.rest).toBe('Renamed 14 files, build OK.')
-  expect(openItemsOf('PASS: fine')).toEqual({ rest: 'PASS: fine' })
-  expect(openItemsOf(undefined).rest).toBe('')
-})
-
-test('isFlagged: an open item, a broken agent or a FAIL answer; FOLD_FROM is a count of agents', () => {
-  expect(isFlagged(mk({ status: 'done', decision: 'x' }))).toBe(true)
-  expect(isFlagged(mk({ status: 'done', verdict: 'fail' }))).toBe(true)
-  expect(isFlagged(mk({ status: 'failed' }))).toBe(true)
-  expect(isFlagged(mk({ status: 'done', verdict: 'pass' }))).toBe(false)
-  expect(FOLD_FROM).toBeGreaterThan(3)
-})
-
-test('lifecycle: DECISION and NEXT lines in the answer reach the agent run, not its result', async ($, on) => {
-  setup(on)
-  await spawn($, 'q1')
-  await $.turn.complete({ agentId: 'q1', reason: 'answer', answer: 'Did it.\nDECISION: ship now?\nNEXT: run the deploy' } as never)
-  const md = await receipt($)
-  expect(md).toContain('Did it.')
-  expect(md).not.toContain('DECISION')
 })

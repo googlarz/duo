@@ -91,14 +91,12 @@ test('steps: a flood of calls and a huge plan stay bounded and drawable', async 
   expect(rows.length).toBeLessThanOrEqual(30)
 })
 
-test('desktop: a row toggles its details and the Svg rows still draw', async ($, on) => {
+test('desktop: a card shows the steps its agent reported', async ($, on) => {
   await spawn($, on, 'duo:duo-max')
-  await $.tool.call({ tool: STEP, agentId: 'a1', done: 0, plan: ['One', 'Two'] } as never)
+  await $.tool.call({ tool: STEP, agentId: 'a1', done: 1, total: 2, note: 'second part' } as never)
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
-  await ui.press({ key: 'open-a1' })
-  expect(await ui.find({ type: 'Text', text: /○ 2\. Two|▸ 1\. One/ })).toBeDefined()
   const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(drawn).toContain('duo-max')
+  expect(drawn).toContain('1/2')
 })
 
 test('steps: a non-string note is ignored and a long note is clipped in the shown note too', async ($, on) => {
@@ -132,11 +130,6 @@ const briefed = async ($: Engine, on: On, subagentType: string) => {
 
 test('brief: the step request is appended to workers but not to advisor or reviewer', async ($, on) => {
   expect(await briefed($, on, 'duo:duo-high')).toContain(STEP)
-})
-test('brief: workers are asked to end with DECISION and NEXT lines only when there is one', async ($, on) => {
-  const brief = await briefed($, on, 'duo:duo-high')
-  expect(brief).toContain('DECISION:')
-  expect(brief).toContain('NEXT:')
 })
 test('brief: advisor (plugin-prefixed) gets no step request', async ($, on) => {
   expect(await briefed($, on, 'duo:duo-advisor')).not.toContain(STEP)
