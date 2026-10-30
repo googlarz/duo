@@ -325,6 +325,12 @@ const label = (f: Flow): string => {
 
 const ratio = (f: Flow): number => (f.isFinished ? 1 : f.total ? f.done / f.total : 0)
 
+// Deterministic noise so the dither does not shimmer between redraws.
+const noise = (x: number, y: number): number => {
+  const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453
+  return s - Math.floor(s)
+}
+
 // The whole row is one SVG: the desktop wraps sibling elements onto new lines,
 // so title, bar, percent and the crab live in one drawing; only the count and
 // the dismiss are Buttons beside it.
@@ -333,6 +339,7 @@ const BAR_H = 16
 const CRAB_W = 26
 // The crab's drawing grid is 30 units wide, props included.
 const CRAB_BOX = 30
+const CELL = 3
 const FONT = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif"
 
 const xml = (s: string): string =>
@@ -415,6 +422,24 @@ export const rowSvg = (f: Flow, W: number, isWorking: boolean, usage = ''): stri
   const bx = (x: number, w: number): number => (rtl ? BAR_W - x - w : x)
   const rx = (x: number, w: number): number => (rtl ? W - x - w : x)
 
+  // Dithered fill: sparse at the start, dense toward the head.
+  const dots: string[] = []
+  const cols = Math.floor(fillW / CELL)
+  const rows = Math.floor(BAR_H / CELL)
+  for (let c = 0; c < cols; c++) {
+    const density = 0.35 + 0.6 * Math.pow(c / Math.max(1, cols), 1.2)
+    for (let r = 0; r < rows; r++) {
+      if (noise(c, r) < density) dots.push(`<rect class="t${Math.floor(noise(r, c) * 4)}" x="${bx(c * CELL + 1, 2)}" y="${r * CELL + 1}" width="2" height="2"/>`)
+    }
+  }
+  // Handed to workers, not yet accepted: a faint second layer.
+  const faint: string[] = []
+  for (let c = cols; c < Math.floor(runW / CELL); c++) {
+    for (let r = 0; r < rows; r++) {
+      if (noise(c + 7, r + 3) < 0.2) faint.push(`<rect class="t${Math.floor(noise(r + 5, c) * 4)}" x="${bx(c * CELL + 1, 1.7)}" y="${r * CELL + 1}" width="1.7" height="1.7"/>`)
+    }
+  }
+
   const ticks: string[] = []
   for (let i = 1; i < f.total; i++) {
     const x = Math.round((BAR_W * i) / f.total)
@@ -433,10 +458,11 @@ export const rowSvg = (f: Flow, W: number, isWorking: boolean, usage = ''): stri
 <style>
 .t{fill:#1f1f1f}.m{fill:#8a8a8a}.k{fill:#e4e4e2}.tk{fill:#b4b4b0}
 @media (prefers-color-scheme: dark){.t{fill:#ececec}.m{fill:#9a9a9a}.k{fill:#2c2c2c}.tk{fill:#5a5a5a}}
-/* A bar that is still working breathes slowly; a finished one is still. */
-.run{animation:br 2.4s ease-in-out infinite}
-@keyframes br{0%,100%{opacity:1}50%{opacity:.78}}
-@media (prefers-reduced-motion: reduce){.run{animation:none}}
+/* Pixels twinkle in four out-of-phase groups; a finished bar settles to a slow glow. */
+.t0,.t1,.t2,.t3{animation:tw ${f.isFinished ? 3.2 : 2.2}s ease-in-out infinite}
+.t1{animation-duration:${f.isFinished ? 3.8 : 2.8}s;animation-delay:-.7s}.t2{animation-duration:${f.isFinished ? 4.4 : 1.9}s;animation-delay:-1.3s}.t3{animation-duration:${f.isFinished ? 3.5 : 3.3}s;animation-delay:-.4s}
+@keyframes tw{0%,100%{opacity:1}50%{opacity:${f.isFinished ? 0.8 : 0.3}}}
+@media (prefers-reduced-motion: reduce){.t0,.t1,.t2,.t3{animation:none}}
 </style>
 <defs><clipPath id="c"><rect x="0" y="0" width="${BAR_W}" height="${BAR_H}" rx="${BAR_H / 2}"/></clipPath></defs>
 <circle cx="${rtl ? W - 5 : 5}" cy="${H / 2}" r="4" fill="${color}"/>
@@ -444,8 +470,8 @@ export const rowSvg = (f: Flow, W: number, isWorking: boolean, usage = ''): stri
 <g transform="translate(${rx(BAR_X, BAR_W)},${y0})">
 <rect class="k" width="${BAR_W}" height="${BAR_H}" rx="${BAR_H / 2}"/>
 <g clip-path="url(#c)">
-<rect class="${isWorking ? 'run' : ''}" x="${bx(0, fillW)}" width="${fillW}" height="${BAR_H}" fill="${color}"/>
-<rect x="${bx(fillW, Math.max(0, runW - fillW))}" width="${Math.max(0, runW - fillW)}" height="${BAR_H}" fill="${color}" opacity="0.4"/>
+<g fill="${color}">${dots.join('')}</g>
+<g fill="${color}" opacity="0.45">${faint.join('')}</g>
 <g class="tk">${ticks.join('')}</g>
 </g>
 <rect x="${pillX}" width="${pillW}" height="${BAR_H}" rx="${BAR_H / 2}" fill="${color}"/>

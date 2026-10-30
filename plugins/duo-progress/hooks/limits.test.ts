@@ -63,17 +63,17 @@ test('usageShort: the 5-hour window first, else the weekly one, else nothing', (
 
 const flowOf = { title: 'hello.txt test 3', total: 2, done: 2, running: 0, phase: 'close', isFinished: true } as Parameters<typeof rowSvg>[0]
 
-test('band: solid bar, no dither, usage named and the flow percent left out', () => {
+test('band: the dithered, twinkling fill is kept; usage is named and the flow percent left out', () => {
   const svg = rowSvg(flowOf, 600, false, '5h 12%')
   expect(svg).toContain('Usage 5h 12%')
   expect(svg).not.toContain('>100%<')
-  expect(svg).not.toContain('class="t0"')
-  expect(svg).not.toContain('twinkle')
+  expect(svg).toContain('class="t0"')
+  expect(svg).toContain('@keyframes tw')
 })
 
 test('band: without a reading the text is just the percent; a working bar breathes', () => {
   expect(rowSvg(flowOf, 600, false)).toContain('>100%</text>')
-  expect(rowSvg({ ...flowOf, isFinished: false, done: 1, running: 1 }, 600, true)).toContain('class="run"')
+  expect(rowSvg({ ...flowOf, isFinished: false, done: 1, running: 1 }, 600, true)).toContain('animation:tw 2.2s')
 })
 
 const at = (five: number, seven: number) => [{ kind: 'five_hour', percentUsed: five }, { kind: 'seven_day', percentUsed: seven }]
