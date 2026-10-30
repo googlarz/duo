@@ -1,0 +1,30 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Helper scripts selftest
+        run: plugins/duo/scripts/selftest.sh
+      - name: Validate plugins and marketplace
+        run: claude plugin validate .
+      - name: Panel tests
+        working-directory: plugins/duo-progress
+        run: claude plugin test .
+      - name: Version bumps (pull requests only)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin main
+          scripts/check-versions.sh

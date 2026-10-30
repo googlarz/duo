@@ -4,6 +4,8 @@ export type PlannedTask = {
   title: string
   tier: string
   after: number[]
+  /** The orchestrator's own reason for this tier, as it wrote it. */
+  why?: string
 }
 
 export type Flow = {
@@ -46,6 +48,16 @@ export type AgentRun = {
   stepPlan?: string[]
   /** One entry per `step` call: `n` steps were done at time `at`, `note` is the step then in progress. */
   stepLog?: { n: number; note: string; at: number }[]
+  /** Last sign of life: spawn, a model request, a step report or a tool call. */
+  lastAt?: number
+  /** What the last tool call was doing, in a few words ("editing cart.py"). */
+  action?: string
+  /** Files the agent edited or wrote, as given. */
+  files?: string[]
+  /** The start of the agent's final answer. */
+  result?: string
+  /** For a checker or reviewer: whether its answer opens with PASS or FAIL. */
+  verdict?: 'pass' | 'fail'
 }
 
 export type Panel = {

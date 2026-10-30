@@ -23,6 +23,7 @@ const runBase = atom({ plugin: 'duo-progress', key: 'runBase' } as const, null a
 const TOOL = 'mcp__duo-progress__progress'
 const STEP_TOOL = 'mcp__duo-progress__step'
 const USAGE_TOOL = 'mcp__duo-progress__usage'
+const RECEIPT_TOOL = 'mcp__duo-progress__receipt'
 // Added to the end of each duo-flow or duo worker's brief. Their system prompt words step
 // reporting as a condition ("if the step tool appears among your tools") and they
 // skip it even with the tool listed; the same request in the brief is followed.
@@ -41,6 +42,11 @@ const MAX_TITLE = 120
 const MAX_STEPLOG = 40
 const MAX_PLAN = 30
 const MAX_NOTE = 80
+const MAX_WHY = 140
+const MAX_RESULT = 160
+const MAX_FILES = 20
+// An agent with no sign of life for this long is called stalled in the panel.
+const STALL_MS = 3 * 60 * 1000
 const MAX_OPEN = 200
 const ACCENT = '#8f8cf4'
 const DONE = '#5fbf8f'
@@ -51,7 +57,7 @@ type ProgressInput = {
   done?: number
   phase?: Phase
   finished?: boolean
-  tasks?: { title?: string; tier?: string; after?: number[] }[]
+  tasks?: { title?: string; tier?: string; after?: number[]; why?: string }[]
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +105,13 @@ const STRINGS = {
     status: 'Status',
     timeWord: 'Time',
     stepsWord: 'Steps',
+    nowWord: 'Now',
+    whyWord: 'Why this tier',
+    resultWord: 'Result',
+    verdictWord: 'Verdict',
+    filesWord: 'Files',
+    stalled: 'stalled',
+    attention: 'Needs attention',
     groupModels: 'Models',
     groupStages: 'Stages',
     runningNow: 'Running now',
@@ -151,6 +164,13 @@ const STRINGS = {
     status: 'Статус',
     timeWord: 'Время',
     stepsWord: 'Шаги',
+    nowWord: 'Сейчас',
+    whyWord: 'Почему этот уровень',
+    resultWord: 'Результат',
+    verdictWord: 'Вердикт',
+    filesWord: 'Файлы',
+    stalled: 'завис',
+    attention: 'Требуют внимания',
     groupModels: 'Модели',
     groupStages: 'Этапы',
     runningNow: 'Сейчас работают',
@@ -203,6 +223,13 @@ const STRINGS = {
     status: 'סטטוס',
     timeWord: 'זמן',
     stepsWord: 'שלבים',
+    nowWord: 'כעת',
+    whyWord: 'למה הרמה הזו',
+    resultWord: 'תוצאה',
+    verdictWord: 'מסקנה',
+    filesWord: 'קבצים',
+    stalled: 'תקוע',
+    attention: 'דורשים תשומת לב',
     groupModels: 'מודלים',
     groupStages: 'שלבי עבודה',
     runningNow: 'פועלים עכשיו',
@@ -294,6 +321,7 @@ const cleanTasks = (tasks: ProgressInput['tasks']): PlannedTask[] | undefined =>
       title: (t.title ?? '').trim(),
       tier: tierName(t.tier ?? ''),
       after: (t.after ?? []).filter(n => Number.isInteger(n) && n > 0).slice(0, MAX_AFTER),
+      ...(typeof t.why === 'string' && t.why.trim() ? { why: clip(t.why.trim(), MAX_WHY) } : {}),
     }))
 
 const merge = (prev: Flow | null, input: ProgressInput): Flow => {
@@ -404,13 +432,13 @@ export const usageShort = (list: readonly Limit[], base: RunBase = null): string
   return ''
 }
 
-export const rowSvg = (f: Flow, W: number, isWorking: boolean, usage = ''): string => {
+export const rowSvg = (f: Flow, W: number, isWorking: boolean, usage = '', alert = ''): string => {
   // The title takes what it needs, up to 40% of the row; the bar takes the rest.
   const title = fitText(f.title, 13, Math.max(60, W * 0.4))
   const BAR_X = Math.round(16 + textWidth(title, 13) + 12)
   const percent = `${Math.round(ratio(f) * 100)}%`
   // The pill already says where the flow stands, so with a usage reading the right side is only usage, named: a bare "100%" next to it reads as usage.
-  const tail = usage ? `${tr().limit} ${usage}` : percent
+  const tail = [alert, usage ? `${tr().limit} ${usage}` : percent].filter(Boolean).join(' · ')
   const BAR_W = Math.max(60, W - BAR_X - Math.max(56, Math.ceil(textWidth(tail, 12.5)) + 26) - CRAB_W)
   const color = f.isFinished ? DONE : ACCENT
   const y0 = (H - BAR_H) / 2
@@ -456,8 +484,8 @@ export const rowSvg = (f: Flow, W: number, isWorking: boolean, usage = ''): stri
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <style>
-.t{fill:#1f1f1f}.m{fill:#8a8a8a}.k{fill:#e4e4e2}.tk{fill:#b4b4b0}
-@media (prefers-color-scheme: dark){.t{fill:#ececec}.m{fill:#9a9a9a}.k{fill:#2c2c2c}.tk{fill:#5a5a5a}}
+.t{fill:#1f1f1f}.m{fill:#666666}.k{fill:#e4e4e2}.tk{fill:#7a7a76}
+@media (prefers-color-scheme: dark){.t{fill:#ececec}.m{fill:#a6a6a6}.k{fill:#2c2c2c}.tk{fill:#8a8a8a}}
 /* Pixels twinkle in four out-of-phase groups; a finished bar settles to a slow glow. */
 .t0,.t1,.t2,.t3{animation:tw ${f.isFinished ? 3.2 : 2.2}s ease-in-out infinite}
 .t1{animation-duration:${f.isFinished ? 3.8 : 2.8}s;animation-delay:-.7s}.t2{animation-duration:${f.isFinished ? 4.4 : 1.9}s;animation-delay:-1.3s}.t3{animation-duration:${f.isFinished ? 3.5 : 3.3}s;animation-delay:-.4s}
@@ -475,7 +503,7 @@ export const rowSvg = (f: Flow, W: number, isWorking: boolean, usage = ''): stri
 <g class="tk">${ticks.join('')}</g>
 </g>
 <rect x="${pillX}" width="${pillW}" height="${BAR_H}" rx="${BAR_H / 2}" fill="${color}"/>
-<text x="${pillX + pillW / 2}" y="${BAR_H / 2 + 4}" text-anchor="middle"${rtl ? ' direction="rtl"' : ''} font-family="${FONT}" font-size="11" font-weight="600" fill="#ffffff">${xml(text)}</text>
+<text x="${pillX + pillW / 2}" y="${BAR_H / 2 + 4}" text-anchor="middle"${rtl ? ' direction="rtl"' : ''} font-family="${FONT}" font-size="11" font-weight="600" fill="${inkOn(color)}">${xml(text)}</text>
 </g>
 <text class="m" ${percentAt} font-family="${FONT}" font-size="12.5" font-variant-numeric="tabular-nums">${xml(tail)}</text>
 ${CRAB_CSS}${crab(rx(W - CRAB_W + 1, crabW), 0, 'other', false, isWorking, 0.8, rtl)}
@@ -650,6 +678,15 @@ const totals = (list: AgentRun[], at: number) => {
 export const GROUP_THRESHOLD = 8
 export const isGrouped = (count: number): boolean => count > GROUP_THRESHOLD
 
+// The agents that need a look: failed ones first, then running ones with no sign of life, the longest quiet first.
+export const MAX_ATTENTION = 5
+export const attentionOf = (list: readonly AgentRun[], at: number): AgentRun[] => {
+  const quiet = (a: AgentRun): number => at - (a.lastAt ?? a.startedAt)
+  const failed = list.filter(a => a.status === 'failed')
+  const stalled = list.filter(a => isStalled(a, at)).sort((a, b) => quiet(b) - quiet(a))
+  return [...failed, ...stalled]
+}
+
 // 'truth:A10' -> 'truth'. No usable prefix -> 'other'.
 export const groupKey = (description: string): string => {
   const i = (description ?? '').indexOf(':')
@@ -788,8 +825,8 @@ const gridSvg = (W: number, H: number) => `<svg xmlns="http://www.w3.org/2000/sv
 </svg>`
 
 const PANE_CSS = `<style>
-.t{fill:#1f1f1f}.s{fill:#6b6b68}.m{fill:#9a9a96}.k{fill:#ecebe8}.ln{stroke:#e4e4e1}.tile{fill:#f4f3f0}
-@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}.m{fill:#7d7d79}.k{fill:#2c2c2b}.ln{stroke:#333331}.tile{fill:#262625}}
+.t{fill:#1f1f1f}.s{fill:#6b6b68}.m{fill:#75756f}.k{fill:#ecebe8}.ln{stroke:#e4e4e1}.tile{fill:#f4f3f0}
+@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}.m{fill:#9a9a96}.k{fill:#2c2c2b}.ln{stroke:#333331}.tile{fill:#262625}}
 .live{animation:p 1.6s ease-in-out infinite}@keyframes p{50%{opacity:.3}}
 @media (prefers-reduced-motion: reduce){.live{animation:none}}
 </style>`
@@ -1125,6 +1162,21 @@ const startText = (W: number, x: number, y: number, words = true): string =>
 const endText = (W: number, x: number, y: number, words = false): string =>
   !isRtl() ? `x="${x}" y="${y}" text-anchor="end"` : `x="${W - x}" y="${y}"${words ? ' direction="rtl" text-anchor="end"' : ''}`
 
+// Text on a coloured fill: whichever of near-black and white reads better (WCAG contrast).
+const channel = (v: number): number => (v / 255 <= 0.03928 ? v / 255 / 12.92 : Math.pow((v / 255 + 0.055) / 1.055, 2.4))
+export const luminance = (hex: string): number => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex)
+  if (!m) return 0
+  const n = parseInt(m[1], 16)
+  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255)
+}
+export const contrast = (a: string, b: string): number => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+const BAND_INK = '#10151a'
+export const inkOn = (fill: string): string => (contrast(fill, BAND_INK) >= contrast(fill, '#ffffff') ? BAND_INK : '#ffffff')
+
 const crabWidth = (scale: number): number => Math.round(CRAB_BOX * scale * 100) / 100
 
 // A panel crab at x in a row of width W: on the mirrored side and facing left in Hebrew.
@@ -1148,6 +1200,43 @@ export const limitTile = (list: readonly Limit[]): { label: string; value: strin
   })
   return rows.length ? { label: rows.map(r => r.short).join(' · '), value: rows.map(r => `${r.pct}%`).join(' · ') } : null
 }
+
+// What a tool call was doing, in a few words, for the one-line status.
+const baseName = (p: string): string => p.split(/[\\/]/).filter(Boolean).pop() ?? p
+
+export const describeAction = (tool: string, input: Record<string, unknown>): string => {
+  const str = (k: string): string => (typeof input[k] === 'string' ? (input[k] as string) : '')
+  switch (tool) {
+    case 'Edit':
+    case 'MultiEdit':
+    case 'NotebookEdit':
+      return str('file_path') ? `editing ${baseName(str('file_path'))}` : 'editing'
+    case 'Write':
+      return str('file_path') ? `writing ${baseName(str('file_path'))}` : 'writing'
+    case 'Read':
+      return str('file_path') ? `reading ${baseName(str('file_path'))}` : 'reading'
+    case 'Bash':
+      return str('command') ? `running: ${clip(str('command').trim().replace(/\s+/g, ' '), 36)}` : 'running a command'
+    case 'Grep':
+    case 'Glob':
+      return 'searching'
+    case 'WebFetch':
+    case 'WebSearch':
+      return 'looking things up'
+    default:
+      return tool.replace(/^mcp__[^_]+__/, '')
+  }
+}
+
+const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
+
+export const verdictOf = (answer: unknown): 'pass' | 'fail' | undefined => {
+  const m = typeof answer === 'string' ? /^[\s*_#>`"'-]*(pass|fail)\b/i.exec(answer) : null
+  return m ? (m[1].toLowerCase() as 'pass' | 'fail') : undefined
+}
+
+// Running with no sign of life for STALL_MS.
+export const isStalled = (a: AgentRun, at: number): boolean => a.status === 'running' && at - (a.lastAt ?? a.startedAt) > STALL_MS
 
 // What the usage tool answers: the same shape duo's usage file has (percent used, reset as epoch
 // seconds, per window), or a plain sentence when the host has no reading.
@@ -1194,7 +1283,7 @@ const ctxOf = (a: AgentRun): number => (a.contextMax ? Math.min(100, Math.round(
 const clock = (ms: number): string => new Date(ms).toTimeString().slice(0, 8)
 
 // The expanded rows' text, from data the run already holds. First line: which model ran it.
-const detailLines = (a: AgentRun, at: number): string[] => {
+export const detailLines = (a: AgentRun, at: number): string[] => {
   const s = tr()
   const tier = tierOf(a.type)
   const state = a.status === 'running' ? s.isRunning : a.status === 'failed' ? s.failed : s.isFinished
@@ -1202,10 +1291,12 @@ const detailLines = (a: AgentRun, at: number): string[] => {
     `${s.model}: ${runModel(a)}${a.model ? ` (${a.model})` : ''}`,
     `${s.agentType}: ${a.type}${tier === 'other' ? '' : ` · ${tierWord(tier)}`}`,
     `${s.task}: ${a.description || a.type}`,
-    `${s.status}: ${state}${a.round > 1 ? ` · ${s.round} ${a.round}` : ''}`,
+    `${s.status}: ${state}${a.round > 1 ? ` · ${s.round} ${a.round}` : ''}${isStalled(a, at) ? ` · ${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : ''}`,
     `${s.ctx} ${ctxOf(a)}% · ${fmtTokens(a.contextTokens)} · ${fmtTokens(a.tokens)} ${s.tokensWord} · ≈${fmtCost(a.costUsd)}`,
     `${s.timeWord}: ${clock(a.startedAt)}${a.endedAt ? ` – ${clock(a.endedAt)}` : ''} · ${fmtTime(elapsed(a, at))}`,
   ]
+  if (a.why) lines.push(`${s.whyWord}: ${a.why}`)
+  if (a.status === 'running' && a.action) lines.push(`${s.nowWord}: ${a.action}`)
   const done = stepsDone(a)
   const log = a.stepLog ?? []
   if (a.stepTotal || log.length) lines.push(`${s.stepsWord}: ${done}/${a.stepTotal || '?'}${a.stepNote ? ` · ${a.stepNote}` : ''}`)
@@ -1222,6 +1313,9 @@ const detailLines = (a: AgentRun, at: number): string[] => {
       lines.push(`  ${mark} ${l.n + 1}. ${l.note}`)
     })
   }
+  if (a.verdict) lines.push(`${s.verdictWord}: ${a.verdict.toUpperCase()}`)
+  if (a.result) lines.push(`${s.resultWord}: ${a.result}`)
+  if (a.files?.length) lines.push(`${s.filesWord}: ${a.files.map(baseName).join(', ')}`)
   return lines
 }
 
@@ -1254,19 +1348,22 @@ const agentSvg = (W: number, a: AgentRun, at: number): string => {
   const meta = [runModel(a)]
   if (a.round > 1) meta.push(`${s.round} ${a.round}`)
   if (a.status === 'failed') meta.push(s.failed)
+  const isQuiet = isStalled(a, at)
+  if (isQuiet) meta.push(`${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`)
   const barW = textW
   const progress = progressOf(a)
   const stats = `${s.ctx} ${ctx}% · ${fmtTokens(a.contextTokens)}  ≈${fmtCost(a.costUsd)}  ${fmtTime(elapsed(a, at))}`
-  const steps = a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}` : ''
+  // Reported steps, else what the agent's last tool call was doing.
+  const steps = a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}` : a.status === 'running' ? (a.action ?? '') : ''
   const stepsW = Math.max(0, barW - textWidth(stats, 11) - 12)
   // Without reported steps the bar falls back to the context, drawn grey.
   const fillW = Math.round(barW * (progress ?? ctx / 100))
   return svg(
     W,
     66,
-    `${rowCrab(W, 0, 14, costumeOf(a.type), false, a.status === 'running')}
+    `${rowCrab(W, 0, 14, costumeOf(a.type), isQuiet, a.status === 'running' && !isQuiet)}
 <text class="t" ${startText(W, 42, 18)} font-family="${FONT}" font-size="13" font-weight="600">${xml(fitText(a.description || a.type, 13, textW))}</text>
-<text ${startText(W, 42, 34)} font-family="${FONT}" font-size="11"><tspan fill="${color}">${xml(tier === 'other' ? a.type : tierWord(tier))}</tspan><tspan class="s">  ${xml(meta.join('  ·  '))}</tspan></text>
+<text ${startText(W, 42, 34)} font-family="${FONT}" font-size="11"><tspan fill="${color}">${xml(tier === 'other' ? a.type : tierWord(tier))}</tspan><tspan class="t" font-weight="500">  ${xml(meta.join('  ·  '))}</tspan></text>
 ${steps && stepsW > 30 ? `<text class="t" ${startText(W, 42, 49)} font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${xml(fitText(steps, 11, stepsW))}</text>` : ''}
 <text class="s" ${endText(W, 42 + barW, 49, true)} font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${stats}</text>
 <rect class="k" x="${mx(W, 42, barW)}" y="55" width="${barW}" height="4" rx="2"/><rect${progress === null ? ' class="m"' : ''} x="${mx(W, 42, fillW)}" y="55" width="${fillW}" height="4" rx="2"${progress === null ? '' : ` fill="${color}"`}/>
@@ -1377,8 +1474,32 @@ export const groupedSvg = (W: number, list: AgentRun[], at: number, title: strin
   const leftW = textWidth(`${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`, 12)
   out.push(T(W, 's', W - GP, 62, 12, 400, fitText(right, 12, Math.max(40, wide - leftW - 12)), 'end'))
 
-  // Models
+  // Needs attention: failed and stalled agents, named, with the reason and the last thing they did.
   let y = 88
+  const needs = attentionOf(list, at)
+  if (needs.length) {
+    out.push(sectionLabel(W, y, `${s.attention} · ${needs.length}`))
+    y += 10
+    for (const a of needs.slice(0, MAX_ATTENTION)) {
+      const why = a.status === 'failed' ? s.failed : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`
+      const detail = a.status === 'failed' ? a.result || a.action || '' : a.action || a.stepNote || ''
+      const rw = textWidth(why, 12)
+      out.push(crabAt(W, GP + 2, y + 5, agentCostume(a), 0.73, false))
+      out.push(T(W, 't', GP + 2 + 22 + 10, y + 20, 13, 600, fitText(a.description || a.type, 13, Math.max(40, W - GP * 2 - 34 - rw - 14)), 'start'))
+      out.push(T(W, 's', W - GP, y + 20, 12, 600, why, 'end'))
+      if (detail) out.push(T(W, 'm', GP + 34, y + 35, 11.5, 400, fitText(detail, 11.5, Math.max(40, W - GP * 2 - 34)), 'start'))
+      y += detail ? 42 : 30
+    }
+    if (needs.length > MAX_ATTENTION) {
+      out.push(T(W, 's', GP + 34, y + 14, 12, 400, `+${needs.length - MAX_ATTENTION}`, 'start'))
+      y += 24
+    }
+    y += 6
+    out.push(rule(y))
+    y += 22
+  }
+
+  // Models
   out.push(sectionLabel(W, y, s.groupModels))
   const mix = modelMix(list)
   const narrow = W < 480
@@ -1586,6 +1707,61 @@ async function currentLimits($: EngineInterface): Promise<Limit[]> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The run receipt: what the agents actually did, built by the panel from what it saw (not
+// written by a model), for the user to keep or paste into a pull request.
+
+export type Receipt = { at: number; title: string; used: string; agents: AgentRun[] }
+
+const mdCell = (t: string): string => t.replace(/\|/g, '/').replace(/\s+/g, ' ').trim()
+
+export const receiptMarkdown = (r: Receipt): string => {
+  const rows = r.agents.map(
+    a =>
+      `| ${mdCell(a.description || a.type)} | ${mdCell(runModel(a))} | ${a.status}${a.verdict ? ` (${a.verdict.toUpperCase()})` : ''} | ${a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : '-'} | ${fmtTokens(a.tokens)} | ≈${fmtCost(a.costUsd)} | ${fmtTime(a.endedAt ? a.endedAt - a.startedAt : 0)} |`,
+  )
+  const detail = r.agents.flatMap(a => {
+    const bits = [
+      a.why ? `- Why this tier (the orchestrator's words): ${mdCell(a.why)}` : '',
+      a.verdict ? `- Verdict: ${a.verdict.toUpperCase()}` : '',
+      a.result ? `- Result: ${mdCell(a.result)}` : '',
+      a.files?.length ? `- Files: ${a.files.map(f => '`' + f + '`').join(', ')}` : '',
+    ].filter(Boolean)
+    return bits.length ? [`### ${mdCell(a.description || a.type)} (${a.type})`, ...bits, ''] : []
+  })
+  return [
+    `# duo run receipt: ${mdCell(r.title)}`,
+    '',
+    `${new Date(r.at).toISOString().slice(0, 16).replace('T', ' ')} UTC · ${r.agents.length} agent${r.agents.length === 1 ? '' : 's'}${r.used ? ` ·${r.used}` : ''}`,
+    '',
+    '| Agent | Model · effort | Status | Steps | Tokens | Cost (est.) | Time |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    ...rows,
+    '',
+    ...detail,
+    '_Built by duo-progress from what the agents did. Cost is an API-price estimate, not your bill._',
+  ].join('\n')
+}
+
+async function currentReceipt($: EngineInterface): Promise<Receipt | null> {
+  const f = await read($, flow)
+  const list = await read($, agents)
+  const mine = f?.isImplicit ? list.slice(f.skip ?? 0) : list
+  if (!mine.length) return null
+  const used = runSentence(runDelta(await read($, runBase), await currentLimits($))).replace(/\.$/, '')
+  return { at: await $.clock.now(), title: f?.title ?? 'Agents', used, agents: mine.slice(-50) }
+}
+
+// Keeps the last ten finished runs between sessions.
+async function persistReceipt($: EngineInterface): Promise<void> {
+  try {
+    const r = await currentReceipt($)
+    if (!r) return
+    const old = (await $.store.get('receipts')) as Receipt[] | undefined
+    await $.store.set('receipts', [r, ...(Array.isArray(old) ? old : [])].slice(0, 10))
+  } catch {}
+}
+
 // The panel's own flow for agents started outside a duo flow, so the bar above the prompt follows
 // them: it counts the agents spawned since it began, and finishes when none runs.
 async function syncImplicit($: EngineInterface): Promise<void> {
@@ -1595,7 +1771,9 @@ async function syncImplicit($: EngineInterface): Promise<void> {
   const running = mine.filter(a => a.status === 'running').length
   const total = mine.length
   const isFinished = running === 0 && total > 0
+  const justFinished = isFinished && !f.isFinished
   await update($, flow, p => (p?.isImplicit ? { ...p, total, done: total - running, running, isFinished, phase: isFinished ? 'close' : 'delegate' } : p))
+  if (justFinished) await persistReceipt($)
   try {
     $.ui.invalidate('ui.render')
   } catch {}
@@ -1651,6 +1829,7 @@ export const register: Register = (on, options) => {
                 title: { type: 'string', description: 'A few words; reused verbatim as the Agent description.' },
                 tier: { type: 'string', enum: [...TIERS] },
                 after: { type: 'array', items: { type: 'integer' }, description: 'Numbers of the tasks this one waits for.' },
+                why: { type: 'string', description: 'One short sentence: why this tier fits the task (shown to the user as your reason).' },
               },
               required: ['title', 'tier'],
             },
@@ -1682,6 +1861,14 @@ export const register: Register = (on, options) => {
       description:
         'The subscription usage right now: JSON with `five_hour` and `seven_day`, each `used_percentage` (0-100) and `resets_at` ' +
         '(epoch seconds), or a sentence saying there is no reading. For the duo orchestrator: call before choosing tiers and before each dispatch.',
+      inputSchema: { type: 'object', properties: {} },
+    })
+    await $.tool.register({
+      name: 'receipt',
+      description:
+        'A markdown receipt of the current or last run: each agent with its model, effort, status, steps, tokens, estimated cost, time, ' +
+        'the orchestrator\'s reason for its tier, the checker\'s PASS or FAIL, a start of its answer and the files it edited, plus how much of the usage window the run took. ' +
+        'Built by the panel from what the agents did. Show it to the user as is.',
       inputSchema: { type: 'object', properties: {} },
     })
     await $.command.register({
@@ -1732,12 +1919,46 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
     } catch {}
     if (next && input.tasks?.length) await autoOpen($, next.title)
+    if (next?.isFinished && !prev?.isFinished) await persistReceipt($)
     const note = next?.isFinished && !prev?.isFinished ? runSentence(runDelta(await read($, runBase), await currentLimits($))) : ''
     return { result: `ok: ${label(next ?? blank())}${note}` }
   })
 
   // A worker's own progress: the call runs in the worker's loop, so agentId names it.
   on('tool.call', { tool: USAGE_TOOL }, async $ => ({ result: usageReport(await currentLimits($)) }))
+
+  on('tool.call', { tool: RECEIPT_TOOL }, async $ => {
+    const live = await currentReceipt($)
+    if (live) return { result: receiptMarkdown(live) }
+    const old = (await $.store.get('receipts').catch(() => undefined)) as Receipt[] | undefined
+    return { result: Array.isArray(old) && old[0] ? receiptMarkdown(old[0]) : 'No run to report yet.' }
+  })
+
+  // A sign of life and a one-line status from every tool call a subagent makes; edited files are kept for the receipt.
+  on('tool.call', async ($, e, next) => {
+    try {
+      const agentId = (e as { agentId?: string }).agentId
+      if (agentId) {
+        const input = e as unknown as Record<string, unknown>
+        const tool = String(input.tool ?? '')
+        const at = await $.clock.now()
+        const path = EDIT_TOOLS.has(tool) && typeof input.file_path === 'string' ? (input.file_path as string) : ''
+        await update($, agents, list =>
+          list.map(a =>
+            a.agentId !== agentId
+              ? a
+              : {
+                  ...a,
+                  lastAt: at,
+                  action: describeAction(tool, input),
+                  files: path && !(a.files ?? []).includes(path) ? [...(a.files ?? []), path].slice(0, MAX_FILES) : a.files,
+                },
+          ),
+        )
+      }
+    } catch {}
+    return next(e)
+  })
 
   on('tool.call', { tool: STEP_TOOL }, async ($, e) => {
     const input = e as unknown as { done?: number; total?: number; note?: string; plan?: unknown }
@@ -1755,7 +1976,7 @@ export const register: Register = (on, options) => {
         const stepDone = total ? Math.min(total, done) : done
         const note = typeof input.note === 'string' && input.note.trim() ? clip(input.note.trim(), MAX_NOTE) : ''
         const stepLog = [...(a.stepLog ?? []), { n: stepDone, note, at }].slice(-MAX_STEPLOG)
-        return { ...a, stepTotal: plan && !input.total && !a.stepTotal ? plan.length : total, stepDone, stepNote: note || undefined, stepPlan: plan ?? a.stepPlan, stepLog }
+        return { ...a, lastAt: at, stepTotal: plan && !input.total && !a.stepTotal ? plan.length : total, stepDone, stepNote: note || undefined, stepPlan: plan ?? a.stepPlan, stepLog }
       }),
     )
     return { result: matched ? 'ok' : `ignored: no panel row for agent ${agentId}` }
@@ -1786,6 +2007,7 @@ export const register: Register = (on, options) => {
 
     const at = await $.clock.now()
     const before = (await read($, agents)).length
+    const planned = (await read($, flow))?.tasks.find(t => norm(t.title) === norm(e.description) && e.description)
     await update($, agents, list => {
       const round = 1 + list.filter(a => norm(a.description) === norm(e.description) && e.description).length
       const run: AgentRun = {
@@ -1802,6 +2024,8 @@ export const register: Register = (on, options) => {
         costUsd: 0,
         steps: 0,
         round,
+        lastAt: at,
+        ...(planned?.why ? { why: planned.why } : {}),
       }
       return [...list.filter(a => a.id !== run.id), run].slice(-200)
     })
@@ -1825,12 +2049,14 @@ export const register: Register = (on, options) => {
     if (!agentId || !usage) return result
 
     const model = usage.model || e.model
+    const stepAt = await $.clock.now().catch(() => 0)
     await update($, agents, list =>
       list.map((a): AgentRun =>
         a.agentId !== agentId
           ? a
           : {
               ...a,
+              lastAt: stepAt || a.lastAt,
               model,
               effort: typeof e.effort === 'string' ? e.effort : a.effort,
               status: 'running',
@@ -1868,6 +2094,9 @@ export const register: Register = (on, options) => {
             ...a,
             status: e.reason === 'answer' ? 'done' : 'failed',
             endedAt: at,
+            lastAt: at,
+            ...(typeof e.answer === 'string' && e.answer.trim() ? { result: clip(e.answer.trim().replace(/\s+/g, ' '), MAX_RESULT) } : {}),
+            ...(verdictOf(e.answer) ? { verdict: verdictOf(e.answer) } : {}),
             ...(fallback && e.usage
               ? {
                   model: e.usage.model || a.model,
@@ -2082,6 +2311,11 @@ export const register: Register = (on, options) => {
           <Text wrap="truncate-end">
             {cut(`${tl.running} ${s.isRunning} · ${tl.done} ${s.doneN}${tl.failed ? ` · ${tl.failed} ${s.failedN}` : ''} · ${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`)}
           </Text>
+          {attentionOf(list, at).slice(0, MAX_ATTENTION).map(a => (
+            <Text key={`att-${a.id}`} color={a.status === 'failed' ? '#E5484D' : '#D4A24C'} wrap="truncate-end">
+              {cut(`${a.status === 'failed' ? '✗' : '⏸'} ${a.description || a.type} · ${a.status === 'failed' ? s.failed : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`}${a.action ? ` · ${a.action}` : ''}`)}
+            </Text>
+          ))}
           <Text dimColor wrap="truncate-end">
             {cut(mix.rows.map(r => `${clip(r.name, MODEL_NAME_MAX)} ${r.agents} · ${fmtTokens(r.tokens)}`).join('  ') + (mix.isMixed && mix.top ? `  ${mix.top.pct}% ${s.shareOn} ${clip(mix.top.name.split(' ')[0] ?? '', 14)}` : ''))}
           </Text>
@@ -2195,6 +2429,8 @@ export const register: Register = (on, options) => {
     const crewButton = <Button key="duo-agents" label={crewLabel} plain onPress={() => void togglePane($)} />
     const percent = `${Math.round(ratio(f) * 100)}%`
     const usage = usageShort(await freshLimits($), f.isFinished ? await read($, runBase) : null)
+    const needs = attentionOf(list, await read($, now))
+    const alert = needs.length ? `⚠ ${needs.length}` : ''
     const dismiss = (
       <Button
         key="savvy-dismiss"
@@ -2214,7 +2450,7 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column">
           <Box flexDirection={isRtl() ? 'row-reverse' : 'row'} alignItems="center" gap={1}>
-            <Svg source={rowSvg(f, width, isWorking, usage)} alt={`${f.title}: ${label(f)}, ${percent}`} width={width} height={H} />
+            <Svg source={rowSvg(f, width, isWorking, usage, alert)} alt={`${f.title}: ${label(f)}, ${percent}`} width={width} height={H} />
             {crewButton}
             {dismiss}
           </Box>
