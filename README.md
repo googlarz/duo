@@ -1,8 +1,10 @@
 # duo: see every AI agent Claude spawns for you
 
 <p align="center">
-  <img src="assets/duo-panel-running.png" alt="The agents panel with eleven agents running in four stages: the Usage tile shows 10% of the 5-hour window and 36% of the weekly one with a countdown to the reset, then tokens and time; below, the model mix, one row per stage (scan, map, truth, draft) with its crab and a square per agent, and a Running now list with seven more running" width="709">
+  <img src="assets/duo-panel-plan.jpg" alt="The agents panel for a plan of fourteen tasks in four stages: a card with its own crab per task, arrows from what each task waits for, green for done, amber for running, red for a failed task, dashed for tasks still waiting; each card names its model with a dot in the model's colour and shows the effort as rising bars; on top, the job's name, how far it is and a progress bar" width="709">
 </p>
+
+<p align="center"><em>The panel on a sample plan of 14 tasks (rendered from test data, not a live run).</em></p>
 
 On a big job, Claude Code starts helper agents by itself. By default you can't see what they are doing, which model each one runs on, or what they cost you. **duo shows every one of them live**: its task, model, effort, steps and tokens, plus how much of your usage limit you have used. You don't create or steer the agents; you watch.
 
@@ -135,11 +137,7 @@ Every agent in the panel is a small animated pixel crab, and its costume follows
   <img src="assets/duo-task.svg" alt="Each task: brief, built by Sonnet, checked by a fresh checker, reviewed by Opus, accepted. Failures go back with a defect list, max two attempts, Opus as a worker only with your approval" width="100%">
 </p>
 
-Sonnet does the volume and Opus is a gate. Up to 2 tasks skip both Opus calls; 3 to 4 low-risk tasks skip the plan check and keep one final review. Two attempts per task, a checker that did not write the code, and Opus as a worker only if you say yes. The same panel after the agents finished (an earlier design; the screenshot at the top shows eleven agents running):
-
-<p align="center">
-  <img src="assets/duo-panel-done.png" alt="The same panel when the ten agents are done: the Usage tile with its reset countdown, the model mix, one row per stage with a green check, and the Finished list folded away" width="691">
-</p>
+Sonnet does the volume and Opus is a gate. Up to 2 tasks skip both Opus calls; 3 to 4 low-risk tasks skip the plan check and keep one final review. Two attempts per task, a checker that did not write the code, and Opus as a worker only if you say yes.
 
 | Effort | Used for |
 | --- | --- |
