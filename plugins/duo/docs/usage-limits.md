@@ -42,6 +42,8 @@ The StopFailure hook (`hooks/hooks.json`, matcher `rate_limit`) is loaded automa
 
 ## Caveats
 
+- Confirmed: with `claude` in a terminal the helper writes `duo-usage.json` (observed 9% / 31%). In the desktop app the file did not refresh in our test (not conclusive); there the usage guard stays off and the skill says so.
+
 - Only Pro/Max subscribers get `rate_limits`, and only after the first API response; either window may be missing (the file is then not written or the window omitted).
 - The cache updates only when the statusline refreshes; it can lag, and can go stale (>15 min) during long subagent waits, in which case the skill ignores it.
 - Replace `<plugin dir>` with the installed plugin path.
