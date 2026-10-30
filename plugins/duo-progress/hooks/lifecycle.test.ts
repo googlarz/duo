@@ -316,3 +316,37 @@ test('verdictCounts and the summary line: PASS and FAIL counts and this run\'s u
   expect(g.top.source).toContain('1 FAIL')
   expect(g.top.source).toContain('this run: 1% 5h')
 })
+
+// ---- a failed check is not green ----
+import { groupAgents, hasMore, STAGES_FROM } from './register'
+
+test('attentionOf: a finished agent whose checker said FAIL is pinned, after errors and before the stalled', () => {
+  const at = 10 * 60_000
+  const list = [
+    mk({ id: 'quiet', lastAt: at - 9 * 60_000 }),
+    mk({ id: 'fail', status: 'done', verdict: 'fail', result: 'FAIL: three folders, not seven' }),
+    mk({ id: 'pass', status: 'done', verdict: 'pass' }),
+    mk({ id: 'err', status: 'failed' }),
+  ]
+  expect(attentionOf(list, at).map(a => a.id)).toEqual(['err', 'fail', 'quiet'])
+})
+
+test('groupAgents and the stage row: a stage with a FAIL verdict says so and is not dimmed green', () => {
+  const list = [
+    mk({ id: 'a', description: 'truth:A', status: 'done', verdict: 'pass', endedAt: 5 }),
+    mk({ id: 'b', description: 'truth:B', status: 'done', verdict: 'fail', endedAt: 5 }),
+    ...Array.from({ length: 10 }, (_, i) => mk({ id: `s${i}`, description: `scan:S${i}`, status: 'done', endedAt: 5 })),
+  ]
+  expect(groupAgents(list).find(g => g.key === 'truth')?.fails).toBe(1)
+  const g = groupedSvg(480, list, 9000, 'Job')
+  expect(g.stages.source).toContain('1 FAIL')
+  expect(g.top.source).toContain('NEEDS ATTENTION')
+})
+
+test('hasMore: only files, steps or a stated reason are worth a Details switch; STAGES_FROM is a count of agents', () => {
+  expect(hasMore(mk({ status: 'done', result: 'x' }))).toBe(false)
+  expect(hasMore(mk({ status: 'done', files: ['/a'] }))).toBe(true)
+  expect(hasMore(mk({ status: 'done', stepTotal: 2 }))).toBe(true)
+  expect(hasMore(mk({ status: 'done', why: 'cheap tier' }))).toBe(true)
+  expect(STAGES_FROM).toBeGreaterThan(8)
+})

@@ -7,7 +7,6 @@ const flow = atom({ plugin: 'duo-progress', key: 'flow' } as const, null)
 const agents = atom({ plugin: 'duo-progress', key: 'agents' } as const, [])
 const panel = atom({ plugin: 'duo-progress', key: 'panel' } as const, {
   isDoneCollapsed: false,
-  isFinishedOpen: false,
   autoOpenedFor: '',
   openIds: [] as string[],
 })
@@ -693,8 +692,10 @@ export const MAX_ATTENTION = 5
 export const attentionOf = (list: readonly AgentRun[], at: number): AgentRun[] => {
   const quiet = (a: AgentRun): number => at - (a.lastAt ?? a.startedAt)
   const failed = list.filter(a => a.status === 'failed')
+  // Finished, but a checker said FAIL: the work is done and it did not pass.
+  const failedChecks = list.filter(a => a.status === 'done' && a.verdict === 'fail')
   const stalled = list.filter(a => isStalled(a, at)).sort((a, b) => quiet(b) - quiet(a))
-  return [...failed, ...stalled]
+  return [...failed, ...failedChecks, ...stalled]
 }
 
 // 'truth:A10' -> 'truth'. No usable prefix -> 'other'.
@@ -705,7 +706,7 @@ export const groupKey = (description: string): string => {
   return key.length >= 1 && key.length <= 24 ? key : 'other'
 }
 
-export type Group = { key: string; agents: AgentRun[]; done: number; running: number; failed: number; model: string }
+export type Group = { key: string; agents: AgentRun[]; done: number; running: number; failed: number; fails: number; model: string }
 
 const mostCommon = (xs: string[]): string => {
   const n = new Map<string, number>()
@@ -732,6 +733,8 @@ export const groupAgents = (list: AgentRun[]): Group[] => {
       done: agents.filter(a => a.status === 'done').length,
       running: agents.filter(a => a.status === 'running').length,
       failed: agents.filter(a => a.status === 'failed').length,
+      // Finished, but the checker said FAIL: the stage is not green.
+      fails: agents.filter(a => a.verdict === 'fail').length,
       model: mostCommon(agents.map(runModel)),
       first: Math.min(...agents.map(a => a.startedAt)),
     }))
@@ -1434,6 +1437,12 @@ const GP = 6
 const STAGE_CRAB = 1.2
 const MAX_SQUARES = 40
 const MAX_FINISHED_ROWS = 60
+// Agents at work are drawn as full rows up to this many; the rest are counted.
+const MAX_RUNNING_ROWS = 6
+// The Stages block pays off when many agents share a few stages; for a handful it only repeats the list below.
+export const STAGES_FROM = 12
+// A finished row has more to open when it has files, steps or a stated reason; its result is already on the row.
+export const hasMore = (a: AgentRun): boolean => !!(a.files?.length || a.stepTotal || a.stepLog?.length || a.why)
 
 const fmtSpan = (ms: number): string => {
   const m = Math.floor(Math.max(0, ms) / 60000)
@@ -1462,9 +1471,9 @@ const stageBadge = (cx: number, cy: number, kind: 'done' | 'running' | 'failed')
       ? `<circle cx="${cx}" cy="${cy}" r="6.5" fill="${C_FAIL}"/><path d="M${cx - 2.6} ${cy - 2.6}l5.2 5.2M${cx + 2.6} ${cy - 2.6}l-5.2 5.2" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>`
       : `<circle cx="${cx}" cy="${cy}" r="6.5" fill="#1d1d1c" stroke="${C_RUN}" stroke-width="1.8"/><circle class="live" cx="${cx}" cy="${cy}" r="2.6" fill="${C_RUN}"/>`
 
-const countsText = (g: { done: number; running: number; failed: number }): string => {
+const countsText = (g: { done: number; running: number; failed: number; fails?: number }): string => {
   const s = tr()
-  return [g.done ? `${g.done} ${s.doneN}` : '', g.running ? `${g.running} ${s.isRunning}` : '', g.failed ? `${g.failed} ${s.failedN}` : ''].filter(Boolean).join(' · ') || `0 ${s.doneN}`
+  return [g.done ? `${g.done} ${s.doneN}` : '', g.running ? `${g.running} ${s.isRunning}` : '', g.failed ? `${g.failed} ${s.failedN}` : '', g.fails ? `${g.fails} FAIL` : ''].filter(Boolean).join(' · ') || `0 ${s.doneN}`
 }
 
 // Header, models and stages, running now: one drawing. Returns the markup and its height.
@@ -1475,7 +1484,13 @@ export const groupedSvg = (
   title: string,
   planned: Planned[] = [],
   runUse = '',
-): { source: string; height: number; top: { source: string; height: number }; bottom: { source: string; height: number } } => {
+): {
+  source: string
+  height: number
+  top: { source: string; height: number }
+  stages: { source: string; height: number }
+  bottom: { source: string; height: number }
+} => {
   const s = tr()
   const out: string[] = []
   const tl = tally(list)
@@ -1506,8 +1521,8 @@ export const groupedSvg = (
     out.push(sectionLabel(W, y, `${s.attention} · ${needs.length}`))
     y += 10
     for (const a of needs.slice(0, MAX_ATTENTION)) {
-      const why = a.status === 'failed' ? s.failed : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`
-      const detail = a.status === 'failed' ? a.result || a.action || '' : a.action || a.stepNote || ''
+      const why = a.status === 'failed' ? s.failed : a.verdict === 'fail' ? 'FAIL' : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`
+      const detail = a.status === 'failed' || a.verdict === 'fail' ? a.result || a.action || '' : a.action || a.stepNote || ''
       const rw = textWidth(why, 12)
       out.push(crabAt(W, GP + 2, y + 5, agentCostume(a), 0.73, false))
       out.push(T(W, 't', GP + 2 + 22 + 10, y + 20, 13, 600, fitText(a.description || a.type, 13, Math.max(40, W - GP * 2 - 34 - rw - 14)), 'start'))
@@ -1617,13 +1632,16 @@ export const groupedSvg = (
     }
     const cy = y + (active && rowH > 56 && place(0).x === textX ? 28 : rowH / 2)
     const crabY = cy - Math.round(28 * STAGE_CRAB) / 2
-    const kind = active ? 'running' : g.failed ? 'failed' : 'done'
+    const kind = active ? 'running' : g.failed || g.fails ? 'failed' : 'done'
     const body = `${crabAt(W, GP + 2, crabY, costume, STAGE_CRAB, active)}${stageBadge(mx(W, GP + 2 + cw - 3), crabY + Math.round(28 * STAGE_CRAB) - 3, kind)}
 ${T(W, 't', textX, cy - 4, 14, 700, fitText(name, 14, nameMax), 'start')}${T(W, 's', textX, cy + 12, 11.5, 400, fitText(g.model, 11.5, nameMax), 'start')}${sq.join('')}${T(W, 's', W - GP, cy + 4, 12, 400, counts, 'end')}`
-    out.push(active ? `<g>${body}</g>` : `<g opacity="0.62">${body}</g>`)
+    out.push(active || g.fails ? `<g>${body}</g>` : `<g opacity="0.62">${body}</g>`)
     y += rowH
     out.push(rule(y))
   }
+
+  const stagesIdx = out.length
+  const stagesEndY = Math.ceil(y + 4)
 
   // Running now
   const running = list.filter(a => a.status === 'running').sort((a, b) => b.startedAt - a.startedAt)
@@ -1657,7 +1675,9 @@ ${T(W, 't', textX, cy - 4, 14, 700, fitText(name, 14, nameMax), 'start')}${T(W, 
   const top = { source: svg(W, splitY, out.slice(0, splitIdx).join('\n')), height: splitY }
   const bottomH = Math.max(1, height - splitY)
   const bottom = { source: svg(W, bottomH, `<g transform="translate(0,${-splitY})">${out.slice(splitIdx).join('\n')}</g>`), height: bottomH }
-  return { source: svg(W, height, out.join('\n')), height, top, bottom }
+  const stagesH = Math.max(1, stagesEndY - splitY)
+  const stages = { source: svg(W, stagesH, `<g transform="translate(0,${-splitY})">${out.slice(splitIdx, stagesIdx).join('\n')}</g>`), height: stagesH }
+  return { source: svg(W, height, out.join('\n')), height, top, stages, bottom }
 }
 
 // "3.6M tokens · ≈$4.20 API-equivalent" under the Finished toggle.
@@ -2251,13 +2271,15 @@ export const register: Register = (on, options) => {
 
     // The grouped view has its own switch, closed by default: its point is to avoid the long list.
     const isGroupedView = p.view ? p.view === 'grouped' : isGrouped(list.length)
-    const finClosed = isGroupedView ? !p.isFinishedOpen : p.isDoneCollapsed
+    // On the desktop one layout serves every count; the Finished list is open for a small run and folded for a big one.
+    const isDesktop = e.surface !== 'terminal' && 'Svg' in ui
+    const finClosed = isDesktop ? !(p.isFinishedOpen ?? finished.length <= GROUP_THRESHOLD) : isGroupedView ? !p.isFinishedOpen : p.isDoneCollapsed
     const toggleDone = (
       <Button
         key="done"
         label={`${finClosed ? (isRtl() ? '◂' : '▸') : '▾'} ${s.finished} · ${finished.length}`}
         plain
-        onPress={() => update($, panel, prev => (isGroupedView ? { ...prev, isFinishedOpen: !prev.isFinishedOpen } : { ...prev, isDoneCollapsed: !prev.isDoneCollapsed }))}
+        onPress={() => update($, panel, prev => (isDesktop ? { ...prev, isFinishedOpen: finClosed } : isGroupedView ? { ...prev, isFinishedOpen: !prev.isFinishedOpen } : { ...prev, isDoneCollapsed: !prev.isDoneCollapsed }))}
       />
     )
     const toggleRow = (a: AgentRun) => (
@@ -2297,45 +2319,23 @@ export const register: Register = (on, options) => {
 
       // In Hebrew the column hugs the right edge: section heads and buttons right-aligned.
       const align = isRtl() ? 'flex-end' : undefined
-      if (isGroupedView) {
-        const g = groupedSvg(W, list, at, title || s.pane, planned, runUse)
-        // Each finished row is its own drawing with a Details switch under it, as in the detailed view.
-        const finRows = finClosed || finished.length === 0 ? [] : finishedRows(finished)
-        const more = finished.length - finishedRows(finished).length
-        const finH = finRows.reduce((n, a) => n + finishedRowHeight(a) + LINE_H + (isOpen(p, a) ? detailLineCount(a, at, (e.props.bodyColumns || 40) - 4) * LINE_H : 0), 0)
-        const gridH = headerHeight('') + g.height + 2 * LINE_H + (finished.length > 0 ? 22 : 0) + finH + (finRows.length && more > 0 ? LINE_H : 0)
-        return (
-          <Box flexDirection="column">
-            {gridTiles(gridH).map((tileH, i) => (
-              <Svg key={`grid-${i}`} source={gridSvg(W, tileH)} alt="dotted grid" width={W} height={tileH} />
-            ))}
-            <Box flexDirection="column" position="absolute" top={0} left={0} right={0} alignItems={align}>
-              <Svg source={headerSvg(W, '', t, lim, nowMs)} alt={summary} width={W} height={headerHeight('')} />
-              <Svg source={g.source} alt={`${title || s.pane}: ${summary}`} width={W} height={g.height} />
-              {finished.length > 0 && toggleDone}
-              {finRows.map(a => {
-                const row = finishedRowCached(W, a, at)
-                return (
-                  <Box key={`fin-${a.id}`} flexDirection="column" alignItems={align}>
-                    <Svg source={row.source} alt={`${a.description || a.type}: ${a.verdict ? a.verdict.toUpperCase() : s.isFinished}`} width={W} height={row.height} />
-                    {toggleRow(a)}
-                    {detailsBlock(a)}
-                  </Box>
-                )
-              })}
-              {finRows.length > 0 && more > 0 && <Text dimColor>+{more}</Text>}
-              {finished.length > 0 && <Svg source={footerSvg(W, finished)} alt={s.finished} width={W} height={22} />}
-            </Box>
-          </Box>
-        )
-      }
-      // The same top as the grouped view (title, counts, models, what needs attention); only the body below differs.
+      // One body for every number of agents, so nothing reflows when the count grows: the summary on top, the stages
+      // (from three agents on), the agents at work as full rows, the finished ones as compact rows, what is planned.
       const sum = list.length ? groupedSvg(W, list, at, title || s.pane, planned, runUse) : null
       const headTitle = sum ? '' : title
-      const shownDone = p.isDoneCollapsed ? 0 : finished.length
-      const lines = 1 + (isEmpty ? 1 : 0) + (running.length > 0 ? 1 : 0) + (finished.length > 0 ? 1 : 0) + (planned.length > 0 ? 1 : 0)
-      const gridH = headerHeight(headTitle) + (sum ? sum.top.height : 0) + lines * LINE_H + (running.length + shownDone) * (66 + LINE_H) + planned.length * 46 +
-        [...running, ...(p.isDoneCollapsed ? [] : finished)].filter(a => isOpen(p, a)).reduce((n, a) => n + detailLineCount(a, at, (e.props.bodyColumns || 40) - 4) * LINE_H, 0)
+      const showStages = sum !== null && list.length >= STAGES_FROM
+      const runRows = running.slice(0, MAX_RUNNING_ROWS)
+      const runMore = running.length - runRows.length
+      const finRows = finClosed || finished.length === 0 ? [] : finishedRows(finished)
+      const moreFin = finished.length - finishedRows(finished).length
+      const cols = (e.props.bodyColumns || 40) - 4
+      const openH = (rows: AgentRun[]) => rows.filter(a => isOpen(p, a)).reduce((n, a) => n + detailLineCount(a, at, cols) * LINE_H, 0)
+      const finH = finRows.reduce((n, a) => n + finishedRowHeight(a) + (hasMore(a) ? LINE_H : 0), 0) + openH(finRows.filter(hasMore))
+      const gridH =
+        headerHeight(headTitle) + (sum ? sum.top.height : 0) + (showStages && sum ? sum.stages.height : 0) + LINE_H +
+        (isEmpty ? LINE_H : 0) + (running.length > 0 ? LINE_H : 0) + runRows.length * (66 + LINE_H) + openH(runRows) + (runMore > 0 ? LINE_H : 0) +
+        (finished.length > 0 ? LINE_H + 22 : 0) + finH + (finRows.length > 0 && moreFin > 0 ? LINE_H : 0) +
+        (planned.length > 0 ? LINE_H : 0) + planned.length * 46
       return (
         <Box flexDirection="column">
           {/* The grid sizes the pane; the content is placed over it, as an
@@ -2346,24 +2346,30 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column" position="absolute" top={0} left={0} right={0} alignItems={align}>
             <Svg source={headerSvg(W, headTitle, t, lim, nowMs)} alt={headTitle ? `${headTitle}: ${summary}` : summary} width={W} height={headerHeight(headTitle)} />
             {sum && <Svg source={sum.top.source} alt={`${title || s.pane}: ${summary}`} width={W} height={sum.top.height} />}
+            {showStages && sum && <Svg source={sum.stages.source} alt={s.groupStages} width={W} height={sum.stages.height} />}
             {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && section('h-run', `${s.running} · ${running.length}`)}
-            {running.map(a => (
+            {runRows.map(a => (
               <Box key={a.id} flexDirection="column" alignItems={align}>
                 <Svg source={agentSvg(W, a, at)} alt={`${a.description}: ${modelName(a.model)}, ${s.isRunning}`} width={W} height={66} />
                 {toggleRow(a)}
                 {detailsBlock(a)}
               </Box>
             ))}
+            {runMore > 0 && <Text dimColor>+{runMore} {s.moreRunning}</Text>}
             {finished.length > 0 && toggleDone}
-            {!p.isDoneCollapsed &&
-              finished.map(a => (
-                <Box key={a.id} flexDirection="column" alignItems={align}>
-                  <Svg source={agentSvg(W, a, at)} alt={`${a.description}: ${modelName(a.model)}, ${s.isFinished}`} width={W} height={66} />
-                  {toggleRow(a)}
-                  {detailsBlock(a)}
+            {finRows.map(a => {
+              const row = finishedRowCached(W, a, at)
+              return (
+                <Box key={`fin-${a.id}`} flexDirection="column" alignItems={align}>
+                  <Svg source={row.source} alt={`${a.description || a.type}: ${a.verdict ? a.verdict.toUpperCase() : s.isFinished}`} width={W} height={row.height} />
+                  {hasMore(a) && toggleRow(a)}
+                  {hasMore(a) && detailsBlock(a)}
                 </Box>
-              ))}
+              )
+            })}
+            {finRows.length > 0 && moreFin > 0 && <Text dimColor>+{moreFin}</Text>}
+            {finished.length > 0 && <Svg source={footerSvg(W, finished)} alt={s.finished} width={W} height={22} />}
             {planned.length > 0 && section('h-plan', `${s.planned} · ${planned.length}`)}
             {planned.map(pl => (
               <Svg key={`plan-${pl.n}`} source={plannedSvg(W, pl)} alt={`${pl.n}. ${pl.title}: ${s.isPlanned}`} width={W} height={46} />
@@ -2425,8 +2431,8 @@ export const register: Register = (on, options) => {
             {cut(`${tl.running} ${s.isRunning} · ${tl.done} ${s.doneN}${tl.failed ? ` · ${tl.failed} ${s.failedN}` : ''} · ${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`)}
           </Text>
           {attentionOf(list, at).slice(0, MAX_ATTENTION).map(a => (
-            <Text key={`att-${a.id}`} color={a.status === 'failed' ? '#E5484D' : '#D4A24C'} wrap="truncate-end">
-              {cut(`${a.status === 'failed' ? '✗' : '⏸'} ${a.description || a.type} · ${a.status === 'failed' ? s.failed : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`}${a.action ? ` · ${a.action}` : ''}`)}
+            <Text key={`att-${a.id}`} color={a.status === 'failed' || a.verdict === 'fail' ? '#E5484D' : '#D4A24C'} wrap="truncate-end">
+              {cut(`${a.status === 'failed' || a.verdict === 'fail' ? '✗' : '⏸'} ${a.description || a.type} · ${a.status === 'failed' ? s.failed : a.verdict === 'fail' ? 'FAIL' : `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`}${a.action ? ` · ${a.action}` : ''}`)}
             </Text>
           ))}
           <Text dimColor wrap="truncate-end">

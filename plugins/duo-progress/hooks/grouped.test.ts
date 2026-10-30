@@ -97,19 +97,31 @@ const spawnMany = async ($: Engine, on: On, n: number, isSetUp = false) => {
   }
 }
 
-for (const surface of ['terminal', 'desktop'] as const) {
-  for (const [n, grouped] of [[GROUP_THRESHOLD, false], [GROUP_THRESHOLD + 1, true]] as const) {
-    test(`${surface}: ${n} agents draw the ${grouped ? 'grouped' : 'detailed'} view`, async ($, on) => {
-      await spawnMany($, on, n)
-      const ui = await $.ui.mount({ plugin: 'duo-progress', surface, component: 'Pane', requestId: 'duo-agents', props: pane })
-      expect((await ui.find({ key: 'open-t0' })) !== undefined).toBe(!grouped)
-      if (surface === 'desktop') {
-        const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-        expect(drawn.includes('STAGES')).toBe(grouped)
-      }
-    })
-  }
+// The terminal still switches between per-agent rows and per-stage lines (with a margin); the desktop has one body.
+for (const [n, grouped] of [[GROUP_THRESHOLD, false], [GROUP_THRESHOLD + 1, true]] as const) {
+  test(`terminal: ${n} agents draw the ${grouped ? 'grouped' : 'detailed'} view`, async ($, on) => {
+    await spawnMany($, on, n)
+    const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'terminal', component: 'Pane', requestId: 'duo-agents', props: pane })
+    expect((await ui.find({ key: 'open-t0' })) !== undefined).toBe(!grouped)
+  })
 }
+
+test('desktop: up to eleven agents draw no Stages block; the agents at work are full rows', async ($, on) => {
+  await spawnMany($, on, 8)
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
+  const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
+  expect(drawn.includes('STAGES')).toBe(false)
+  expect(await ui.find({ key: 'open-t7' })).toBeDefined() // the newest running agent has its row and its switch
+})
+
+test('desktop: from twelve agents the Stages block appears and the agents at work are capped, the rest counted', async ($, on) => {
+  await spawnMany($, on, 12)
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
+  const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
+  expect(drawn.includes('STAGES')).toBe(true)
+  expect(await ui.find({ key: 'open-t11' })).toBeDefined()
+  expect(await ui.find({ key: 'open-t0' })).toBeUndefined() // only the six newest are full rows
+})
 
 test('desktop: the grouped view keeps the header tiles (usage or cost, tokens, time) above its own summary', async ($, on) => {
   await spawnMany($, on, 12)
@@ -157,18 +169,19 @@ test('grouped: the Finished list starts closed, shows the count, and opens with 
   expect(String((await ui.find({ key: 'done' }))?.props.label)).toMatch(/^▾ Finished · 3/)
 })
 
-test('desktop grouped: an open Finished list has a Details switch under every row', async ($, on) => {
+test('desktop: the Finished list is open for a small run and shows each verdict and result without a click', async ($, on) => {
   on('turn.complete', () => ({ text: 'ok' }) as never)
   await spawnMany($, on, 10)
   for (let i = 0; i < 3; i++) await $.turn.complete({ agentId: `t${i}`, reason: 'answer', answer: 'PASS: all good' } as never)
   const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
-  expect(await ui.find({ key: 'open-t0' })).toBeUndefined() // closed: no rows
-  await ui.press({ key: 'done' })
-  expect(await ui.find({ key: 'open-t0' })).toBeDefined()
-  expect(await ui.find({ key: 'open-t2' })).toBeDefined()
   const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
   expect(drawn).toContain('>PASS<')
   expect(drawn).toContain('PASS: all good')
+  // Nothing more to open on those rows (no files, steps or stated reason), so no Details switch either.
+  expect(await ui.find({ key: 'open-t0' })).toBeUndefined()
+  await ui.press({ key: 'done' }) // the switch folds it
+  const folded = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
+  expect(folded).not.toContain('PASS: all good')
 })
 
 test('barWidths: the segments fill the bar exactly and the last never goes negative', () => {
