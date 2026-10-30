@@ -63,7 +63,6 @@ export type AgentRun = {
 }
 
 export type Panel = {
-  isCompact: boolean
   isDoneCollapsed: boolean
   /** Grouped view only: the Finished list is open. Absent (closed) in state saved by older versions. */
   isFinishedOpen?: boolean

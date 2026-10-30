@@ -13,6 +13,10 @@ Besides `fable`, `heavy`, `careful`, `medium` and `light`, the panel knows the [
 
 Under each running or finished agent row a `▸ Details · <model>` button opens a block with the model (friendly name, effort and the id as reported), agent type, full description, status and round, context, tokens, cost, start/end/elapsed and the steps. With a `plan` the steps are its titles as a checklist (✓ done, ▸ in progress, ○ pending); without one, the notes the worker logged. Open rows are remembered in the panel state (`openIds`). Rendering was not checked visually.
 
+## The current run
+
+The panel and the bar show the current run. For agents Claude starts outside a duo flow, a run is the agents started since its window began (agents that follow each other within five minutes belong to the same run); earlier ones leave the panel and stay in the run receipts (`/duo:receipt`). So the header counts and the grouped view are about what you are watching now, not the whole session. There is no collapse button: the grouped view and the `Finished` toggle keep long lists short.
+
 ## Needs attention
 
 An agent that fails, or that has shown no sign of life (a model request, a step report or a tool call) for three minutes, is marked in its row ("stalled 4m", the crab stops walking) and shown, first, in a **Needs attention** block at the top of the grouped view with its last action or result. The bar above the prompt adds a count (⚠ 2). Each agent's row also shows what its last tool call was doing ("editing cart.py", "running: python3") when it has not reported steps. Agents Claude starts outside a duo flow get a bar of their own ("Agents", counting them). Not yet seen in a real run (unit-tested only).

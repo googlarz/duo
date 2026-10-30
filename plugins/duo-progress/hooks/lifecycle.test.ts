@@ -239,3 +239,26 @@ test('contrast: the colours the band and the panel really use meet 4.5:1', () =>
   expect(contrast(panel.light, '#ffffff')).toBeGreaterThanOrEqual(4.5)
   expect(contrast(panel.dark, '#262625')).toBeGreaterThanOrEqual(4.5)
 })
+
+// ---- the panel shows the current run; no Collapse button ----
+import { inRun } from './register'
+
+test('inRun: an implicit flow shows only the agents since its window began; any other flow shows them all', () => {
+  const old = mk({ id: 'old', startedAt: 100 })
+  const fresh = mk({ id: 'fresh', startedAt: 5000 })
+  const implicit = { isImplicit: true, since: 5000 } as Parameters<typeof inRun>[0]
+  expect(inRun(implicit, [old, fresh]).map(a => a.id)).toEqual(['fresh'])
+  expect(inRun({ isImplicit: false } as Parameters<typeof inRun>[0], [old, fresh]).length).toBe(2)
+  expect(inRun(null, [old, fresh]).length).toBe(2)
+})
+
+test('panel: there is no Collapse or Expand button, in the desktop or the terminal view', async ($, on) => {
+  mock.clock(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('agent.spawn', (_$, e) => ({ model: 'claude-sonnet-5-5', agentId: e.tool_use_id }))
+  await spawn($, 'c1', 'A job')
+  for (const surface of ['desktop', 'terminal'] as const) {
+    const ui = await $.ui.mount({ plugin: 'duo-progress', surface, component: 'Pane', requestId: 'duo-agents', props: { title: '', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} } })
+    expect(await ui.find({ key: 'compact' })).toBeUndefined()
+  }
+})

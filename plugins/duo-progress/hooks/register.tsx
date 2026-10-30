@@ -6,7 +6,6 @@ import type { AgentRun, Flow, Panel, Phase, PlannedTask } from '../types'
 const flow = atom({ plugin: 'duo-progress', key: 'flow' } as const, null)
 const agents = atom({ plugin: 'duo-progress', key: 'agents' } as const, [])
 const panel = atom({ plugin: 'duo-progress', key: 'panel' } as const, {
-  isCompact: false,
   isDoneCollapsed: false,
   isFinishedOpen: false,
   autoOpenedFor: '',
@@ -76,8 +75,6 @@ const STRINGS = {
     limit: 'Usage',
     tokens: 'Tokens',
     time: 'Time',
-    collapse: 'Collapse',
-    expand: 'Expand',
     running: 'Running',
     finished: 'Finished',
     planned: 'Planned',
@@ -136,8 +133,6 @@ const STRINGS = {
     limit: 'Расход',
     tokens: 'Токены',
     time: 'Время',
-    collapse: 'Свернуть',
-    expand: 'Развернуть',
     running: 'Работают',
     finished: 'Завершены',
     planned: 'Запланированы',
@@ -196,8 +191,6 @@ const STRINGS = {
     limit: 'שימוש',
     tokens: 'טוקנים',
     time: 'זמן',
-    collapse: 'כיווץ',
-    expand: 'הרחבה',
     running: 'פועלים',
     finished: 'הסתיימו',
     planned: 'מתוכננים',
@@ -1420,26 +1413,6 @@ ${statusMark(mx(W, W - 8), 16, 'planned', color)}
   )
 }
 
-const compactSvg = (W: number, list: AgentRun[], planned: Planned[], t: ReturnType<typeof totals>): string => {
-  const icons = [
-    ...list.filter(a => a.status === 'running').map(a => ({ k: costumeOf(a.type), c: colorOf(tierOf(a.type)), s: 'running', dim: false })),
-    ...list.filter(a => a.status !== 'running').map(a => ({ k: costumeOf(a.type), c: colorOf(tierOf(a.type)), s: a.status, dim: false })),
-    ...planned.map(p => ({ k: p.tier in TIER_COLOR ? p.tier : 'other', c: colorOf(p.tier), s: 'planned', dim: true })),
-  ]
-  const fit = Math.max(1, Math.floor((W - 150) / 36))
-  const shown = icons.slice(0, fit)
-  const more = icons.length - shown.length
-  const body = shown
-    .map((ic, i) => rowCrab(W, i * 36, 0, ic.k, ic.dim, ic.s === 'running') + (ic.s === 'running' ? `<circle class="live" cx="${mx(W, i * 36 + 32)}" cy="4" r="3" fill="${ic.c}"/>` : ''))
-    .join('')
-  const x = shown.length * 36 + (more ? 4 : 0)
-  return svg(
-    W,
-    32,
-    `${body}${more ? `<text class="s" ${startText(W, x, 21, false)} font-family="${FONT}" font-size="12">+${more}</text>` : ''}
-<text class="s" ${endText(W, W, 21)} font-family="${FONT}" font-size="12" font-variant-numeric="tabular-nums">≈${fmtCost(t.cost)} · ${fmtTokens(t.tokens)} · ${fmtTime(t.time)}</text>`,
-  )
-}
 
 // --- desktop drawings of the grouped view.
 
@@ -1819,6 +1792,9 @@ async function syncImplicit($: EngineInterface): Promise<void> {
   } catch {}
 }
 
+// The agents of the current run: all of them, but for an implicit flow only those since its window began.
+export const inRun = (f: Flow | null, list: AgentRun[]): AgentRun[] => (f?.isImplicit ? list.filter(a => a.startedAt >= (f.since ?? 0)) : list)
+
 // No duo flow is running and an agent started anyway: the bar follows these agents too, from `before`.
 async function ensureImplicit($: EngineInterface, at: number): Promise<void> {
   const prev = await read($, flow)
@@ -2179,8 +2155,9 @@ export const register: Register = (on, options) => {
     const s = tr()
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
-    const list = await read($, agents)
     const f = await read($, flow)
+    // The panel shows the current run: for agents started outside a duo flow, those since its window began (older ones are in the receipts).
+    const list = inRun(f, await read($, agents))
     const p: Panel = await read($, panel)
     const at = Math.max(await read($, now), ...list.map(a => a.startedAt), 0)
 
@@ -2193,14 +2170,6 @@ export const register: Register = (on, options) => {
     // The pane's title says "Agents"; inside, only the flow's own name.
     const title = f && !f.isFinished ? f.title : ''
 
-    const toggleCompact = (
-      <Button
-        key="compact"
-        label={p.isCompact ? s.expand : s.collapse}
-        plain
-        onPress={() => update($, panel, prev => ({ ...prev, isCompact: !prev.isCompact }))}
-      />
-    )
     // The grouped view has its own switch, closed by default: its point is to avoid the long list.
     const isGroupedView = isGrouped(list.length)
     const finClosed = isGroupedView ? !p.isFinishedOpen : p.isDoneCollapsed
@@ -2249,14 +2218,6 @@ export const register: Register = (on, options) => {
 
       // In Hebrew the column hugs the right edge: section heads and buttons right-aligned.
       const align = isRtl() ? 'flex-end' : undefined
-      if (p.isCompact) {
-        return (
-          <Box flexDirection="column" gap={1} alignItems={align}>
-            <Svg source={compactSvg(W, list, planned, t)} alt={`${list.length} ${s.agentsCount}, ${summary}`} width={W} height={32} />
-            {toggleCompact}
-          </Box>
-        )
-      }
       if (isGrouped(list.length)) {
         const g = groupedSvg(W, list, at, title || s.pane, planned)
         const fin = finClosed || finished.length === 0 ? null : finishedCached(W, finished, at)
@@ -2274,7 +2235,6 @@ export const register: Register = (on, options) => {
               {fin && <Svg source={fin.source} alt={`${s.finished} · ${finished.length}`} width={W} height={fin.height} />}
               {fin && more > 0 && <Text dimColor>+{more}</Text>}
               {finished.length > 0 && <Svg source={footerSvg(W, finished)} alt={s.finished} width={W} height={22} />}
-              {toggleCompact}
             </Box>
           </Box>
         )
@@ -2292,7 +2252,6 @@ export const register: Register = (on, options) => {
           ))}
           <Box flexDirection="column" position="absolute" top={0} left={0} right={0} alignItems={align}>
             <Svg source={headerSvg(W, title, t, lim, nowMs)} alt={title ? `${title}: ${summary}` : summary} width={W} height={headerHeight(title)} />
-            {toggleCompact}
             {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && section('h-run', `${s.running} · ${running.length}`)}
             {running.map(a => (
@@ -2423,26 +2382,11 @@ export const register: Register = (on, options) => {
           <Text bold wrap="truncate-end">
             {title}
           </Text>
-          {toggleCompact}
         </Box>
         <Text dimColor>
           ≈{fmtCost(t.cost)} · {fmtTokens(t.tokens)} {s.tokensWord} · {fmtTime(t.time)}
         </Text>
-        {p.isCompact ? (
-          <Text wrap="truncate-end">
-            {[...running, ...finished].map(a => (
-              <Text key={a.id} color={colorOf(tierOf(a.type))}>
-                {STATUS_GLYPH[a.status]}{' '}
-              </Text>
-            ))}
-            {planned.map(pl => (
-              <Text key={`plan-${pl.n}`} dimColor>
-                ◷{' '}
-              </Text>
-            ))}
-          </Text>
-        ) : (
-          isGrouped(list.length) ? groupedTerminal() : (
+        {isGrouped(list.length) ? groupedTerminal() : (
           <Box flexDirection="column" marginTop={1}>
             {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && <Text dimColor>{s.running} · {running.length}</Text>}
@@ -2466,8 +2410,7 @@ export const register: Register = (on, options) => {
               )
             })}
           </Box>
-          )
-        )}
+          )}
       </Box>
     )
   })
@@ -2482,7 +2425,7 @@ export const register: Register = (on, options) => {
 
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
-    const list = await read($, agents)
+    const list = inRun(f, await read($, agents))
     const crew = list.length + plannedOf(f, list).length
     const isWorking = list.some(a => a.status === 'running')
     const crewLabel = `${crew} ${agentsWord(crew)}`
