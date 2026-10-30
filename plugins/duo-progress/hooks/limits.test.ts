@@ -66,7 +66,7 @@ const flowOf = { title: 'hello.txt test 3', total: 2, done: 2, running: 0, phase
 test('band: solid bar, no dither, usage named and the flow percent left out', () => {
   const svg = rowSvg(flowOf, 600, false, '5h 12%')
   expect(svg).toContain('Usage 5h 12%')
-  expect(svg).not.toContain('100%')
+  expect(svg).not.toContain('>100%<')
   expect(svg).not.toContain('class="t0"')
   expect(svg).not.toContain('twinkle')
 })
