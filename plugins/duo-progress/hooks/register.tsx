@@ -817,6 +817,17 @@ export const stageCostume = (key: string): string => {
   const k = key.toLowerCase()
   return STAGE_COSTUMES.find(([, words]) => words.some(w => k === w || k.startsWith(w)))?.[0] ?? 'other'
 }
+// How hard the model works, as one to five rising bars.
+export const EFFORT_LEVEL: Record<string, number> = { minimal: 1, low: 1, medium: 2, high: 3, xhigh: 4, max: 5 }
+export const effortBars = (x: number, base: number, effort: string | undefined, color: string, W = 0): string => {
+  const level = EFFORT_LEVEL[effort ?? ''] ?? 0
+  if (!level) return ''
+  return `<g><title>${xml(effortWord(effort ?? ''))}</title>${Array.from({ length: 5 }, (_, i) => {
+    const h = 3 + i * 2
+    return `<rect ${i < level ? `fill="${color}"` : 'class="k"'} x="${mx(W, x + i * 5, 3)}" y="${base - h}" width="3" height="${h}" rx="1"/>`
+  }).join('')}</g>`
+}
+
 // A card's crab: the roles keep theirs (reviewer, verifier, advisor, opus); otherwise the label prefix, then the first
 // word of the title that names a costume, then the agent type's own.
 const ROLE_AGENT = /^(?:[^:]*:)?duo-(?:advisor|reviewer|verifier|opus)$/
@@ -1485,7 +1496,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const dotColor = modelColor(a ? modelName(a.model) : modelText)
     const model = compact
       ? `<circle cx="${mx(W, to.x + cw - 12, 0)}" cy="${to.y + ch - 15}" r="3.5" fill="${dotColor}"/>`
-      : `<circle cx="${mx(W, to.x + 48, 0)}" cy="${to.y + (two ? 60 : 47)}" r="3.5" fill="${dotColor}"/>${T(W, 'm', to.x + 57, to.y + (two ? 64 : 51), 10.5, 500, fitText(modelText, 10.5, Math.max(30, cw - 63)), 'start')}`
+      : `<circle cx="${mx(W, to.x + 48, 0)}" cy="${to.y + (two ? 60 : 47)}" r="3.5" fill="${dotColor}"/>${T(W, 'm', to.x + 57, to.y + (two ? 64 : 51), 10.5, 500, fitText(modelText, 10.5, Math.max(30, cw - 63 - 30)), 'start')}${effortBars(to.x + cw - 12 - 22, to.y + (two ? 65 : 52), a ? a.effort : TIER_MODEL[tier]?.[1], dotColor, W)}`
     const pct = !a ? 0 : a.status === 'done' ? 1 : a.status === 'failed' ? 1 : (progressOf(a) ?? 0)
     const bx = to.x + 8
     const bw = cw - 16
