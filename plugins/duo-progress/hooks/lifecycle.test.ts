@@ -102,7 +102,7 @@ test('isStalled: only a running agent with no sign of life past the threshold', 
 })
 
 // ---- needs attention ----
-import { layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
+import { cardCostume, layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
 
 const mk = (o: Partial<AgentRun>): AgentRun =>
   ({ id: 'x', type: 'general-purpose', description: 'Job', model: 'claude-sonnet-5-5', status: 'running', startedAt: 0, lastAt: 0, contextTokens: 0, contextMax: 1, tokens: 0, costUsd: 0, steps: 0, round: 1, ...o }) as AgentRun
@@ -162,6 +162,22 @@ test('planSvg: a failed card is red, a stalled one amber; text from an agent can
   expect(source).toContain('#E5484D')
   expect(source).toContain('#D4A24C')
   expect(source).not.toContain('<script>')
+})
+
+test('cardCostume: roles keep theirs, otherwise the prefix, then a word of the title, then the type\'s own', () => {
+  expect(cardCostume('Verify the two lists', 'duo:duo-verifier', 'x')).toBe('duo-verifier')
+  expect(cardCostume('scan:File 3', 'duo:duo-low', 'light')).toBe('explorer')
+  expect(cardCostume('Map internal links vs DE_LINK_MAP', 'duo:duo-low', 'light')).toBe('explorer')
+  expect(cardCostume('Prepare SEO fix list', 'duo:duo-medium', 'medium')).toBe('doctor')
+  expect(cardCostume('Something plain', 'duo:duo-low', 'light')).toBe('light')
+})
+
+test('planSvg: cards that wear the same costume still differ by the colour of the crab', () => {
+  const rows = taskRowsOf(null, [mk({ id: 'a', description: 'Plain one' }), mk({ id: 'b', description: 'Plain two' }), mk({ id: 'c', description: 'Plain three' })])
+  const { source } = planSvg(480, rows, 5)
+  expect(source).toContain('#D97757')
+  expect(source).toContain('#4F9BD9')
+  expect(source).toContain('#3FA796')
 })
 
 test('titleLines: a title that fits stays on one line, a long one breaks at a space, the second line is cut', () => {

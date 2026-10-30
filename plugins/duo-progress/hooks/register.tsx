@@ -796,13 +796,13 @@ const STAGE_COSTUMES: [costume: string, words: string[]][] = [
   ['detective', ['truth', 'verify', 'verifier', 'check', 'test']],
   ['judge', ['value', 'judge', 'rank']],
   ['hardhat', ['risk', 'security', 'audit']],
-  ['explorer', ['map', 'explore', 'scout']],
+  ['explorer', ['map', 'explore', 'scout', 'find', 'search', 'scan']],
   ['bulb', ['ideate', 'brainstorm', 'design']],
-  ['quill', ['synthesize', 'write', 'summary']],
+  ['quill', ['synthesize', 'write', 'summary', 'translat', 'draft', 'copy']],
   ['rocket', ['deploy', 'release', 'ship', 'launch']],
   ['robot', ['build', 'compile', 'generate', 'codegen']],
   ['scientist', ['research', 'analy', 'investigate', 'study']],
-  ['artist', ['ui', 'visual', 'style', 'render', 'css']],
+  ['artist', ['ui', 'visual', 'style', 'render', 'css', 'image', 'photo', 'icon', 'alt']],
   ['ninja', ['perf', 'optimi', 'speed', 'fast', 'bench']],
   ['doctor', ['fix', 'debug', 'repair', 'patch', 'bug']],
   ['librarian', ['docs', 'readme', 'document']],
@@ -817,6 +817,22 @@ export const stageCostume = (key: string): string => {
   const k = key.toLowerCase()
   return STAGE_COSTUMES.find(([, words]) => words.some(w => k === w || k.startsWith(w)))?.[0] ?? 'other'
 }
+// A card's crab: the roles keep theirs (reviewer, verifier, advisor, opus); otherwise the label prefix, then the first
+// word of the title that names a costume, then the agent type's own.
+const ROLE_AGENT = /^(?:[^:]*:)?duo-(?:advisor|reviewer|verifier|opus)$/
+export const cardCostume = (title: string, type: string, fallback: string): string => {
+  if (ROLE_AGENT.test(type)) return costumeOf(type) !== 'other' ? costumeOf(type) : fallback
+  const byPrefix = stageCostume(groupKey(title))
+  if (byPrefix !== 'other') return byPrefix
+  for (const w of title.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    const c = w ? stageCostume(w) : 'other'
+    if (c !== 'other') return c
+  }
+  return fallback
+}
+// Cards that wear the same costume still tell apart by the colour of the crab.
+const CRAB_TINTS = ['#D97757', '#4F9BD9', '#3FA796', '#9B7BDB', '#E0679A', '#D9A82B']
+
 export const STAGE_COSTUME_NAMES: string[] = STAGE_COSTUMES.map(([c]) => c)
 
 // --- desktop drawings: each row is one SVG, as the band above the prompt is.
@@ -1470,7 +1486,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const dim = status === 'planned' ? ' opacity="0.7"' : ''
     cards.push(`<g${dim}><rect class="tile" x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8"/>
 <rect x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8" fill="none" stroke="${edge}" stroke-width="${status === 'planned' ? 1 : 1.6}"${status === 'planned' ? ' stroke-dasharray="4 3"' : ''}/>
-${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? (a ? agentCostume(a) : tier) : 'other', !a, status === 'running')}
+${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? cardCostume(r.title, a ? a.type : r.tier, a ? costumeOf(a.type) : tier) : 'other', !a, status === 'running').replaceAll('#D97757', CRAB_TINTS[i % CRAB_TINTS.length])}
 ${(compact ? [fitText(cardLabel(r), 12, Math.max(30, cw - 50))] : titleLines(cardLabel(r), 12, Math.max(30, cw - 50)).slice(0, 2)).map((line, k) => T(W, 't', to.x + 44, to.y + (compact ? 19 : 20) + k * 13, 12, 600, line, 'start')).join('')}
 ${T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 50 : 38), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50)), 'start')}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : two ? 46 : 34)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
 <rect class="k" x="${mx(W, bx, bw)}" y="${to.y + ch - 7}" width="${bw}" height="3" rx="1.5"/><rect x="${mx(W, bx, Math.round(bw * pct))}" y="${to.y + ch - 7}" width="${Math.round(bw * pct)}" height="3" rx="1.5" fill="${edge}"/>
