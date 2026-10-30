@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { AgentRun } from '../types'
-import { headerSvg, limitTile, stepsDone, usageReport } from './register'
+import { headerSvg, limitTile, rowSvg, stepsDone, usageReport, usageShort } from './register'
 
 test('limitTile: both windows, label names them, value their rounded percentages', () => {
   expect(limitTile([{ kind: 'five_hour', percentUsed: 9.4 }, { kind: 'seven_day', percentUsed: 31 }])).toEqual({ label: '5h · 7d', value: '9% · 31%' })
@@ -53,4 +53,24 @@ test('usageReport: the usage file shape, reset in epoch seconds', () => {
 test('usageReport: no reading is a plain sentence, not JSON', () => {
   expect(usageReport([])).toStartWith('no reading')
   expect(usageReport([{ kind: 'spend_limit', percentUsed: 5 }])).toStartWith('no reading')
+})
+
+test('usageShort: the 5-hour window first, else the weekly one, else nothing', () => {
+  expect(usageShort([{ kind: 'seven_day', percentUsed: 32 }, { kind: 'five_hour', percentUsed: 11.6 }])).toBe('5h 12%')
+  expect(usageShort([{ kind: 'seven_day', percentUsed: 32 }])).toBe('7d 32%')
+  expect(usageShort([])).toBe('')
+})
+
+const flowOf = { title: 'hello.txt test 3', total: 2, done: 2, running: 0, phase: 'close', isFinished: true } as Parameters<typeof rowSvg>[0]
+
+test('band: solid bar, no dither, usage beside the percent', () => {
+  const svg = rowSvg(flowOf, 600, false, '5h 12%')
+  expect(svg).toContain('100% · 5h 12%')
+  expect(svg).not.toContain('class="t0"')
+  expect(svg).not.toContain('twinkle')
+})
+
+test('band: without a reading the text is just the percent; a working bar breathes', () => {
+  expect(rowSvg(flowOf, 600, false)).toContain('>100%</text>')
+  expect(rowSvg({ ...flowOf, isFinished: false, done: 1, running: 1 }, 600, true)).toContain('class="run"')
 })

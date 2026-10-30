@@ -7,22 +7,15 @@
   Built for Claude Pro / Max, where every agent spends your usage limit.
 </p>
 
+<p align="center">
+  <img src="assets/duo-panel-real.png" alt="The real agents panel after a duo run: the Usage tile shows 12% of the 5-hour window and 32% of the weekly window, each task shows its model and effort, and Details lists the steps the agent planned with the ones done" width="592">
+</p>
+
+<p align="center"><i>The live panel from a real run: every agent, the model it ran on, its steps, and your usage.</i></p>
+
+> **A fork of the amazing [savvy](https://github.com/JohnnyVizz/claude-kit) by [JohnnyVizz](https://github.com/JohnnyVizz), rebuilt for subscription users.** savvy is a great multi-agent flow built for API-style budgets (Opus and Fable workers). duo keeps its panel and orchestration ideas, credited in full below, and adapts them to a Pro/Max plan: Sonnet does the work, Opus is only a gate, and your usage limit is the budget.
+
 ---
-
-## The problem
-
-When you give Claude Code a big job, it doesn't work alone. It **creates agents on its own**: one to explore, several to build, one to test, one to review. You don't write them and you don't pick them. By default you also can't see them: which model each one runs on, what it is doing, how far along it is, what it costs.
-
-On a subscription that's your usage limit draining in a place you can't look.
-
-## What duo gives you
-
-You describe the task. The AI creates the agents and picks the model for each stage. duo works with zero setup, and you can shape it with ordinary rules in your `CLAUDE.md`. It adds the two things that were missing:
-
-| | |
-| --- | --- |
-| 👁 **Visibility** | A live panel with **every agent**: its task, the **model and effort** it runs on, its steps, progress, tokens, cost and time, plus **how much of your 5-hour and weekly limit you have used** (read from Claude Code itself; needs no setup). Open any task to see its steps. With big fan-outs of many agents it groups them by stage and shows the model mix, so it stays readable. Each stage gets its own animated pixel crab in a costume. |
-| 🧠 **The right model, automatically** | The AI picks the model for each stage and the effort for each task by itself, within built-in guardrails (an Opus budget, a cap on retries, a check when your limit runs low). Works out of the box; shape it with your own rules in `CLAUDE.md` if you want (see below). |
 
 ## Try it
 
@@ -51,6 +44,21 @@ Then, once, turn on the usage guard (it asks before touching your settings):
 > Shorter command: try plain `/duo <task>`. If your version doesn't accept it, copy the skill once:
 > `git clone https://github.com/googlarz/duo.git ~/duo && cp -R ~/duo/plugins/duo/skills/duo ~/.claude/skills/`
 
+## Why duo
+
+When you give Claude Code a big job, it doesn't work alone. It **creates agents on its own**: one to explore, several to build, one to test, one to review. You don't write them and you don't pick them. By default you also can't see them: which model each one runs on, what it is doing, how far along it is, what it costs.
+
+On a subscription that's your usage limit draining in a place you can't look.
+
+## What duo gives you
+
+You describe the task. The AI creates the agents and picks the model for each stage. duo works with zero setup, and you can shape it with ordinary rules in your `CLAUDE.md`. It adds the two things that were missing:
+
+| | |
+| --- | --- |
+| 👁 **Visibility** | A live panel with **every agent**: its task, the **model and effort** it runs on, its steps, progress, tokens, cost and time, plus **how much of your 5-hour and weekly limit you have used** (read from Claude Code itself; needs no setup). Open any task to see its steps. With big fan-outs of many agents it groups them by stage and shows the model mix, so it stays readable. Each stage gets its own animated pixel crab in a costume. |
+| 🧠 **The right model, automatically** | The AI picks the model for each stage and the effort for each task by itself, within built-in guardrails (an Opus budget, a cap on retries, a check when your limit runs low). Works out of the box; shape it with your own rules in `CLAUDE.md` if you want (see below). |
+
 ## How it works
 
 ### The right model at every stage, chosen automatically
@@ -71,11 +79,7 @@ The agents run in parallel where they can, within guardrails: **two attempts per
 
 ### Visibility: open any agent
 
-<p align="center">
-  <img src="assets/duo-panel-real.png" alt="The real agents panel after a duo run: the Usage tile shows 12% of the 5-hour window and 32% of the weekly window, each task shows its model and effort, and Details lists the steps the agent planned with the ones done" width="592">
-</p>
-
-*A real run, not a mock-up.* The top tile shows **how much of your 5-hour and weekly limit you have used**. Every task row shows the model and effort that ran it, its context, tokens, an estimated cost and time. Press **Details** under a task to see its steps and which are done.
+The panel at the top is a real run, not a mock-up. Its first tile shows **how much of your 5-hour and weekly limit you have used**. Every task row shows the model and effort that ran it, its context, tokens, an estimated cost and time. Press **Details** under a task to see its steps and which are done.
 
 When many agents run at once (more than 8), the panel switches to a grouped view: a summary, the model mix, one row per stage, only the few running agents in view, and the finished ones folded away. Illustration of that view, with example tasks:
 
