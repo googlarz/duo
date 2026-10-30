@@ -23,6 +23,10 @@ The panel and the bar show the job you are watching now, not the whole session. 
 
 An agent that fails, or that has shown no sign of life (a model request, a step report or a tool call) for three minutes, is marked in its row ("stalled 4m", the crab stops walking) and shown, first, in a **Needs attention** block at the top of the grouped view with its last action or result. The bar above the prompt adds a count (⚠ 2). Each agent's row also shows what its last tool call was doing ("editing cart.py", "running: python3") when it has not reported steps. Agents Claude starts outside a duo flow get a bar of their own ("Agents", counting them). Not yet seen in a real run (unit-tested only).
 
+## One layout, two bodies
+
+The panel always has the same top: the usage, tokens and time tiles, then a summary (title, counts and a progress bar, the model mix, and what needs attention). Only the body below changes: one row per agent for up to 8 agents, one row per stage above that. The body switches at more than 8 agents and switches back only at 5 or fewer, so a count hovering around the edge does not make the panel jump.
+
 ## Grouped view (big fan-outs)
 
 With more than 8 agents (`GROUP_THRESHOLD` in `hooks/register.tsx`) the panel stops listing one row per agent and shows a summary instead: a header with running/done counts and a started/running/failed bar, the models in use with agent and token counts and each model's share of tokens, one row per **stage**, the four most recently started running agents, and a `▸ Finished · N` toggle with compact rows, token total and the API-equivalent cost. A stage is the label prefix before the first colon (`truth:A10` belongs to `truth`; a label without a usable prefix goes to `other`); stages are ordered by their first start. An active stage shows one square per agent (green done, amber running, red failed; at most 40, then `+N`); a finished stage collapses to one dim row. The terminal gets the same content as text lines. Planned flow tasks show as a dim `Planned · N` line. The run list keeps only the last 200 runs, so "started so far" counts at most 200. With 8 agents or fewer the detailed view is unchanged.

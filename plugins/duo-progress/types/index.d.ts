@@ -66,6 +66,8 @@ export type Panel = {
   isDoneCollapsed: boolean
   /** Grouped view only: the Finished list is open. Absent (closed) in state saved by older versions. */
   isFinishedOpen?: boolean
+  /** Which body the panel draws: one row per agent or one per stage. Set when agents start or end, with a margin so it does not flip back and forth. */
+  view?: 'detail' | 'grouped'
   autoOpenedFor: string
   /** Agent row ids whose details are expanded. Absent in state saved by older versions. */
   openIds?: string[]

@@ -121,6 +121,23 @@ test('desktop: the grouped view keeps the header tiles (usage or cost, tokens, t
   expect(header).toBeLessThan(grouped)
 })
 
+test('desktop: both views share the same top (header tiles, counts, models); only the body differs', async ($, on) => {
+  await spawnMany($, on, 3)
+  const detailed = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
+  const d = (await detailed.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
+  expect(d).toContain('MODELS')
+  expect(d).toContain('started so far')
+  expect(d).not.toContain('STAGES')
+})
+
+test('desktop: the grouped view has the same top and adds the stages', async ($, on) => {
+  await spawnMany($, on, 12)
+  const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
+  const all = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
+  expect(all).toContain('MODELS')
+  expect(all).toContain('STAGES')
+})
+
 test('terminal: grouped lines never exceed the columns', async ($, on) => {
   await spawnMany($, on, 12)
   const ui = await $.ui.mount({ plugin: 'duo-progress', surface: 'terminal', component: 'Pane', requestId: 'duo-agents', props: { ...pane, bodyColumns: 30 } })

@@ -262,3 +262,27 @@ test('panel: there is no Collapse or Expand button, in the desktop or the termin
     expect(await ui.find({ key: 'compact' })).toBeUndefined()
   }
 })
+
+// ---- one layout, two bodies ----
+import { nextView } from './register'
+
+test('nextView: grouped above the threshold, and back to detailed only at five or fewer', () => {
+  expect(nextView(undefined, 3)).toBe('detail')
+  expect(nextView('detail', 8)).toBe('detail')
+  expect(nextView('detail', 9)).toBe('grouped')
+  expect(nextView('grouped', 8)).toBe('grouped') // no flip back at the edge
+  expect(nextView('grouped', 6)).toBe('grouped')
+  expect(nextView('grouped', 5)).toBe('detail')
+  expect(nextView('grouped', 0)).toBe('detail')
+})
+
+test('groupedSvg: the top piece holds the summary, the bottom piece the stages, and together they are the whole', () => {
+  const at = 5000
+  const list = Array.from({ length: 10 }, (_, i) => mk({ id: `g${i}`, description: `scan:Job ${i}`, lastAt: at, startedAt: 0 }))
+  const g = groupedSvg(480, list, at, 'Big job')
+  expect(g.top.source).toContain('MODELS')
+  expect(g.top.source).not.toContain('STAGES')
+  expect(g.bottom.source).toContain('STAGES')
+  expect(g.bottom.source).not.toContain('MODELS')
+  expect(Math.abs(g.top.height + g.bottom.height - g.height)).toBeLessThanOrEqual(1)
+})

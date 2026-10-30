@@ -677,6 +677,14 @@ const totals = (list: AgentRun[], at: number) => {
 export const GROUP_THRESHOLD = 8
 export const isGrouped = (count: number): boolean => count > GROUP_THRESHOLD
 
+// The view changes at more than GROUP_THRESHOLD agents and changes back only at GROUP_LEAVE or fewer, so a count
+// hovering around the edge does not make the panel jump back and forth.
+export const GROUP_LEAVE = 5
+export const nextView = (current: 'detail' | 'grouped' | undefined, count: number): 'detail' | 'grouped' => {
+  if ((current ?? 'detail') === 'detail') return count > GROUP_THRESHOLD ? 'grouped' : 'detail'
+  return count <= GROUP_LEAVE ? 'detail' : 'grouped'
+}
+
 // The agents that need a look: failed ones first, then running ones with no sign of life, the longest quiet first.
 export const MAX_ATTENTION = 5
 export const attentionOf = (list: readonly AgentRun[], at: number): AgentRun[] => {
@@ -1457,7 +1465,13 @@ const countsText = (g: { done: number; running: number; failed: number }): strin
 }
 
 // Header, models and stages, running now: one drawing. Returns the markup and its height.
-export const groupedSvg = (W: number, list: AgentRun[], at: number, title: string, planned: Planned[] = []): { source: string; height: number } => {
+export const groupedSvg = (
+  W: number,
+  list: AgentRun[],
+  at: number,
+  title: string,
+  planned: Planned[] = [],
+): { source: string; height: number; top: { source: string; height: number }; bottom: { source: string; height: number } } => {
   const s = tr()
   const out: string[] = []
   const tl = tally(list)
@@ -1542,6 +1556,8 @@ export const groupedSvg = (W: number, list: AgentRun[], at: number, title: strin
     y = Math.max(rowsEnd, rowsY + 10) + 14
   }
   out.push(rule(y))
+  const splitIdx = out.length
+  const splitY = Math.ceil(y + 8)
 
   // Stages
   y += 26
@@ -1630,7 +1646,11 @@ ${T(W, 't', textX, cy - 4, 14, 700, fitText(name, 14, nameMax), 'start')}${T(W, 
     y += 30
   }
   const height = Math.ceil(y + 4)
-  return { source: svg(W, height, out.join('\n')), height }
+  // The same drawing in two pieces: the summary (header, needs attention, models) that both views share, and the stages below it.
+  const top = { source: svg(W, splitY, out.slice(0, splitIdx).join('\n')), height: splitY }
+  const bottomH = Math.max(1, height - splitY)
+  const bottom = { source: svg(W, bottomH, `<g transform="translate(0,${-splitY})">${out.slice(splitIdx).join('\n')}</g>`), height: bottomH }
+  return { source: svg(W, height, out.join('\n')), height, top, bottom }
 }
 
 // "3.6M tokens · ≈$4.20 API-equivalent" under the Finished toggle.
@@ -1790,6 +1810,16 @@ async function syncImplicit($: EngineInterface): Promise<void> {
   try {
     $.ui.invalidate('ui.render')
   } catch {}
+}
+
+// Decides the body of the panel after agents start or end (state may not be written while drawing).
+async function syncView($: EngineInterface): Promise<void> {
+  const f = await read($, flow)
+  const n = inRun(f, await read($, agents)).length
+  await update($, panel, p => {
+    const v = nextView(p.view, n)
+    return v === p.view ? p : { ...p, view: v }
+  })
 }
 
 // The agents of the current run: all of them, but for an implicit flow only those since its window began.
@@ -2066,6 +2096,7 @@ export const register: Register = (on, options) => {
     await update($, now, () => at)
     if (!isPipelineAgent(e.subagentType)) await ensureImplicit($, at)
     await syncImplicit($)
+    await syncView($)
     if (isPipelineAgent(e.subagentType)) {
       const f = await read($, flow)
       await autoOpen($, f && !f.isFinished ? f.title : 'duo-flow')
@@ -2147,6 +2178,7 @@ export const register: Register = (on, options) => {
       )
       await update($, now, () => at)
       await syncImplicit($)
+      await syncView($)
     }
     return next(e)
   })
@@ -2171,7 +2203,7 @@ export const register: Register = (on, options) => {
     const title = f && !f.isFinished ? f.title : ''
 
     // The grouped view has its own switch, closed by default: its point is to avoid the long list.
-    const isGroupedView = isGrouped(list.length)
+    const isGroupedView = p.view ? p.view === 'grouped' : isGrouped(list.length)
     const finClosed = isGroupedView ? !p.isFinishedOpen : p.isDoneCollapsed
     const toggleDone = (
       <Button
@@ -2218,7 +2250,7 @@ export const register: Register = (on, options) => {
 
       // In Hebrew the column hugs the right edge: section heads and buttons right-aligned.
       const align = isRtl() ? 'flex-end' : undefined
-      if (isGrouped(list.length)) {
+      if (isGroupedView) {
         const g = groupedSvg(W, list, at, title || s.pane, planned)
         const fin = finClosed || finished.length === 0 ? null : finishedCached(W, finished, at)
         const more = finished.length - finishedRows(finished).length
@@ -2239,9 +2271,12 @@ export const register: Register = (on, options) => {
           </Box>
         )
       }
+      // The same top as the grouped view (title, counts, models, what needs attention); only the body below differs.
+      const sum = list.length ? groupedSvg(W, list, at, title || s.pane, planned) : null
+      const headTitle = sum ? '' : title
       const shownDone = p.isDoneCollapsed ? 0 : finished.length
       const lines = 1 + (isEmpty ? 1 : 0) + (running.length > 0 ? 1 : 0) + (finished.length > 0 ? 1 : 0) + (planned.length > 0 ? 1 : 0)
-      const gridH = headerHeight(title) + lines * LINE_H + (running.length + shownDone) * (66 + LINE_H) + planned.length * 46 +
+      const gridH = headerHeight(headTitle) + (sum ? sum.top.height : 0) + lines * LINE_H + (running.length + shownDone) * (66 + LINE_H) + planned.length * 46 +
         [...running, ...(p.isDoneCollapsed ? [] : finished)].filter(a => isOpen(p, a)).reduce((n, a) => n + detailLineCount(a, at, (e.props.bodyColumns || 40) - 4) * LINE_H, 0)
       return (
         <Box flexDirection="column">
@@ -2251,7 +2286,8 @@ export const register: Register = (on, options) => {
             <Svg key={`grid-${i}`} source={gridSvg(W, tileH)} alt="dotted grid" width={W} height={tileH} />
           ))}
           <Box flexDirection="column" position="absolute" top={0} left={0} right={0} alignItems={align}>
-            <Svg source={headerSvg(W, title, t, lim, nowMs)} alt={title ? `${title}: ${summary}` : summary} width={W} height={headerHeight(title)} />
+            <Svg source={headerSvg(W, headTitle, t, lim, nowMs)} alt={headTitle ? `${headTitle}: ${summary}` : summary} width={W} height={headerHeight(headTitle)} />
+            {sum && <Svg source={sum.top.source} alt={`${title || s.pane}: ${summary}`} width={W} height={sum.top.height} />}
             {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && section('h-run', `${s.running} · ${running.length}`)}
             {running.map(a => (
@@ -2386,7 +2422,7 @@ export const register: Register = (on, options) => {
         <Text dimColor>
           ≈{fmtCost(t.cost)} · {fmtTokens(t.tokens)} {s.tokensWord} · {fmtTime(t.time)}
         </Text>
-        {isGrouped(list.length) ? groupedTerminal() : (
+        {isGroupedView ? groupedTerminal() : (
           <Box flexDirection="column" marginTop={1}>
             {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && <Text dimColor>{s.running} · {running.length}</Text>}
