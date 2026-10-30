@@ -13,6 +13,9 @@ const panel = atom({ plugin: 'duo-progress', key: 'panel' } as const, {
   openIds: [] as string[],
 })
 const now = atom({ plugin: 'duo-progress', key: 'now' } as const, 0)
+// The subscription windows the host reports (`$.session.usage()`, `session.measure`).
+type Limit = { kind: string; percentUsed: number; resetsAt?: string }
+const limits = atom({ plugin: 'duo-progress', key: 'limits' } as const, [] as Limit[])
 
 const TOOL = 'mcp__duo-progress__progress'
 const STEP_TOOL = 'mcp__duo-progress__step'
@@ -57,6 +60,7 @@ const STRINGS = {
   en: {
     pane: 'Agents',
     cost: 'Cost',
+    limit: 'Limit',
     tokens: 'Tokens',
     time: 'Time',
     collapse: 'Collapse',
@@ -108,6 +112,7 @@ const STRINGS = {
   ru: {
     pane: 'Агенты',
     cost: 'Стоимость',
+    limit: 'Лимит',
     tokens: 'Токены',
     time: 'Время',
     collapse: 'Свернуть',
@@ -159,6 +164,7 @@ const STRINGS = {
   he: {
     pane: 'סוכנים',
     cost: 'עלות',
+    limit: 'מגבלה',
     tokens: 'טוקנים',
     time: 'זמן',
     collapse: 'כיווץ',
@@ -1087,8 +1093,23 @@ const rowCrab = (W: number, x: number, y: number, costume: string, dim = false, 
 const svg = (W: number, H: number, body: string): string =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${PANE_CSS}${CRAB_CSS}${body}</svg>`
 
+// A finished run shows all its steps done, whatever the worker last reported.
+export const stepsDone = (a: AgentRun): number => (a.status === 'done' && a.stepTotal ? a.stepTotal : (a.stepDone ?? 0))
+
+const WINDOWS: readonly (readonly [string, string])[] = [['five_hour', '5h'], ['seven_day', '7d']]
+
+// The usage tile: the label names the windows, the value their percentages; null off a
+// subscription or before the host has a reading.
+export const limitTile = (list: readonly Limit[]): { label: string; value: string } | null => {
+  const rows = WINDOWS.flatMap(([kind, short]) => {
+    const l = list.find(x => x.kind === kind)
+    return l && Number.isFinite(l.percentUsed) ? [{ short, pct: Math.round(l.percentUsed) }] : []
+  })
+  return rows.length ? { label: rows.map(r => r.short).join(' · '), value: rows.map(r => `${r.pct}%`).join(' · ') } : null
+}
+
 // The pane's own title already says "Agents": the header names the flow, if any.
-const headerSvg = (W: number, title: string, t: ReturnType<typeof totals>): string => {
+export const headerSvg = (W: number, title: string, t: ReturnType<typeof totals>, lim: readonly Limit[] = []): string => {
   const s = tr()
   const gap = 6
   const tw = (W - gap * 2) / 3
@@ -1101,7 +1122,7 @@ const headerSvg = (W: number, title: string, t: ReturnType<typeof totals>): stri
     W,
     headerHeight(title),
     `${title ? `<text class="t" ${startText(W, 0, 15)} font-family="${FONT}" font-size="14" font-weight="600">${xml(fitText(title, 14, W))}</text>` : ''}
-${tile(0, s.cost, '≈' + fmtCost(t.cost))}${tile(1, s.tokens, fmtTokens(t.tokens))}${tile(2, s.time, fmtTime(t.time))}`,
+${tile(0, ...(limitTile(lim) ? [`${s.limit} ${limitTile(lim)!.label}`, limitTile(lim)!.value] : [s.cost, '≈' + fmtCost(t.cost)]) as [string, string])}${tile(1, s.tokens, fmtTokens(t.tokens))}${tile(2, s.time, fmtTime(t.time))}`,
   )
 }
 
@@ -1131,7 +1152,7 @@ const detailLines = (a: AgentRun, at: number): string[] => {
     `${s.ctx} ${ctxOf(a)}% · ${fmtTokens(a.contextTokens)} · ${fmtTokens(a.tokens)} ${s.tokensWord} · ≈${fmtCost(a.costUsd)}`,
     `${s.timeWord}: ${clock(a.startedAt)}${a.endedAt ? ` – ${clock(a.endedAt)}` : ''} · ${fmtTime(elapsed(a, at))}`,
   ]
-  const done = a.stepDone ?? 0
+  const done = stepsDone(a)
   const log = a.stepLog ?? []
   if (a.stepTotal || log.length) lines.push(`${s.stepsWord}: ${done}/${a.stepTotal || '?'}${a.stepNote ? ` · ${a.stepNote}` : ''}`)
   // With a plan the checklist is its titles; without one, the notes the worker logged, in order.
@@ -1182,7 +1203,7 @@ const agentSvg = (W: number, a: AgentRun, at: number): string => {
   const barW = textW
   const progress = progressOf(a)
   const stats = `${s.ctx} ${ctx}% · ${fmtTokens(a.contextTokens)}  ≈${fmtCost(a.costUsd)}  ${fmtTime(elapsed(a, at))}`
-  const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}` : ''
+  const steps = a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}` : ''
   const stepsW = Math.max(0, barW - textWidth(stats, 11) - 12)
   // Without reported steps the bar falls back to the context, drawn grey.
   const fillW = Math.round(barW * (progress ?? ctx / 100))
@@ -1495,8 +1516,17 @@ async function autoOpen($: EngineInterface, key: string): Promise<void> {
 }
 
 export const register: Register = (on, options) => {
+  on('session.measure', async ($, e, next) => {
+    await update($, limits, () => e.rateLimits.map(l => ({ kind: l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt })))
+    return next(e)
+  })
+
   on('session.start', async ($, e, next) => {
     const started = await next(e)
+    try {
+      const u = await $.session.usage()
+      await update($, limits, () => u.rateLimits.map(l => ({ kind: l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt })))
+    } catch {}
     lang = await detectLang($, options.language)
     await $.tool.register({
       name: 'progress',
@@ -1752,6 +1782,7 @@ export const register: Register = (on, options) => {
     const finished = list.filter(a => a.status !== 'running').reverse()
     const planned = plannedOf(f, list)
     const t = totals(list, at)
+    const lim = await read($, limits)
     // The pane's title says "Agents"; inside, only the flow's own name.
     const title = f && !f.isFinished ? f.title : ''
 
@@ -1852,7 +1883,7 @@ export const register: Register = (on, options) => {
             <Svg key={`grid-${i}`} source={gridSvg(W, tileH)} alt="dotted grid" width={W} height={tileH} />
           ))}
           <Box flexDirection="column" position="absolute" top={0} left={0} right={0} alignItems={align}>
-            <Svg source={headerSvg(W, title, t)} alt={title ? `${title}: ${summary}` : summary} width={W} height={headerHeight(title)} />
+            <Svg source={headerSvg(W, title, t, lim)} alt={title ? `${title}: ${summary}` : summary} width={W} height={headerHeight(title)} />
             {toggleCompact}
             {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && section('h-run', `${s.running} · ${running.length}`)}
@@ -1890,7 +1921,7 @@ export const register: Register = (on, options) => {
       const ctx = ctxOf(a)
       const progress = progressOf(a)
       const model = runModel(a)
-      const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' ' + a.stepNote : ''} · ` : ''
+      const steps = a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}${a.stepNote ? ' ' + a.stepNote : ''} · ` : ''
       return (
         <Box key={a.id} flexDirection="column" marginBottom={1}>
           <Box flexDirection="row" gap={1}>
