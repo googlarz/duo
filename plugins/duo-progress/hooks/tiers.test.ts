@@ -91,12 +91,12 @@ test('steps: a flood of calls and a huge plan stay bounded and drawable', async 
   expect(rows.length).toBeLessThanOrEqual(30)
 })
 
-test('desktop: a card shows the steps its agent reported', async ($, on) => {
+test('desktop: a card shows the steps its agent reported as pips', async ($, on) => {
   await spawn($, on, 'duo:duo-max')
   await $.tool.call({ tool: STEP, agentId: 'a1', done: 1, total: 2, note: 'second part' } as never)
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', component: 'Pane', requestId: 'duo-agents', props: pane })
   const drawn = (await ui.findAll({ type: 'Svg' })).map(el => String(el.props.source)).join('')
-  expect(drawn).toContain('1/2')
+  expect((drawn.match(/r="2.5"/g) ?? []).length).toBe(2) // one pip per planned step, the first one filled
 })
 
 test('steps: a non-string note is ignored and a long note is clipped in the shown note too', async ($, on) => {

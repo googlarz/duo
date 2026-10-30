@@ -1358,12 +1358,13 @@ const detailLineCount = (a: AgentRun, at: number, cols: number): number =>
 // state changes, so nothing jumps.
 export type TaskRow = { n?: number; title: string; tier: string; after: number[]; a?: AgentRun }
 export const taskRowsOf = (f: Flow | null, list: AgentRun[]): TaskRow[] => {
-  const tasks = f && !f.isFinished ? (f.tasks ?? []) : []
+  const tasks = f ? (f.tasks ?? []) : []
   const used = new Set<string>()
   const rows: TaskRow[] = []
   tasks.forEach((t, i) => {
     const mine = list.filter(a => norm(a.description) === norm(t.title))
-    if (!mine.length) rows.push({ n: i + 1, title: t.title, tier: t.tier, after: t.after })
+    // A finished job keeps its plan, minus tasks that never started.
+    if (!mine.length && !f?.isFinished) rows.push({ n: i + 1, title: t.title, tier: t.tier, after: t.after })
     for (const a of mine) {
       used.add(a.id)
       rows.push({ n: i + 1, title: t.title, tier: t.tier, after: t.after, a })
@@ -1410,9 +1411,11 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
   const rich = rows.length <= FULL_CRABS
   const ch = compact ? 46 : 58
   const base = compact ? 100 : 150
-  const perRow = Math.max(1, Math.floor((wide + CARD_GAP) / (base + CARD_GAP)))
-  const cw = Math.floor((wide - (perRow - 1) * CARD_GAP) / perRow)
   const layers = layersOf(rows)
+  const widest = Math.max(1, ...[...new Set(layers)].map(l => layers.filter(x => x === l).length))
+  const perRow = Math.max(1, Math.floor((wide + CARD_GAP) / (base + CARD_GAP)))
+  const cols = Math.min(perRow, widest)
+  const cw = Math.min(260, Math.floor((wide - (cols - 1) * CARD_GAP) / cols))
   const depth = Math.max(0, ...layers)
   const place = new Map<number, { x: number; y: number }>()
   let y = 6
@@ -1445,7 +1448,8 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const isQuiet = a ? isStalled(a, at) : false
     const status = !a ? 'planned' : isQuiet ? 'stalled' : a.status
     const edge = status === 'failed' ? C_FAIL : status === 'running' ? C_RUN : status === 'stalled' ? C_CHECK : status === 'done' ? C_DONE : '#9a9a96'
-    const sub = !a ? tierWord(tier) : a.status === 'failed' ? s.failed : isQuiet ? `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : a.status === 'running' ? (a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : (a.action ?? fmtTime(elapsed(a, at)))) : fmtTime(elapsed(a, at))
+    const pips = a && a.status === 'running' && a.stepTotal && a.stepTotal <= 10 ? a.stepTotal : 0
+    const sub = pips ? '' : !a ? tierWord(tier) : a.status === 'failed' ? s.failed : isQuiet ? `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : a.status === 'running' ? (a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : (a.action ?? fmtTime(elapsed(a, at)))) : fmtTime(elapsed(a, at))
     const pct = !a ? 0 : a.status === 'done' ? 1 : a.status === 'failed' ? 1 : (progressOf(a) ?? 0)
     const bx = to.x + 8
     const bw = cw - 16
@@ -1454,7 +1458,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
 <rect x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8" fill="none" stroke="${edge}" stroke-width="${status === 'planned' ? 1 : 1.6}"${status === 'planned' ? ' stroke-dasharray="4 3"' : ''}/>
 ${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? (a ? agentCostume(a) : tier) : 'other', !a, status === 'running')}
 ${T(W, 't', to.x + 44, to.y + (compact ? 19 : 22), 12, 600, fitText(`${r.n ? `${r.n}. ` : ''}${r.title}`, 12, Math.max(30, cw - 50)), 'start')}
-${T(W, 'm', to.x + 44, to.y + (compact ? 33 : 38), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50)), 'start')}
+${T(W, 'm', to.x + 44, to.y + (compact ? 33 : 38), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50)), 'start')}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : 34)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
 <rect class="k" x="${mx(W, bx, bw)}" y="${to.y + ch - 7}" width="${bw}" height="3" rx="1.5"/><rect x="${mx(W, bx, Math.round(bw * pct))}" y="${to.y + ch - 7}" width="${Math.round(bw * pct)}" height="3" rx="1.5" fill="${edge}"/>
 ${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' : status, edge)}</g>`)
   })
@@ -2059,7 +2063,7 @@ export const register: Register = (on, options) => {
     const five = runDelta(await read($, runBase), lim).find(d => d.short === '5h')
     const runUse = five && list.length > 0 && list.every(a => a.status !== 'running') ? `${s.thisRun}: ${five.pct > 0 ? fmtPct(five.pct) : '<1%'} 5h` : ''
     // The pane's title says "Agents"; inside, only the flow's own name.
-    const title = f && !f.isFinished ? f.title : ''
+    const title = f && !f.isImplicit ? f.title : ''
 
     // The grouped view has its own switch, closed by default: its point is to avoid the long list.
     const isGroupedView = p.view ? p.view === 'grouped' : isGrouped(list.length)

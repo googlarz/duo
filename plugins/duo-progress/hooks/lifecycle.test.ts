@@ -137,7 +137,7 @@ test('taskRowsOf: plan order, a started task takes its agent, the rest wait; age
   const rows = taskRowsOf(PLAN, list)
   expect(rows.map(r => [r.n, r.title, r.a?.id])).toEqual([[1, 'Map', 'm'], [2, 'Build', undefined], [3, 'Check', undefined], [undefined, 'Odd job', 'x']])
   expect(taskRowsOf(null, list).map(r => r.title)).toEqual(['Map', 'Odd job'])
-  expect(taskRowsOf({ ...PLAN, isFinished: true }, list).map(r => r.title)).toEqual(['Map', 'Odd job'])
+  expect(taskRowsOf({ ...PLAN, isFinished: true }, list).map(r => [r.n, r.title])).toEqual([[1, 'Map'], [undefined, 'Odd job']]) // a finished job keeps its plan, minus tasks that never started
 })
 
 test('layersOf: a task sits one layer below everything it waits for; agents of no task come last', () => {

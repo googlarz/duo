@@ -1,6 +1,6 @@
 {
   "name": "duo-progress",
-  "version": "1.21.0",
+  "version": "1.21.1",
   "description": "Progress bar above the prompt for /duo-flow, plus an agents panel (/agents-info): running, finished and planned subagents with model, task progress, context, cost and time.",
   "author": {
     "name": "johnnyvizz",
