@@ -186,21 +186,30 @@ test('mdCell: escapes the characters that make markdown, keeps plain words and h
   expect(mdCell('a   b\n c')).toBe('a b c')
 })
 
-test('implicit flow: a second run starts its own window; the receipt holds only that run', async ($, on) => {
+test('implicit flow: agents that follow each other closely are one run; a later one starts a new run', async ($, on) => {
   let t = 1000
-  on('clock.now', () => ({ value: (t += 1000) }))
+  on('clock.now', () => ({ value: t }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('agent.spawn', (_$, e) => ({ model: 'claude-sonnet-5-5', agentId: e.tool_use_id }))
   on('turn.complete', () => ({ text: 'ok' }) as never)
-  await spawn($, 'r1', 'First run job')
+  await spawn($, 'r1', 'First job')
+  t += 1000
   await $.turn.complete({ agentId: 'r1', reason: 'answer', answer: 'ok' } as never)
-  expect(await receipt($)).toContain('First run job')
-  // The clock moves on, a new agent starts: a new window.
-  await spawn($, 'r2', 'Second run job')
-  const md = await receipt($)
-  expect(md).toContain('Second run job')
+  t += 1000
+  await spawn($, 'r2', 'Second job, right after')
+  let md = await receipt($)
+  expect(md).toContain('First job')
+  expect(md).toContain('Second job, right after')
+  expect(md).toContain('2 agents')
+
+  t += 1000
+  await $.turn.complete({ agentId: 'r2', reason: 'answer', answer: 'ok' } as never)
+  t += 10 * 60_000 // a long pause: the next one is a new run
+  await spawn($, 'r3', 'Much later job')
+  md = await receipt($)
+  expect(md).toContain('Much later job')
   expect(md).toContain('1 agent')
-  expect(md).not.toContain('First run job')
+  expect(md).not.toContain('First job')
 })
 
 test('isStalled: a running tool call gets the longer allowance', () => {

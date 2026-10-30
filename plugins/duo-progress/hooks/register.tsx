@@ -48,6 +48,8 @@ const MAX_FILES = 20
 // An agent with no sign of life for this long is called stalled in the panel; a running tool call (a build, a test run) gets longer.
 const STALL_MS = 3 * 60 * 1000
 const STALL_BUSY_MS = 10 * 60 * 1000
+// Agents started this soon after the last one ended belong to the same run.
+const SAME_JOB_MS = 5 * 60 * 1000
 const MAX_OPEN = 200
 const ACCENT = '#8f8cf4'
 const DONE = '#5fbf8f'
@@ -1713,7 +1715,7 @@ async function currentLimits($: EngineInterface): Promise<Limit[]> {
 // The run receipt: what the agents actually did, built by the panel from what it saw (not
 // written by a model), for the user to keep or paste into a pull request.
 
-export type Receipt = { at: number; title: string; used: string; agents: AgentRun[] }
+export type Receipt = { key?: string; at: number; title: string; used: string; agents: AgentRun[] }
 
 // Free text from an agent (its task, answer, file names) goes into markdown the user may paste into a pull
 // request: every character that could make a link, an image, a heading or HTML is escaped.
@@ -1757,7 +1759,8 @@ async function currentReceipt($: EngineInterface): Promise<Receipt | null> {
   const mine = f?.isImplicit ? list.filter(a => a.startedAt >= (f.since ?? 0)) : list
   if (!mine.length) return null
   const used = runSentence(runDelta(await read($, runBase), await currentLimits($))).replace(/\.$/, '')
-  return { at: await $.clock.now(), title: f?.title ?? 'Agents', used, agents: mine.slice(-50) }
+  const key = f?.isImplicit ? `agents:${f.since ?? 0}` : `flow:${f?.title ?? ''}`
+  return { key, at: await $.clock.now(), title: f?.title ?? 'Agents', used, agents: mine.slice(-50) }
 }
 
 // Keeps the last ten finished runs between sessions.
@@ -1766,7 +1769,9 @@ async function persistReceipt($: EngineInterface): Promise<void> {
     const r = await currentReceipt($)
     if (!r) return
     const old = (await $.store.get('receipts')) as Receipt[] | undefined
-    await $.store.set('receipts', [r, ...(Array.isArray(old) ? old : [])].slice(0, 10))
+    // A run that went on after it finished (another agent, a later report) replaces its own entry.
+    const rest = (Array.isArray(old) ? old : []).filter(x => !r.key || x.key !== r.key)
+    await $.store.set('receipts', [r, ...rest].slice(0, 10))
   } catch {}
 }
 
@@ -1790,8 +1795,17 @@ async function syncImplicit($: EngineInterface): Promise<void> {
 // No duo flow is running and an agent started anyway: the bar follows these agents too, from `before`.
 async function ensureImplicit($: EngineInterface, at: number): Promise<void> {
   const prev = await read($, flow)
-  // A duo flow in progress, or an implicit one still running, is left as it is; otherwise a new run begins now.
+  // A duo flow in progress, or an implicit one still running, is left as it is.
   if (prev && !prev.isFinished) return
+  // An agent that follows within a few minutes of the last one is the same job: the window reopens.
+  if (prev?.isImplicit) {
+    const mine = (await read($, agents)).filter(a => a.startedAt >= (prev.since ?? 0))
+    const lastEnd = Math.max(0, ...mine.map(a => a.endedAt ?? 0))
+    if (at - lastEnd < SAME_JOB_MS) {
+      await update($, flow, p => (p?.isImplicit ? { ...p, isFinished: false, phase: 'delegate' } : p))
+      return
+    }
+  }
   const base = baseOf(await currentLimits($))
   await update($, runBase, () => base)
   await update($, flow, () => ({ ...blank(), title: 'Agents', phase: 'delegate', isImplicit: true, since: at }))
