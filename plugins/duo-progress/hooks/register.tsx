@@ -19,6 +19,7 @@ const limits = atom({ plugin: 'duo-progress', key: 'limits' } as const, [] as Li
 
 const TOOL = 'mcp__duo-progress__progress'
 const STEP_TOOL = 'mcp__duo-progress__step'
+const USAGE_TOOL = 'mcp__duo-progress__usage'
 // Added to the end of each duo-flow or duo worker's brief. Their system prompt words step
 // reporting as a condition ("if the step tool appears among your tools") and they
 // skip it even with the tool listed; the same request in the brief is followed.
@@ -1108,6 +1109,19 @@ export const limitTile = (list: readonly Limit[]): { label: string; value: strin
   return rows.length ? { label: rows.map(r => r.short).join(' · '), value: rows.map(r => `${r.pct}%`).join(' · ') } : null
 }
 
+// What the usage tool answers: the same shape duo's usage file has (percent used, reset as epoch
+// seconds, per window), or a plain sentence when the host has no reading.
+export const usageReport = (list: readonly Limit[]): string => {
+  const out: Record<string, { used_percentage: number; resets_at?: number }> = {}
+  for (const [kind] of WINDOWS) {
+    const l = list.find(x => x.kind === kind)
+    if (!l || !Number.isFinite(l.percentUsed)) continue
+    const ms = l.resetsAt ? Date.parse(l.resetsAt) : Number.NaN
+    out[kind] = { used_percentage: l.percentUsed, ...(Number.isFinite(ms) ? { resets_at: Math.floor(ms / 1000) } : {}) }
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : 'no reading: the host reports no usage windows (not a subscription, or no response yet)'
+}
+
 // The pane's own title already says "Agents": the header names the flow, if any.
 export const headerSvg = (W: number, title: string, t: ReturnType<typeof totals>, lim: readonly Limit[] = []): string => {
   const s = tr()
@@ -1579,6 +1593,13 @@ export const register: Register = (on, options) => {
       // In every agent's tool list, not behind ToolSearch: workers do not go looking for it.
       isDeferred: false,
     })
+    await $.tool.register({
+      name: 'usage',
+      description:
+        'The subscription usage right now: JSON with `five_hour` and `seven_day`, each `used_percentage` (0-100) and `resets_at` ' +
+        '(epoch seconds), or a sentence saying there is no reading. For the duo orchestrator: call before choosing tiers and before each dispatch.',
+      inputSchema: { type: 'object', properties: {} },
+    })
     await $.command.register({
       name: 'agents-info',
       description: 'Show or hide the panel of subagents: running, finished and planned, with model, context, cost and time',
@@ -1624,6 +1645,15 @@ export const register: Register = (on, options) => {
   })
 
   // A worker's own progress: the call runs in the worker's loop, so agentId names it.
+  on('tool.call', { tool: USAGE_TOOL }, async $ => {
+    try {
+      const u = await $.session.usage()
+      return { result: usageReport(u.rateLimits) }
+    } catch {
+      return { result: usageReport(await read($, limits)) }
+    }
+  })
+
   on('tool.call', { tool: STEP_TOOL }, async ($, e) => {
     const input = e as unknown as { done?: number; total?: number; note?: string; plan?: unknown }
     const agentId = e.agentId

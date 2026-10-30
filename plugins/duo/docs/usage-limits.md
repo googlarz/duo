@@ -2,6 +2,10 @@
 
 duo can check how much of your subscription window is used before spawning expensive workers, and notice when a limit was hit.
 
+## Easiest: the panel
+
+With the `duo-progress` plugin installed, the orchestrator reads usage live through the panel's `usage` tool (it asks Claude Code directly), in the terminal and in the desktop app. No setup. The rest of this page covers the status-line helper, which is the fallback without the panel.
+
 ## Files (contract)
 
 - `~/.claude/duo-usage.json`: `{"updated_at": <epoch s>, "five_hour": {"used_percentage": n, "resets_at": <epoch s>}, "seven_day": {...}}`. A window is omitted if absent.

@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { AgentRun } from '../types'
-import { headerSvg, limitTile, stepsDone } from './register'
+import { headerSvg, limitTile, stepsDone, usageReport } from './register'
 
 test('limitTile: both windows, label names them, value their rounded percentages', () => {
   expect(limitTile([{ kind: 'five_hour', percentUsed: 9.4 }, { kind: 'seven_day', percentUsed: 31 }])).toEqual({ label: '5h · 7d', value: '9% · 31%' })
@@ -42,4 +42,15 @@ test('header: with a reading the first tile is the limit; without, the cost', ()
   const without = headerSvg(320, '', totalsOf, [])
   expect(without).toContain('Cost')
   expect(without).toContain('≈$0.39')
+})
+
+test('usageReport: the usage file shape, reset in epoch seconds', () => {
+  const r = JSON.parse(usageReport([{ kind: 'five_hour', percentUsed: 11, resetsAt: '2026-10-30T12:00:00Z' }, { kind: 'seven_day', percentUsed: 32 }]))
+  expect(r.five_hour).toEqual({ used_percentage: 11, resets_at: Date.parse('2026-10-30T12:00:00Z') / 1000 })
+  expect(r.seven_day).toEqual({ used_percentage: 32 })
+})
+
+test('usageReport: no reading is a plain sentence, not JSON', () => {
+  expect(usageReport([])).toStartWith('no reading')
+  expect(usageReport([{ kind: 'spend_limit', percentUsed: 5 }])).toStartWith('no reading')
 })
