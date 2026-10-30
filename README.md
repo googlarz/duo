@@ -24,13 +24,42 @@ You describe the task. The AI creates the agents and picks the model for each st
 | 👁 **Visibility** | A live panel with **every agent**: its task, the **model and effort** it runs on, its steps, progress, tokens, cost and time. Open any task to see its steps. With big fan-outs of many agents it groups them by stage and shows the model mix, so it stays readable. Each stage gets its own animated pixel crab in a costume. |
 | 🧠 **The right model, automatically** | The AI picks the model for each stage and the effort for each task by itself, within built-in guardrails (an Opus budget, a cap on retries, a check when your limit runs low). Works out of the box; shape it with your own rules in `CLAUDE.md` if you want (see below). |
 
+## Try it
+
+Install duo and the panel:
+
+```
+/plugin marketplace add googlarz/duo
+/plugin install duo@duo
+/plugin install duo-progress@duo
+```
+
+Restart Claude Code, then give it a task:
+
+```
+/duo:duo add rate limiting to the upload endpoint and cover it with tests
+```
+
+duo plans, the AI spawns the agents and runs them, and at the end you get a report: what changed, what was verified, what was left out, and which models did the work. If the panel doesn't appear, load it by hand: `claude --plugin-dir ~/duo/plugins/duo-progress`.
+
+Then, once, turn on the usage guard (it asks before touching your settings):
+
+```
+/duo:setup
+```
+
+> Shorter command: try plain `/duo <task>`. If your version doesn't accept it, copy the skill once:
+> `git clone https://github.com/googlarz/duo.git ~/duo && cp -R ~/duo/plugins/duo/skills/duo ~/.claude/skills/`
+
+## How it works
+
 ### The right model at every stage, chosen automatically
 
 <p align="center">
   <img src="assets/duo-stages.svg" alt="The seven duo stages and the model used at each: explore on Haiku or Sonnet, plan on your session model, plan check on Opus, build on Sonnet from low to max effort, verify on Sonnet, review on Opus, last resort on Opus" width="100%">
 </p>
 
-Sonnet does the volume. Opus is a gate (a plan check and a review), not a worker. Small jobs skip the Opus stages.
+Sonnet does the volume. Opus is a gate (a plan check and a review), not a worker. Small jobs skip the Opus stages: up to 2 tasks skip both Opus calls, 3 to 4 low-risk tasks skip the plan check and keep one final review.
 
 ### What happens to every task
 
@@ -56,32 +85,11 @@ Every agent is a small animated pixel crab, and its costume tells you the job. T
   <img src="assets/duo-crabs.svg" alt="All the panel's crab costumes: fable, heavy, careful, medium, light, explore, wizard, monocle, detective, judge, hardhat, explorer, bulb, quill, crown, rocket, robot, scientist, artist, ninja, doctor, librarian, viking, cleaner, cyborg, thunder, fireninja, iceninja, and the plain crab" width="70%">
 </p>
 
-## Try it
-
-Install duo and the panel:
-
-```
-/plugin marketplace add googlarz/duo
-/plugin install duo@duo
-/plugin install duo-progress@duo
-```
-
-Restart Claude Code, then give it a task:
-
-```
-/duo:duo add rate limiting to the upload endpoint and cover it with tests
-```
-
-duo plans, the AI spawns the agents and runs them, and at the end you get a report: what changed, what was verified, what was left out, and which models did the work. If the panel doesn't appear, load it by hand: `claude --plugin-dir ~/duo/plugins/duo-progress`.
-
-> Shorter command: try plain `/duo <task>`. If your version doesn't accept it, copy the skill once:
-> `git clone https://github.com/googlarz/duo.git ~/duo && cp -R ~/duo/plugins/duo/skills/duo ~/.claude/skills/`
-
 ## Built-in guardrails for your usage limit (automatic)
 
 - **Opus budget:** one plan check and up to two reviews per run. Opus as a worker only with your consent.
 - **Effort ceiling:** tasks run at `high` at most; `xhigh` and `max` only after a failed attempt or when the cause is unclear.
-- **Limit-aware** *(optional, 2 min setup)*: at 80% used, duo skips the plan check and early review and caps workers at `medium`. At 95% it stops starting new work and reports where it stands, so you can continue after the reset. Setup: **[usage-limits guide](plugins/duo/docs/usage-limits.md)** (Pro/Max only; the plan reports usage only there).
+- **Limit-aware** *(one command: `/duo:setup`)*: at 80% used, duo skips the plan check and early review and caps workers at `medium`. At 95% it stops starting new work and reports where it stands, so you can continue after the reset. Manual steps and details: **[usage-limits guide](plugins/duo/docs/usage-limits.md)** (Pro/Max only; the plan reports usage only there).
 - **Your session model:** run duo from a Sonnet session. duo can't see which model your session runs, so tell it if it's Opus (then it reviews itself instead of calling a second Opus) or Haiku (then the plan check is mandatory).
 
 ## Make it yours: rules in CLAUDE.md
@@ -105,7 +113,7 @@ Also good to know:
 
 ## Questions
 
-**Do I have to create, configure or steer anything?** No. Claude creates the agents and chooses the models; you just watch. If you do want a say, use rules in `CLAUDE.md` (next section). duo ships ready-made roles (`duo-low` … `duo-max`, `duo-verifier`, `duo-advisor`, `duo-reviewer`, `duo-opus`), and the AI picks the right ones for each task.
+**Do I have to create, configure or steer anything?** No. Claude creates the agents and chooses the models; you just watch. If you do want a say, use rules in `CLAUDE.md` (see above). duo ships ready-made roles (`duo-low` … `duo-max`, `duo-verifier`, `duo-advisor`, `duo-reviewer`, `duo-opus`), and the AI picks the right ones for each task.
 
 **Will it burn my Opus limit?** That's what the rules prevent: one plan check and up to two reviews per run, none on small jobs.
 
@@ -116,6 +124,14 @@ Also good to know:
 **Does it change my files without asking?** The builder agents edit your project, as in any Claude Code run, and you see every change. The plan checker, reviewer and verifier have no Edit or Write tools (they keep a shell to run checks and are told not to change files).
 
 **Which Claude Code version?** Recent. duo uses subagents with per-agent model and effort. Effort `low` to `max` is available on Sonnet 5.5; on older Sonnets an unsupported level falls back to the closest lower one.
+
+## Honest status
+
+Verified: all plugins pass `claude plugin validate`; the panel's tests pass; the helper scripts ran against sample input; the effort levels and agent settings duo relies on were checked against the Claude Code docs.
+
+Not yet verified, because it needs a live session: the statusline helper in daily use, the rate-limit hook firing on a real limit, how the panel's details and grouped views look in the real app, and whether a bare `/duo` resolves on your version. The panel is built on Claude Code's early-access hooks and may change between releases. If something looks off, please open an issue with what you saw.
+
+New in 0.3.0: an offline selftest for the helper scripts (`plugins/duo/scripts/selftest.sh`, 13 checks, all passing).
 
 <details>
 <summary><b>Effort per task</b></summary>
@@ -132,26 +148,18 @@ Agents behind the stages: Explore subagent, the orchestrator (your session), `du
 
 </details>
 
-<details>
-<summary><b>Honest status</b></summary>
-
-Verified: all plugins pass `claude plugin validate`; the panel's tests pass; the helper scripts ran against sample input; the effort levels and agent settings duo relies on were checked against the Claude Code docs.
-
-Not yet verified, because it needs a live session: the statusline helper in daily use, the rate-limit hook firing on a real limit, how the panel's details and grouped views look in the real app, and whether a bare `/duo` resolves on your version. The panel is built on Claude Code's early-access hooks and may change between releases. If something looks off, please open an issue with what you saw.
-
-</details>
 
 <details>
 <summary><b>What's in this repo</b></summary>
 
 | Plugin | What it is |
 | --- | --- |
-| [duo](plugins/duo) | The rules and the agents: model per stage, effort per task, Opus budget, limit awareness |
-| [duo-progress](plugins/duo-progress) | The panel: every agent with its model, steps, cost; understands the duo tiers |
-| [duo-flow](plugins/duo-flow) | The original flow by JohnnyVizz (tiered Opus/Fable workers), for API-style budgets |
-| [session-band](plugins/session-band) | Band above the prompt: turn, speed, cost, cache countdown, context |
+| [duo](plugins/duo) · **start here** | The rules and the agents: model per stage, effort per task, Opus budget, limit awareness |
+| [duo-progress](plugins/duo-progress) · **recommended** | The panel: every agent with its model, steps, cost; understands the duo tiers |
+| [duo-flow](plugins/duo-flow) · optional | The original flow by JohnnyVizz (tiered Opus/Fable workers), for API-style budgets |
+| [session-band](plugins/session-band) · optional | Band above the prompt: turn, speed, cost, cache countdown, context |
 
-Develop: `claude plugin validate .` · `cd plugins/duo-progress && claude plugin test .` · `plugins/duo/scripts/gen-agents.sh` (regenerates duo's six worker agents from one shared body).
+Develop: `scripts/check-versions.sh` (run before pushing: a plugin change needs a version bump, or `update` will not see it) · `plugins/duo/scripts/selftest.sh` · `claude plugin validate .` · `cd plugins/duo-progress && claude plugin test .` · `plugins/duo/scripts/gen-agents.sh` (regenerates duo's six worker agents from one shared body).
 
 </details>
 

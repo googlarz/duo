@@ -30,7 +30,7 @@ Rules in the user's `CLAUDE.md` (global or project) and instructions in the task
 ## Usage limits
 
 - Baseline: before the first dispatch, and again whenever the user resumes after a stop, read `at` from `~/.claude/duo-limit-hit.json` if it exists (otherwise 0).
-- Before choosing tiers, and again before each dispatch, read `~/.claude/duo-usage.json` if it exists and `updated_at` (epoch s) is within 15 minutes: `{"updated_at", "five_hour": {"used_percentage", "resets_at"}, "seven_day": {...}}`, either window may be missing. Any window >= 80% (the cap): skip the plan gate and the early reviewer, cap workers at `medium`, keep the verifier and the single final reviewer. >= 95%: start no new tasks at all, report state. Missing or stale file: proceed, but say once in the plan and once in the final report that the usage guard is off (see docs/usage-limits.md).
+- Before choosing tiers, and again before each dispatch, read `~/.claude/duo-usage.json` if it exists and `updated_at` (epoch s) is within 15 minutes: `{"updated_at", "five_hour": {"used_percentage", "resets_at"}, "seven_day": {...}}`, either window may be missing. Any window >= 80% (the cap): skip the plan gate and the early reviewer, cap workers at `medium`, keep the verifier and the single final reviewer. >= 95%: start no new tasks at all, report state. Missing or stale file: proceed, but say once in the plan and once in the final report that the usage guard is off, and that `/duo:setup` turns it on (see docs/usage-limits.md).
 - Limit marker: `~/.claude/duo-limit-hit.json` (`{"at": epoch s, "session_id"}`) is a hint, written when a turn dies from a rate limit. Check it between dispatches. It counts only if its `at` is greater than the baseline, and is ignored when `five_hour.resets_at` from the usage file is already in the past. If it counts, stop dispatching and report: accepted tasks, finished-but-unreviewed tasks, pending tasks, so the user can resume. If your own turn died, the user simply says continue and the flow resumes from the report. Switching model does not help for session/weekly limits (shared across models); only for a model-specific Opus or Sonnet limit message.
 
 ## Opus budget
@@ -54,8 +54,9 @@ Per flow: the advisor at most once; the reviewer at most twice (one early, only 
 1. Read what is needed: relevant files, CLAUDE.md, recent history. Wide searches go to an Explore subagent.
 2. If the task touches visible design (UI, layout, copy, flow), the design decisions are yours (or the user's): write them into the brief as concrete specs, or show a mockup first. Workers never invent UI.
 3. Break the work into tasks, each with a self-contained brief (what, where, constraints, definition of done, how to verify), dependencies, a tier (section 2), and a risk mark where a defect would be costly.
-4. Present the plan compactly. Ask first only if a reading of the request would lead to materially different work.
+4. Present the plan compactly. End it with one cost line the user can read at a glance, no dollars: task count per tier and the Opus calls planned (for example "about 5 Sonnet tasks, 1 Opus check, 1 Opus review"). Ask first only if a reading of the request would lead to materially different work.
 5. Fast path: <= 2 tasks and none marked risky: skip advisor and reviewer, keep only the verifier (on Haiku the plan gate stays).
+6. Lite path: 3-4 tasks and none marked risky: skip the advisor, keep the verifier and the single final reviewer (on Haiku the plan gate stays).
 
 ## 2. Tiering (all Sonnet unless noted)
 
@@ -91,4 +92,4 @@ Max 2 attempts in total per task. On failure jump straight to the Sonnet tier th
 
 ## 6. Close
 
-Report: what changed and where, what was verified (verifier and reviewer outcomes), what was left out and why, follow-ups noticed but not touched. One line on which tiers ran, no per-task narration. Note when Opus was used beyond the two gates.
+Report in at most about 10 lines: what changed and where, what was verified (verifier and reviewer outcomes), what was left out and why, follow-ups noticed but not touched. One line on which tiers ran; per-task detail lives in the agents panel, so do not narrate it. Note when Opus was used beyond the two gates.

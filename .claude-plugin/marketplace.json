@@ -19,7 +19,7 @@
       "name": "duo",
       "source": "./plugins/duo",
       "description": "Skill: Sonnet works, Opus checks; a subscription-friendly flow aware of usage limits.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "category": "skill"
     },
     {
