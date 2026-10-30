@@ -1400,6 +1400,17 @@ export const layersOf = (rows: readonly TaskRow[]): number[] => {
 // yet, in plan order) and counts the rest.
 // A costume crab is up to 9 KB of drawing, a plain one under 1 KB: costumes up to FULL_CRABS cards.
 export const MAX_CARDS = 40
+// A title that does not fit on one line takes two, broken at a space; the second line is cut with an ellipsis.
+export const titleLines = (text: string, size: number, maxW: number): string[] => {
+  if (textWidth(text, size) <= maxW) return [text]
+  let first = ''
+  for (const w of text.split(' ')) {
+    const next = first ? `${first} ${w}` : w
+    if (textWidth(next, size) > maxW) break
+    first = next
+  }
+  return first ? [first, fitText(text.slice(first.length).trim(), size, maxW)] : [fitText(text, size, maxW)]
+}
 export const FULL_CRABS = 10
 export const planSvg = (W: number, all: readonly TaskRow[], at: number): { source: string; height: number } => {
   const s = tr()
@@ -1409,7 +1420,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
   const wide = W - GP * 2
   const compact = rows.length > 24
   const rich = rows.length <= FULL_CRABS
-  const ch = compact ? 46 : 58
+  const cardLabel = (r: TaskRow): string => `${r.n ? `${r.n}. ` : ''}${r.title}`
   const base = compact ? 100 : 150
   const layers = layersOf(rows)
   const widest = Math.max(1, ...[...new Set(layers)].map(l => layers.filter(x => x === l).length))
@@ -1417,6 +1428,9 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
   const cols = Math.min(perRow, widest)
   const cw = Math.min(260, Math.floor((wide - (cols - 1) * CARD_GAP) / cols))
   const depth = Math.max(0, ...layers)
+  // Cards are taller when some title needs two lines (decided from the titles, so it does not change while the job runs).
+  const two = !compact && rows.some(r => textWidth(cardLabel(r), 12) > cw - 50)
+  const ch = compact ? 46 : two ? 70 : 58
   const place = new Map<number, { x: number; y: number }>()
   let y = 6
   for (let l = 0; l <= depth; l++) {
@@ -1457,8 +1471,8 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     cards.push(`<g${dim}><rect class="tile" x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8"/>
 <rect x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8" fill="none" stroke="${edge}" stroke-width="${status === 'planned' ? 1 : 1.6}"${status === 'planned' ? ' stroke-dasharray="4 3"' : ''}/>
 ${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? (a ? agentCostume(a) : tier) : 'other', !a, status === 'running')}
-${T(W, 't', to.x + 44, to.y + (compact ? 19 : 22), 12, 600, fitText(`${r.n ? `${r.n}. ` : ''}${r.title}`, 12, Math.max(30, cw - 50)), 'start')}
-${T(W, 'm', to.x + 44, to.y + (compact ? 33 : 38), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50)), 'start')}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : 34)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
+${(compact ? [fitText(cardLabel(r), 12, Math.max(30, cw - 50))] : titleLines(cardLabel(r), 12, Math.max(30, cw - 50)).slice(0, 2)).map((line, k) => T(W, 't', to.x + 44, to.y + (compact ? 19 : 20) + k * 13, 12, 600, line, 'start')).join('')}
+${T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 50 : 38), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50)), 'start')}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : two ? 46 : 34)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
 <rect class="k" x="${mx(W, bx, bw)}" y="${to.y + ch - 7}" width="${bw}" height="3" rx="1.5"/><rect x="${mx(W, bx, Math.round(bw * pct))}" y="${to.y + ch - 7}" width="${Math.round(bw * pct)}" height="3" rx="1.5" fill="${edge}"/>
 ${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' : status, edge)}</g>`)
   })

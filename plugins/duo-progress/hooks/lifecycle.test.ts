@@ -102,7 +102,7 @@ test('isStalled: only a running agent with no sign of life past the threshold', 
 })
 
 // ---- needs attention ----
-import { layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf } from './register'
+import { layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
 
 const mk = (o: Partial<AgentRun>): AgentRun =>
   ({ id: 'x', type: 'general-purpose', description: 'Job', model: 'claude-sonnet-5-5', status: 'running', startedAt: 0, lastAt: 0, contextTokens: 0, contextMax: 1, tokens: 0, costUsd: 0, steps: 0, round: 1, ...o }) as AgentRun
@@ -162,6 +162,20 @@ test('planSvg: a failed card is red, a stalled one amber; text from an agent can
   expect(source).toContain('#E5484D')
   expect(source).toContain('#D4A24C')
   expect(source).not.toContain('<script>')
+})
+
+test('titleLines: a title that fits stays on one line, a long one breaks at a space, the second line is cut', () => {
+  expect(titleLines('Short title', 12, 300)).toEqual(['Short title'])
+  const two = titleLines('Translate every alt text and aria label on the German pages', 12, 120)
+  expect(two.length).toBe(2)
+  expect(two[0].endsWith(' ')).toBe(false)
+  expect(titleLines('Averyveryverylongwordwithoutanyspaces', 12, 60).length).toBe(1)
+})
+
+test('planSvg: when a title needs two lines every card gets taller, so the cards keep one size', () => {
+  const short = planSvg(300, taskRowsOf(null, [mk({ id: 'a', description: 'Map' })]), 5)
+  const long = planSvg(300, taskRowsOf(null, [mk({ id: 'a', description: 'Translate every alt text and aria label on the German pages' })]), 5)
+  expect(long.height).toBeGreaterThan(short.height)
 })
 
 test('planSvg: many agents without a plan wrap into a grid, smaller from twenty-five on', () => {
