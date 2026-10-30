@@ -20,7 +20,7 @@ test('implicit flow: agents started outside a duo flow get a bar that counts the
   await spawn($, 'a1')
   await spawn($, 'a2')
   const running = await row($)
-  expect(running).toContain('Agents')
+  expect(running).toContain('Job a1') // no plan was announced: the job is named after the first agent's task
   expect(running).toContain('Tasks 0/2')
 
   await $.turn.complete({ agentId: 'a1', reason: 'answer', answer: 'ok' } as never)
@@ -40,7 +40,7 @@ test('implicit flow: a finished flow of an earlier run is replaced when new agen
 
   await spawn($, 'b1')
   const next = await row($)
-  expect(next).toContain('Agents')
+  expect(next).toContain('Job b1')
   expect(next).not.toContain('Old duo run')
 })
 
@@ -52,5 +52,5 @@ test('implicit flow: a duo flow in progress is left alone', async ($, on) => {
   await spawn($, 'c1')
   const r = await row($)
   expect(r).toContain('Live duo run')
-  expect(r).not.toContain('Agents')
+  expect(r).not.toContain('Job c1')
 })

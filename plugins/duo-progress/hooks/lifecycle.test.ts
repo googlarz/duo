@@ -102,7 +102,7 @@ test('isStalled: only a running agent with no sign of life past the threshold', 
 })
 
 // ---- needs attention ----
-import { cardCostume, effortBars, shownTitle, layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
+import { cardCostume, effortBars, jobTitle, shownTitle, layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
 
 const mk = (o: Partial<AgentRun>): AgentRun =>
   ({ id: 'x', type: 'general-purpose', description: 'Job', model: 'claude-sonnet-5-5', status: 'running', startedAt: 0, lastAt: 0, contextTokens: 0, contextMax: 1, tokens: 0, costUsd: 0, steps: 0, round: 1, ...o }) as AgentRun
@@ -215,6 +215,15 @@ test('shownTitle: the orchestrator\'s name for the job, never the placeholder; t
   expect(shownTitle('duo-flow', 'WWW')).toBe('WWW')
   expect(shownTitle('', 'WWW')).toBe('WWW')
   expect(shownTitle('duo-flow', '')).toBe('')
+})
+
+test('jobTitle: a named flow keeps its name; one made for agents nobody planned takes the first agent\'s task', () => {
+  const planned = { title: 'Fix German metadata', isImplicit: false } as Parameters<typeof jobTitle>[0]
+  const implicit = { title: 'Agents', isImplicit: true } as Parameters<typeof jobTitle>[0]
+  expect(jobTitle(planned, [mk({ description: 'Other' })], 'WWW')).toBe('Fix German metadata')
+  expect(jobTitle(implicit, [mk({ description: 'Add expectedCount to bulk tools' }), mk({ description: 'Review' })], 'WWW')).toBe('Add expectedCount to bulk tools')
+  expect(jobTitle(implicit, [], 'WWW')).toBe('WWW')
+  expect(jobTitle(implicit, [mk({ description: 'x'.repeat(200) })], '').length).toBeLessThanOrEqual(80)
 })
 
 test('band: a flow nobody has named does not show the placeholder', async ($, on) => {

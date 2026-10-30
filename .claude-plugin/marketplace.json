@@ -19,14 +19,14 @@
       "name": "duo",
       "source": "./plugins/duo",
       "description": "Skill: Sonnet works, Opus checks; a subscription-friendly flow aware of usage limits.",
-      "version": "0.7.2",
+      "version": "0.8.0",
       "category": "skill"
     },
     {
       "name": "duo-progress",
       "source": "./plugins/duo-progress",
       "description": "Mod: live agents panel with animated costume crabs; groups big fan-outs by stage, shows the model behind every agent; made for duo, shows any subagents.",
-      "version": "1.28.0",
+      "version": "1.29.0",
       "category": "mod"
     },
     {

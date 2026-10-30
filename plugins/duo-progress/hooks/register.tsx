@@ -291,6 +291,11 @@ const DEFAULT_TITLE = 'duo-flow'
 // What the panel and the bar call the job: the orchestrator's name for it, or else the project folder.
 export const shownTitle = (title: string, project: string): string => (title && title !== DEFAULT_TITLE ? title : project)
 
+// What the panel and the bar call the job: a named flow, its name; a flow the panel made itself (no plan was announced),
+// the first agent's task; else the project folder.
+export const jobTitle = (f: Flow, list: readonly AgentRun[], project: string): string =>
+  f.isImplicit ? clip(list[0]?.description?.trim() ?? '', 80) || project : shownTitle(f.title, project)
+
 const blank = (): Flow => ({
   title: DEFAULT_TITLE,
   total: 0,
@@ -2139,7 +2144,7 @@ export const register: Register = (on, options) => {
     const five = runDelta(await read($, runBase), lim).find(d => d.short === '5h')
     const runUse = five && list.length > 0 && list.every(a => a.status !== 'running') ? `${s.thisRun}: ${five.pct > 0 ? fmtPct(five.pct) : '<1%'} 5h` : ''
     // The pane's title says "Agents"; inside, only the flow's own name.
-    const title = f && !f.isImplicit ? shownTitle(f.title, await projectName($)) : ''
+    const title = f ? jobTitle(f, list, await projectName($)) : ''
 
     // The grouped view has its own switch, closed by default: its point is to avoid the long list.
     const isGroupedView = p.view ? p.view === 'grouped' : isGrouped(list.length)
@@ -2363,7 +2368,7 @@ export const register: Register = (on, options) => {
     const crewLabel = `${crew} ${agentsWord(crew)}`
     const crewButton = <Button key="duo-agents" label={crewLabel} plain onPress={() => void togglePane($)} />
     // The job's name for the bar: never the placeholder.
-    const named = { ...f, title: shownTitle(f.title, await projectName($)) || tr().pane }
+    const named = { ...f, title: jobTitle(f, list, await projectName($)) || tr().pane }
     // The bar counts what the agents really did (the same as the panel), not only what the orchestrator reported.
     const rows = taskRowsOf(f, list)
     const live: Flow = list.length

@@ -53,3 +53,7 @@ Install instructions are in the [repository README](../../README.md).
 ## The job's name
 
 The name above the agents is the one the orchestrator gives the job (a few words about your task or project). If it gives none, the panel and the bar show the name of the folder you work in, never a placeholder.
+
+## Why a later agent is not on the panel yet
+
+The panel draws the agents that exist and the steps the orchestrator announced. An agent Claude starts later (a verifier after the worker finishes) cannot be shown before it exists, unless Claude announced the plan first with the `progress` tool (a `title`, and every step in `tasks` with `after`). Then the later steps are on the panel from the start as waiting cards. `/duo:duo` and `/duo-flow` do this; for any other delegation the `duo` plugin adds a short reminder to each session (a SessionStart hook), and you can say it once in your own `CLAUDE.md`: "When delegating to two or more subagents and `mcp__duo-progress__progress` is available, call it first with a `title` and every planned step in `tasks`." Without a plan the panel names the job after the first agent's task.

@@ -42,4 +42,8 @@ chk "refresh-helper updates copy"    'cmp -s "$here/usage-cache.sh" "$H/.claude/
 rm -f "$H/.claude/duo-usage-cache.sh"
 CLAUDE_PLUGIN_ROOT="$here/.." HOME=$H "$here/refresh-helper.sh"
 chk "refresh-helper skips without setup" '[ ! -e "$H/.claude/duo-usage-cache.sh" ]'
+out=$("$here/plan-reminder.sh"); rc=$?
+chk "plan-reminder exits 0"          '[ $rc -eq 0 ]'
+chk "plan-reminder is valid json"    'printf "%s" "$out" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d[\"hookSpecificOutput\"][\"hookEventName\"]==\"SessionStart\""'
+chk "plan-reminder names the tool"   'printf "%s" "$out" | grep -q "mcp__duo-progress__progress"'
 exit $fail
