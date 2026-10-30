@@ -1570,6 +1570,13 @@ async function autoOpen($: EngineInterface, key: string): Promise<void> {
 }
 
 // The host's reading now, else the last one the panel saw.
+// What a render shows: the host's reading now, else the last one the panel kept (nothing is stale
+// longer than the next response).
+async function freshLimits($: EngineInterface): Promise<Limit[]> {
+  const reading = await currentLimits($)
+  return reading.length ? reading : read($, limits)
+}
+
 async function currentLimits($: EngineInterface): Promise<Limit[]> {
   try {
     const u = await $.session.usage()
@@ -1577,6 +1584,33 @@ async function currentLimits($: EngineInterface): Promise<Limit[]> {
   } catch {
     return read($, limits)
   }
+}
+
+// The panel's own flow for agents started outside a duo flow, so the bar above the prompt follows
+// them: it counts the agents spawned since it began, and finishes when none runs.
+async function syncImplicit($: EngineInterface): Promise<void> {
+  const f = await read($, flow)
+  if (!f?.isImplicit) return
+  const mine = (await read($, agents)).slice(f.skip ?? 0)
+  const running = mine.filter(a => a.status === 'running').length
+  const total = mine.length
+  const isFinished = running === 0 && total > 0
+  await update($, flow, p => (p?.isImplicit ? { ...p, total, done: total - running, running, isFinished, phase: isFinished ? 'close' : 'delegate' } : p))
+  try {
+    $.ui.invalidate('ui.render')
+  } catch {}
+}
+
+// No duo flow is running and an agent started anyway: the bar follows these agents too, from `before`.
+async function ensureImplicit($: EngineInterface, before: number): Promise<void> {
+  const prev = await read($, flow)
+  if (prev && !prev.isFinished && !prev.isImplicit) return
+  const skip = prev?.isImplicit ? (prev.skip ?? 0) : before
+  if (!prev?.isImplicit) {
+    const base = baseOf(await currentLimits($))
+    await update($, runBase, () => base)
+  }
+  await update($, flow, () => ({ ...blank(), title: 'Agents', phase: 'delegate', isImplicit: true, skip }))
 }
 
 export const register: Register = (on, options) => {
@@ -1751,6 +1785,7 @@ export const register: Register = (on, options) => {
     if (started.deny !== undefined) return started
 
     const at = await $.clock.now()
+    const before = (await read($, agents)).length
     await update($, agents, list => {
       const round = 1 + list.filter(a => norm(a.description) === norm(e.description) && e.description).length
       const run: AgentRun = {
@@ -1771,6 +1806,8 @@ export const register: Register = (on, options) => {
       return [...list.filter(a => a.id !== run.id), run].slice(-200)
     })
     await update($, now, () => at)
+    if (!isPipelineAgent(e.subagentType)) await ensureImplicit($, before)
+    await syncImplicit($)
     if (isPipelineAgent(e.subagentType)) {
       const f = await read($, flow)
       await autoOpen($, f && !f.isFinished ? f.title : 'duo-flow')
@@ -1846,6 +1883,7 @@ export const register: Register = (on, options) => {
         }),
       )
       await update($, now, () => at)
+      await syncImplicit($)
     }
     return next(e)
   })
@@ -1863,7 +1901,7 @@ export const register: Register = (on, options) => {
     const finished = list.filter(a => a.status !== 'running').reverse()
     const planned = plannedOf(f, list)
     const t = totals(list, at)
-    const lim = await read($, limits)
+    const lim = await freshLimits($)
     // The pane's title says "Agents"; inside, only the flow's own name.
     const title = f && !f.isFinished ? f.title : ''
 
@@ -2156,7 +2194,7 @@ export const register: Register = (on, options) => {
     const crewLabel = `${crew} ${agentsWord(crew)}`
     const crewButton = <Button key="duo-agents" label={crewLabel} plain onPress={() => void togglePane($)} />
     const percent = `${Math.round(ratio(f) * 100)}%`
-    const usage = usageShort(await read($, limits), f.isFinished ? await read($, runBase) : null)
+    const usage = usageShort(await freshLimits($), f.isFinished ? await read($, runBase) : null)
     const dismiss = (
       <Button
         key="savvy-dismiss"

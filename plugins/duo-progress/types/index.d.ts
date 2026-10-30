@@ -14,6 +14,10 @@ export type Flow = {
   phase: Phase
   isFinished: boolean
   tasks: PlannedTask[]
+  // A flow the panel made itself for agents started outside a duo flow: it counts them.
+  isImplicit?: boolean
+  // How many agents were listed before it began; it counts the ones after.
+  skip?: number
 }
 
 export type AgentStatus = 'running' | 'done' | 'failed'
