@@ -1,7 +1,7 @@
 # duo: see every AI agent Claude spawns for you
 
 <p align="center">
-  <img src="assets/duo-panel-real.png" alt="The agents panel after a real duo run: a Usage tile showing 12% of the 5-hour window and 32% of the weekly window, each task with the model and effort that ran it, and a Details view listing the steps the agent planned with the ones done" width="592">
+  <img src="assets/duo-panel-real.png" alt="The agents panel with ten agents: the Usage tile shows 6% of the 5-hour window and 35% of the weekly window with a countdown to the reset, then tokens and time; below, the model mix and one row per stage (scan, map, truth, wait), all done" width="691">
 </p>
 
 On a big job, Claude Code starts helper agents by itself. By default you can't see what they are doing, which model each one runs on, or what they cost you. **duo shows every one of them live**: its task, model, effort, steps and tokens, plus how much of your usage limit you have used. You don't create or steer the agents; you watch.
