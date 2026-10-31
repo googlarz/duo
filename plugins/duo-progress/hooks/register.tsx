@@ -78,7 +78,6 @@ const STRINGS = {
     sameFile: 'same file written',
     loopHint: 'The same call keeps failing or the same file keeps being rewritten: worth a look, not proof of a loop',
     collision: 'Two agents touched the same file',
-    openAgent: 'Open',
     tokens: 'Tokens',
     time: 'Time',
     running: 'Running',
@@ -144,7 +143,6 @@ const STRINGS = {
     sameFile: 'один файл переписан',
     loopHint: 'Один и тот же вызов снова падает или один файл переписывают снова и снова: стоит проверить, но это не доказательство цикла',
     collision: 'Два агента трогали один файл',
-    openAgent: 'Открыть',
     tokens: 'Токены',
     time: 'Время',
     running: 'Работают',
@@ -210,7 +208,6 @@ const STRINGS = {
     sameFile: 'אותו קובץ נכתב',
     loopHint: 'אותה קריאה נכשלת שוב או אותו קובץ נכתב מחדש: שווה לבדוק, לא הוכחה ללולאה',
     collision: 'שני סוכנים נגעו באותו קובץ',
-    openAgent: 'פתח',
     tokens: 'טוקנים',
     time: 'זמן',
     running: 'פועלים',
@@ -1509,7 +1506,6 @@ export const layersOf = (rows: readonly TaskRow[]): number[] => {
 // yet, in plan order) and counts the rest.
 // A costume crab is up to 9 KB of drawing, a plain one under 1 KB: costumes up to FULL_CRABS cards.
 export const MAX_CARDS = 40
-const MAX_OPEN_BUTTONS = 12
 // A title that does not fit on one line takes two, broken at a space; the second line is cut with an ellipsis.
 export const titleLines = (text: string, size: number, maxW: number): string[] => {
   if (textWidth(text, size) <= maxW) return [text]
@@ -1607,12 +1603,11 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
       return `<g><title>${xml(s.pulse)}</title><path class="k" d="${off.join('')}"/><path fill="${edge}" d="${on.join('')}"/></g>`
     })()
     const sparkW = spark ? 56 : 0
-    const loopFull = loop ? `${s.looping} ${loop.kind === 'failed' ? s.sameFailed : s.sameFile} ×${loop.n}` : ''
-    const loopText = fitText(loopFull, 10, Math.max(40, cw - 50 - sparkW - 18))
-    const loopW = Math.round(textWidth(loopText, 10) * 1.12 + 16)
-    const subSvg = loop
-      ? `<g><title>${xml(s.loopHint)}</title><rect x="${mx(W, to.x + 44, loopW)}" y="${to.y + (compact ? 22 : two ? 38 : 25)}" width="${loopW}" height="14" rx="7" fill="${C_CHECK}"/>${T(W, 't', to.x + 50, to.y + (compact ? 32 : two ? 48 : 35), 10, 700, loopText, 'start', ' style="fill:#1f1f1f"')}</g>`
-      : T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50 - sparkW)), 'start')
+    const subSvg = T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50 - sparkW)), 'start')
+    // A card that may be looping gets an amber mark under its crab; the words are in its hover text.
+    const loopMark = loop && !compact
+      ? `<g><title>${xml(`${s.looping} ${loop.kind === 'failed' ? s.sameFailed : s.sameFile} ×${loop.n}. ${s.loopHint}`)}</title><circle cx="${mx(W, to.x + 22, 0)}" cy="${to.y + ch - 12}" r="7" fill="${C_CHECK}"/>${T(W, 't', to.x + 17.5, to.y + ch - 8.5, 11, 800, '↻', 'start', ' style="fill:#1f1f1f"')}</g>`
+      : ''
     const pct = !a ? 0 : a.status === 'done' ? 1 : a.status === 'failed' ? 1 : (progressOf(a) ?? 0)
     const bx = to.x + 8
     const bw = cw - 16
@@ -1624,7 +1619,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
 <rect x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8" fill="none" stroke="${edge}" stroke-width="${status === 'planned' ? 1 : 1.6}"${status === 'planned' ? ' stroke-dasharray="4 3"' : ''}/>
 ${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? cardCostume(r.title, a ? a.type : r.tier, a ? costumeOf(a.type) : tier) : 'other', !a, status === 'running').replaceAll('#D97757', CRAB_TINTS[i % CRAB_TINTS.length])}
 ${(compact ? [fitText(cardLabel(r), 12, Math.max(30, cw - 64))] : titleLines(cardLabel(r), 12, Math.max(30, cw - 64)).slice(0, 2)).map((line, k) => T(W, 't', to.x + 44, to.y + (compact ? 19 : 20) + k * 13, 12, 600, line, 'start')).join('')}
-${subSvg}${spark}${model}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : two ? 44 : 31)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
+${subSvg}${spark}${model}${loopMark}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : two ? 44 : 31)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
 <rect class="k" x="${mx(W, bx, bw)}" y="${to.y + ch - 7}" width="${bw}" height="3" rx="1.5"/><rect x="${mx(W, bx, Math.round(bw * pct))}" y="${to.y + ch - 7}" width="${Math.round(bw * pct)}" height="3" rx="1.5" fill="${edge}"/>
 ${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' : status, edge)}${clashDot}</g>`)
   })
@@ -2314,9 +2309,7 @@ export const register: Register = (on, options) => {
       // The plan and the work as one picture: a card per task with arrows from what it waits for.
       const top = statusSvg(W, list, at, title, taskRows.length, lim, nowMs, runUse)
       const plan = taskRows.length ? planSvg(W, taskRows, at) : null
-      // A button per started agent that opens its conversation in the main view (the card is a picture, so it cannot be pressed).
-      const openRows = taskRows.filter(r => r.a?.agentId).slice(0, MAX_OPEN_BUTTONS)
-      const gridH = top.height + (isEmpty ? LINE_H : 0) + (plan?.height ?? 0) + (openRows.length ? LINE_H * (1 + Math.ceil(openRows.length / 3)) : 0)
+      const gridH = top.height + (isEmpty ? LINE_H : 0) + (plan?.height ?? 0)
       return (
         <Box flexDirection="column">
           {/* The grid sizes the pane; the content is placed over it, as an
@@ -2334,24 +2327,6 @@ export const register: Register = (on, options) => {
                 width={W}
                 height={plan.height}
               />
-            )}
-            {openRows.length > 0 && (
-              <Box flexDirection="row" flexWrap="wrap" columnGap={1} alignItems="center">
-                <Text dimColor>{s.openAgent}</Text>
-                {openRows.map(r => (
-                  <Button
-                    key={`view-${r.a?.id}`}
-                    label={`${r.n ? `${r.n}. ` : ''}${clip(r.title, 16)}`}
-                    plain
-                    onPress={async () => {
-                      try {
-                        const shown = await $.ui.view({ agentId: r.a?.agentId })
-                        if (shown.deny) void $.ui.toast(shown.deny)
-                      } catch {}
-                    }}
-                  />
-                ))}
-              </Box>
             )}
           </Box>
         </Box>

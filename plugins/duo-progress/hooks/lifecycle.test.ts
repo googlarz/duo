@@ -334,8 +334,9 @@ test('planSvg: a looping badge, a collision line and mark, and a pulse on the wo
   const a = mk({ id: 'a', description: 'Fixer', files: ['/p/build.js'], ticks: [4000, 4500], calls: [{ s: 'Bash:x', x: true }, { s: 'Bash:x', x: true }, { s: 'Bash:x', x: true }], lastAt: 5000 })
   const b = mk({ id: 'b', description: 'Other', files: ['/p/build.js'], lastAt: 5000 })
   const { source } = planSvg(900, taskRowsOf(null, [a, b]), 5000)
-  expect(source).toContain('looping? same call failed ×3')
-  expect(planSvg(300, taskRowsOf(null, [a]), 5000).source).toContain('looping?') // clipped on a narrow card, still there
+  expect(source).toContain('looping? same call failed ×3.') // in the hover text of the amber mark under the crab
+  expect(source).toContain('↻')
+  expect(planSvg(300, taskRowsOf(null, [a]), 5000).source).toContain('looping?')
   expect(source).toContain('stroke-dasharray="5 4"') // the collision line
   expect(source).toContain('Two agents touched the same file: build.js')
   expect(source).toContain('Calls in the last 5 minutes')
