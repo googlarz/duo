@@ -56,6 +56,10 @@ export type AgentRun = {
   action?: string
   /** Files the agent edited or wrote, as given. */
   files?: string[]
+  /** When the agent last made a tool call or a model request, newest last (recent minutes only): the pulse on its card. */
+  ticks?: number[]
+  /** The last tool calls as a signature and whether the call failed, newest last: what the looping badge reads. No command text is kept. */
+  calls?: { s: string; x?: boolean }[]
   /** The start of the agent's final answer. */
   result?: string
   /** For a checker or reviewer: whether its answer opens with PASS or FAIL. */

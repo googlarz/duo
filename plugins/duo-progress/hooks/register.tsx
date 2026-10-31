@@ -72,6 +72,13 @@ const STRINGS = {
     pane: 'Agents',
     cost: 'Cost',
     limit: 'Usage',
+    pulse: 'Calls in the last 5 minutes, a bar per half minute',
+    looping: 'looping?',
+    sameFailed: 'same call failed',
+    sameFile: 'same file written',
+    loopHint: 'The same call keeps failing or the same file keeps being rewritten: worth a look, not proof of a loop',
+    collision: 'Two agents touched the same file',
+    openAgent: 'Open',
     tokens: 'Tokens',
     time: 'Time',
     running: 'Running',
@@ -131,6 +138,13 @@ const STRINGS = {
     pane: 'Агенты',
     cost: 'Стоимость',
     limit: 'Расход',
+    pulse: 'Вызовы за последние 5 минут, столбик на полминуты',
+    looping: 'зацикливание?',
+    sameFailed: 'один вызов не удался',
+    sameFile: 'один файл переписан',
+    loopHint: 'Один и тот же вызов снова падает или один файл переписывают снова и снова: стоит проверить, но это не доказательство цикла',
+    collision: 'Два агента трогали один файл',
+    openAgent: 'Открыть',
     tokens: 'Токены',
     time: 'Время',
     running: 'Работают',
@@ -190,6 +204,13 @@ const STRINGS = {
     pane: 'סוכנים',
     cost: 'עלות',
     limit: 'שימוש',
+    pulse: 'קריאות ב-5 הדקות האחרונות, עמודה לכל חצי דקה',
+    looping: 'לולאה?',
+    sameFailed: 'אותה קריאה נכשלה',
+    sameFile: 'אותו קובץ נכתב',
+    loopHint: 'אותה קריאה נכשלת שוב או אותו קובץ נכתב מחדש: שווה לבדוק, לא הוכחה ללולאה',
+    collision: 'שני סוכנים נגעו באותו קובץ',
+    openAgent: 'פתח',
     tokens: 'טוקנים',
     time: 'זמן',
     running: 'פועלים',
@@ -1285,6 +1306,65 @@ export const describeAction = (tool: string, input: Record<string, unknown>): st
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
 
+// --- what an agent is doing, from its tool calls: the pulse, the looping badge, files two agents both touch.
+
+const TICK_SPAN = 10 * 60_000
+const MAX_TICKS = 150
+const MAX_CALLS = 12
+export const pushTick = (ticks: readonly number[] | undefined, at: number): number[] => [...(ticks ?? []).filter(t => at - t <= TICK_SPAN), at].slice(-MAX_TICKS)
+
+// One call as a short signature: the tool and the file it works on, or a hash of the command (the command itself is not kept).
+export const signatureOf = (tool: string, input: Record<string, unknown>): string => {
+  const str = (k: string): string => (typeof input[k] === 'string' ? (input[k] as string) : '')
+  const target = str('file_path') || str('path') || str('command') || str('pattern') || str('url')
+  let h = 5381
+  for (let i = 0; i < target.length; i++) h = ((h * 33) ^ target.charCodeAt(i)) >>> 0
+  return `${tool}:${h.toString(36)}`
+}
+export const pushCall = (calls: readonly { s: string; x?: boolean }[] | undefined, s: string, x: boolean): { s: string; x?: boolean }[] =>
+  [...(calls ?? []), x ? { s, x } : { s }].slice(-MAX_CALLS)
+
+// The same call failing three times running, or the same file written five times: worth a look, not proof of a loop.
+export type Loop = { kind: 'failed' | 'edits'; n: number }
+export const loopOf = (a: AgentRun): Loop | null => {
+  if (a.status !== 'running') return null
+  const calls = a.calls ?? []
+  const count = (pred: (c: { s: string; x?: boolean }) => boolean, from: number): Map<string, number> => {
+    const m = new Map<string, number>()
+    for (const c of calls.slice(-from)) if (pred(c)) m.set(c.s, (m.get(c.s) ?? 0) + 1)
+    return m
+  }
+  const failed = Math.max(0, ...count(c => !!c.x, 6).values())
+  if (failed >= 3) return { kind: 'failed', n: failed }
+  const edits = Math.max(0, ...count(c => EDIT_TOOLS.has(c.s.split(':')[0]), MAX_CALLS).values())
+  return edits >= 5 ? { kind: 'edits', n: edits } : null
+}
+
+// Activity per slice of time, oldest first, ending at `at`: how many calls fell in each.
+export const pulseOf = (ticks: readonly number[] | undefined, at: number, slices = 10, span = 30_000): number[] => {
+  const out = Array<number>(slices).fill(0)
+  for (const t of ticks ?? []) {
+    const back = Math.max(0, Math.floor((at - t) / span)) // a tick a moment ahead of the clock still counts as now
+    if (back < slices) out[slices - 1 - back] += 1
+  }
+  return out
+}
+
+// Two agents that have touched the same file while at least one is still working: they may undo each other.
+export type Collision = { a: AgentRun; b: AgentRun; file: string }
+export const collisionsOf = (list: readonly AgentRun[]): Collision[] => {
+  const out: Collision[] = []
+  for (let i = 0; i < list.length; i++)
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i]
+      const b = list[j]
+      if (a.status !== 'running' && b.status !== 'running') continue
+      const file = (a.files ?? []).find(f => (b.files ?? []).includes(f))
+      if (file) out.push({ a, b, file })
+    }
+  return out
+}
+
 // The last line that opens with PASS or FAIL wins, so an agent that corrects itself is read by its final word.
 export const verdictOf = (answer: unknown): 'pass' | 'fail' | undefined => {
   if (typeof answer !== 'string') return undefined
@@ -1429,6 +1509,7 @@ export const layersOf = (rows: readonly TaskRow[]): number[] => {
 // yet, in plan order) and counts the rest.
 // A costume crab is up to 9 KB of drawing, a plain one under 1 KB: costumes up to FULL_CRABS cards.
 export const MAX_CARDS = 40
+const MAX_OPEN_BUTTONS = 12
 // A title that does not fit on one line takes two, broken at a space; the second line is cut with an ellipsis.
 export const titleLines = (text: string, size: number, maxW: number): string[] => {
   if (textWidth(text, size) <= maxW) return [text]
@@ -1440,7 +1521,7 @@ export const titleLines = (text: string, size: number, maxW: number): string[] =
   }
   return first ? [first, fitText(text.slice(first.length).trim(), size, maxW)] : [fitText(text, size, maxW)]
 }
-export const FULL_CRABS = 10
+export const FULL_CRABS = 9
 export const planSvg = (W: number, all: readonly TaskRow[], at: number): { source: string; height: number } => {
   const s = tr()
   const keep = all.length <= MAX_CARDS ? null : new Set([...all.keys()].sort((x, y) => Number(all[x].a?.status === 'done') - Number(all[y].a?.status === 'done') || x - y).slice(0, MAX_CARDS))
@@ -1471,6 +1552,18 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
   const height = Math.ceil(y - LAYER_GAP + 10) + (omitted ? 22 : 0)
   const edges: string[] = []
   const cards: string[] = []
+  // Files two working agents both touched: a red dashed line between their cards and a mark on each.
+  const hits = new Map<number, string[]>()
+  for (const c of collisionsOf(rows.flatMap(r => (r.a ? [r.a] : []))).slice(0, 10)) {
+    const ia = rows.findIndex(r => r.a?.id === c.a.id)
+    const ib = rows.findIndex(r => r.a?.id === c.b.id)
+    const pa = place.get(ia)
+    const pb = place.get(ib)
+    if (!pa || !pb) continue
+    hits.set(ia, [...(hits.get(ia) ?? []), c.file])
+    hits.set(ib, [...(hits.get(ib) ?? []), c.file])
+    edges.push(`<line x1="${mx(W, pa.x + cw / 2)}" y1="${pa.y + ch / 2}" x2="${mx(W, pb.x + cw / 2)}" y2="${pb.y + ch / 2}" stroke="${C_FAIL}" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.85"/>`)
+  }
   rows.forEach((r, i) => {
     const to = place.get(i)
     if (!to) return
@@ -1493,6 +1586,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const status = !a ? 'planned' : isQuiet ? 'stalled' : a.status
     const edge = status === 'failed' ? C_FAIL : status === 'running' ? C_RUN : status === 'stalled' ? C_CHECK : status === 'done' ? C_DONE : '#9a9a96'
     const pips = a && a.status === 'running' && a.stepTotal && a.stepTotal <= 10 ? a.stepTotal : 0
+    const loop = a ? loopOf(a) : null
     const sub = pips ? '' : !a ? tierWord(tier) : a.status === 'failed' ? (a.result ? `${s.failed} · ${a.result}` : s.failed) : isQuiet ? `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : a.status === 'running' ? (a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : (a.action ?? fmtTime(elapsed(a, at)))) : fmtTime(elapsed(a, at))
     // Which model does the task: the one that ran it, or the one it is planned for. A dot in its colour; the name when there is room.
     const modelText = a ? runModel(a) : tierModel(tier)
@@ -1500,17 +1594,39 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const model = compact
       ? `<circle cx="${mx(W, to.x + cw - 12, 0)}" cy="${to.y + ch - 15}" r="3.5" fill="${dotColor}"/>`
       : `<circle cx="${mx(W, to.x + 48, 0)}" cy="${to.y + (two ? 60 : 47)}" r="3.5" fill="${dotColor}"/>${T(W, 'm', to.x + 57, to.y + (two ? 64 : 51), 10.5, 500, fitText(modelText, 10.5, Math.max(30, cw - 63 - 30)), 'start')}${effortBars(to.x + cw - 12 - 22, to.y + (two ? 65 : 52), a ? a.effort : TIER_MODEL[tier]?.[1], dotColor, W)}`
+    // The pulse: calls in the last five minutes, a bar per half minute; a flat line says nothing is happening.
+    const spark = (() => {
+      if (!a || a.status !== 'running' || compact) return ''
+      const base = to.y + (two ? 49 : 36)
+      const on: string[] = []
+      const off: string[] = []
+      pulseOf(a.ticks, at).forEach((n, k) => {
+        const h = n ? Math.min(10, 3 + n * 2.5) : 1.5
+        ;(n ? on : off).push(`M${mx(W, to.x + cw - 64 + k * 5, 3)} ${base - h}h3v${h}h-3z`)
+      })
+      return `<g><title>${xml(s.pulse)}</title><path class="k" d="${off.join('')}"/><path fill="${edge}" d="${on.join('')}"/></g>`
+    })()
+    const sparkW = spark ? 56 : 0
+    const loopFull = loop ? `${s.looping} ${loop.kind === 'failed' ? s.sameFailed : s.sameFile} ×${loop.n}` : ''
+    const loopText = fitText(loopFull, 10, Math.max(40, cw - 50 - sparkW - 18))
+    const loopW = Math.round(textWidth(loopText, 10) * 1.12 + 16)
+    const subSvg = loop
+      ? `<g><title>${xml(s.loopHint)}</title><rect x="${mx(W, to.x + 44, loopW)}" y="${to.y + (compact ? 22 : two ? 38 : 25)}" width="${loopW}" height="14" rx="7" fill="${C_CHECK}"/>${T(W, 't', to.x + 50, to.y + (compact ? 32 : two ? 48 : 35), 10, 700, loopText, 'start', ' style="fill:#1f1f1f"')}</g>`
+      : T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50 - sparkW)), 'start')
     const pct = !a ? 0 : a.status === 'done' ? 1 : a.status === 'failed' ? 1 : (progressOf(a) ?? 0)
     const bx = to.x + 8
     const bw = cw - 16
     const dim = status === 'planned' ? ' opacity="0.7"' : ''
-    cards.push(`<g${dim}><rect class="tile" x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8"/>
+    const clash = hits.get(i)
+    const clashTitle = clash ? `<title>${xml(`${s.collision}: ${[...new Set(clash)].map(f => baseName(f)).join(', ')}`)}</title>` : ''
+    const clashDot = clash ? `<circle cx="${mx(W, to.x + 8, 0)}" cy="${to.y + 8}" r="6" fill="${C_FAIL}"/>${T(W, 't', to.x + 5.5, to.y + 11.5, 9, 800, '!', 'start', ' style="fill:#fff"')}` : ''
+    cards.push(`<g${dim}>${clashTitle}<rect class="tile" x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8"/>
 <rect x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8" fill="none" stroke="${edge}" stroke-width="${status === 'planned' ? 1 : 1.6}"${status === 'planned' ? ' stroke-dasharray="4 3"' : ''}/>
 ${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? cardCostume(r.title, a ? a.type : r.tier, a ? costumeOf(a.type) : tier) : 'other', !a, status === 'running').replaceAll('#D97757', CRAB_TINTS[i % CRAB_TINTS.length])}
 ${(compact ? [fitText(cardLabel(r), 12, Math.max(30, cw - 64))] : titleLines(cardLabel(r), 12, Math.max(30, cw - 64)).slice(0, 2)).map((line, k) => T(W, 't', to.x + 44, to.y + (compact ? 19 : 20) + k * 13, 12, 600, line, 'start')).join('')}
-${T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50)), 'start')}${model}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : two ? 44 : 31)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
+${subSvg}${spark}${model}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : two ? 44 : 31)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
 <rect class="k" x="${mx(W, bx, bw)}" y="${to.y + ch - 7}" width="${bw}" height="3" rx="1.5"/><rect x="${mx(W, bx, Math.round(bw * pct))}" y="${to.y + ch - 7}" width="${Math.round(bw * pct)}" height="3" rx="1.5" fill="${edge}"/>
-${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' : status, edge)}</g>`)
+${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' : status, edge)}${clashDot}</g>`)
   })
   const more = omitted ? T(W, 's', GP, height - 8, 12, 400, `+${omitted} ${agentsWord(omitted)}`, 'start') : ''
   return { source: svg(W, height, `${edges.join('')}${cards.join('\n')}${more}`), height }
@@ -1945,6 +2061,7 @@ export const register: Register = (on, options) => {
                   ...a,
                   lastAt: at,
                   busy: true,
+                  ticks: pushTick(a.ticks, at),
                   action: describeAction(tool, input),
                   files: path && !(a.files ?? []).includes(path) ? [...(a.files ?? []), path].slice(0, MAX_FILES) : a.files,
                 },
@@ -1952,15 +2069,19 @@ export const register: Register = (on, options) => {
         )
       }
     } catch {}
+    let failed = false
     try {
-      return await next(e)
+      const result = await next(e)
+      failed = !!(result as { isError?: boolean } | undefined)?.isError
+      return result
     } finally {
       // The call is over: the clock for "no sign of life" starts again from now.
       const agentId = (e as { agentId?: string }).agentId
       if (agentId) {
         try {
           const done = await $.clock.now()
-          await update($, agents, list => list.map(a => (a.agentId === agentId ? { ...a, busy: false, lastAt: done } : a)))
+          const sig = signatureOf(String((e as unknown as { tool?: string }).tool ?? ''), e as unknown as Record<string, unknown>)
+          await update($, agents, list => list.map(a => (a.agentId === agentId ? { ...a, busy: false, lastAt: done, calls: pushCall(a.calls, sig, failed) } : a)))
         } catch {}
       }
     }
@@ -2063,6 +2184,7 @@ export const register: Register = (on, options) => {
           : {
               ...a,
               lastAt: stepAt || a.lastAt,
+              ticks: stepAt ? pushTick(a.ticks, stepAt) : a.ticks,
               model,
               effort: typeof e.effort === 'string' ? e.effort : a.effort,
               status: 'running',
@@ -2192,7 +2314,9 @@ export const register: Register = (on, options) => {
       // The plan and the work as one picture: a card per task with arrows from what it waits for.
       const top = statusSvg(W, list, at, title, taskRows.length, lim, nowMs, runUse)
       const plan = taskRows.length ? planSvg(W, taskRows, at) : null
-      const gridH = top.height + (isEmpty ? LINE_H : 0) + (plan?.height ?? 0)
+      // A button per started agent that opens its conversation in the main view (the card is a picture, so it cannot be pressed).
+      const openRows = taskRows.filter(r => r.a?.agentId).slice(0, MAX_OPEN_BUTTONS)
+      const gridH = top.height + (isEmpty ? LINE_H : 0) + (plan?.height ?? 0) + (openRows.length ? LINE_H * (1 + Math.ceil(openRows.length / 3)) : 0)
       return (
         <Box flexDirection="column">
           {/* The grid sizes the pane; the content is placed over it, as an
@@ -2210,6 +2334,24 @@ export const register: Register = (on, options) => {
                 width={W}
                 height={plan.height}
               />
+            )}
+            {openRows.length > 0 && (
+              <Box flexDirection="row" flexWrap="wrap" columnGap={1} alignItems="center">
+                <Text dimColor>{s.openAgent}</Text>
+                {openRows.map(r => (
+                  <Button
+                    key={`view-${r.a?.id}`}
+                    label={`${r.n ? `${r.n}. ` : ''}${clip(r.title, 16)}`}
+                    plain
+                    onPress={async () => {
+                      try {
+                        const shown = await $.ui.view({ agentId: r.a?.agentId })
+                        if (shown.deny) void $.ui.toast(shown.deny)
+                      } catch {}
+                    }}
+                  />
+                ))}
+              </Box>
             )}
           </Box>
         </Box>

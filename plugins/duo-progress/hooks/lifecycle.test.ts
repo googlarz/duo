@@ -102,7 +102,7 @@ test('isStalled: only a running agent with no sign of life past the threshold', 
 })
 
 // ---- needs attention ----
-import { cardCostume, effortBars, jobTitle, shownTitle, layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
+import { cardCostume, collisionsOf, effortBars, jobTitle, loopOf, pulseOf, pushCall, pushTick, shownTitle, signatureOf, layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
 
 const mk = (o: Partial<AgentRun>): AgentRun =>
   ({ id: 'x', type: 'general-purpose', description: 'Job', model: 'claude-sonnet-5-5', status: 'running', startedAt: 0, lastAt: 0, contextTokens: 0, contextMax: 1, tokens: 0, costUsd: 0, steps: 0, round: 1, ...o }) as AgentRun
@@ -268,7 +268,7 @@ test('planSvg: no arrow to itself or back around a cycle; a repeated dependency 
 test('planSvg: the worst plans still draw under the engine\'s 131072 characters', () => {
   const size = (n: number, W: number, deps: number, tier: string): number => {
     const tasks = Array.from({ length: n }, (_, i) => ({ title: `Task number ${i} with a long title that needs two lines on a narrow pane`, tier, after: Array.from({ length: deps }, (_, k) => k + 1).filter(d => d !== i + 1) }))
-    const agents = tasks.map((x, i) => mk({ id: `a${i}`, description: x.title, type: `duo:${tier}`, model: 'claude-opus-5-5', effort: 'xhigh', stepTotal: 10, stepDone: 5, lastAt: 5 }))
+    const agents = tasks.map((x, i) => mk({ id: `a${i}`, description: x.title, type: `duo:${tier}`, model: 'claude-opus-5-5', effort: 'xhigh', stepTotal: 10, stepDone: 5, lastAt: 5, files: ['/p/shared.ts'], ticks: [1, 2, 3, 4, 5], calls: [{ s: 'Bash:x', x: true }, { s: 'Bash:x', x: true }, { s: 'Bash:x', x: true }] }))
     const f = { title: 'T', total: n, done: 0, running: 0, phase: 'delegate', isFinished: false, tasks } as Parameters<typeof taskRowsOf>[0]
     return planSvg(W, taskRowsOf(f, agents), 5).source.length
   }
@@ -290,6 +290,58 @@ test('statusSvg: each usage window is a named meter that turns amber from 70% an
   expect(at(10, 10)).toContain('#3FB68B')
   expect(at(75, 10)).toContain('#F5B44A')
   expect(at(95, 10)).toContain('#E5484D')
+})
+
+test('pushTick: keeps the recent ticks only and caps their number', () => {
+  expect(pushTick([1, 2, 3], 11 * 60_000)).toEqual([11 * 60_000]) // all older than ten minutes
+  expect(pushTick(undefined, 5)).toEqual([5])
+  expect(pushTick(Array.from({ length: 300 }, (_, i) => 1000 + i), 1500).length).toBeLessThanOrEqual(150)
+})
+
+test('signatureOf: the same call gives the same signature, and the command text is not kept', () => {
+  const a = signatureOf('Bash', { command: 'npm test -- --secret=hunter2' })
+  expect(a).toBe(signatureOf('Bash', { command: 'npm test -- --secret=hunter2' }))
+  expect(a).not.toBe(signatureOf('Bash', { command: 'npm run build' }))
+  expect(a).not.toContain('hunter2')
+  expect(signatureOf('Edit', { file_path: '/a/b.ts' })).not.toBe(signatureOf('Edit', { file_path: '/a/c.ts' }))
+})
+
+test('loopOf: the same call failing three times, or the same file written five times; only while running', () => {
+  const calls = (...xs: [string, boolean?][]) => xs.map(([s, x]) => (x ? { s, x } : { s }))
+  expect(loopOf(mk({ calls: calls(['Bash:a', true], ['Read:b'], ['Bash:a', true], ['Bash:a', true]) }))).toEqual({ kind: 'failed', n: 3 })
+  expect(loopOf(mk({ calls: calls(['Bash:a', true], ['Bash:b', true], ['Bash:c', true]) }))).toBeNull() // different calls
+  expect(loopOf(mk({ calls: calls(['Bash:a'], ['Bash:a'], ['Bash:a']) }))).toBeNull() // repeated but not failing
+  expect(loopOf(mk({ calls: Array.from({ length: 5 }, () => ({ s: 'Edit:f' })) }))).toEqual({ kind: 'edits', n: 5 })
+  expect(loopOf(mk({ status: 'done', calls: Array.from({ length: 5 }, () => ({ s: 'Edit:f', x: true })) }))).toBeNull()
+  expect(pushCall(Array.from({ length: 12 }, () => ({ s: 'a' })), 'b', true).length).toBe(12)
+})
+
+test('pulseOf: calls per half minute, oldest first, ending now', () => {
+  const at = 10 * 60_000
+  expect(pulseOf([at - 1000, at - 2000, at - 31_000, at - 4 * 60_000], at)).toEqual([0, 1, 0, 0, 0, 0, 0, 0, 1, 2])
+  expect(pulseOf(undefined, at)).toEqual(Array(10).fill(0))
+})
+
+test('collisionsOf: two agents on the same file while one still works', () => {
+  const a = mk({ id: 'a', files: ['/p/build.js', '/p/x.ts'] })
+  const b = mk({ id: 'b', files: ['/p/build.js'] })
+  expect(collisionsOf([a, b]).map(c => c.file)).toEqual(['/p/build.js'])
+  expect(collisionsOf([{ ...a, status: 'done' }, { ...b, status: 'done' }])).toEqual([])
+  expect(collisionsOf([a, mk({ id: 'c', files: ['/p/other.ts'] })])).toEqual([])
+})
+
+test('planSvg: a looping badge, a collision line and mark, and a pulse on the working cards', () => {
+  const a = mk({ id: 'a', description: 'Fixer', files: ['/p/build.js'], ticks: [4000, 4500], calls: [{ s: 'Bash:x', x: true }, { s: 'Bash:x', x: true }, { s: 'Bash:x', x: true }], lastAt: 5000 })
+  const b = mk({ id: 'b', description: 'Other', files: ['/p/build.js'], lastAt: 5000 })
+  const { source } = planSvg(900, taskRowsOf(null, [a, b]), 5000)
+  expect(source).toContain('looping? same call failed ×3')
+  expect(planSvg(300, taskRowsOf(null, [a]), 5000).source).toContain('looping?') // clipped on a narrow card, still there
+  expect(source).toContain('stroke-dasharray="5 4"') // the collision line
+  expect(source).toContain('Two agents touched the same file: build.js')
+  expect(source).toContain('Calls in the last 5 minutes')
+  const calm = planSvg(480, taskRowsOf(null, [mk({ id: 'c', description: 'Calm', lastAt: 5000 })]), 5000).source
+  expect(calm).not.toContain('looping?')
+  expect(calm).not.toContain('Two agents touched')
 })
 
 test('titleLines: a title that fits stays on one line, a long one breaks at a space, the second line is cut', () => {

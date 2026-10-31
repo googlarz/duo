@@ -120,6 +120,15 @@ test('desktop: one picture of all the agents, whatever the count, with no switch
   expect(await ui.find({ key: 'open-t0' })).toBeUndefined()
 })
 
+test('desktop: a button per started agent opens its conversation, up to twelve', async ($, on) => {
+  await spawnMany($, on, 14)
+  const { ui } = await desktop($)
+  expect(await ui.find({ key: 'view-t0' })).toBeDefined()
+  expect(String((await ui.find({ key: 'view-t0' }))?.props.label)).toContain('A0')
+  expect(await ui.find({ key: 'view-t11' })).toBeDefined()
+  expect(await ui.find({ key: 'view-t12' })).toBeUndefined()
+})
+
 test('desktop: the top says how far the job is and how many are running', async ($, on) => {
   await spawnMany($, on, 3)
   const { drawn } = await desktop($)
