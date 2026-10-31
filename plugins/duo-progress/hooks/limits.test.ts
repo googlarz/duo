@@ -132,6 +132,6 @@ test('limitTile: without a clock or a reset time there is no countdown', () => {
 
 test('status: the reset countdown sits beside the limit', () => {
   const lim = [{ kind: 'five_hour', percentUsed: 3, resetsAt: iso(NOW + 4 * 3_600_000 + 36 * 60_000) }]
-  expect(statusSvg(640, noAgents, 0, '', 0, lim, NOW).source).toContain('↻ 4h 36m')
+  expect(statusSvg(640, noAgents, 0, '', 0, lim, NOW).source).toContain('resets in 4h 36m')
   expect(statusSvg(640, noAgents, 0, '', 0, lim).source).not.toContain('↻')
 })

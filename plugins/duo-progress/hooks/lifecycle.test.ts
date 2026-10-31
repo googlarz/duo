@@ -189,8 +189,8 @@ test('planSvg: every card says which model does the task: the one that ran it, o
 })
 
 test('planSvg: a failed card gives the reason the agent reported, not only "error"', () => {
-  const rows = taskRowsOf(null, [mk({ id: 'f', description: 'Link-map audit', status: 'failed', result: 'build.js: 3 META entries missing' })])
-  expect(planSvg(480, rows, 5).source).toContain('error · build.js: 3 META entries missing')
+  const rows = taskRowsOf(null, [mk({ id: 'f', description: 'Link-map audit', status: 'failed', result: 'build.js: 3 META gaps' })])
+  expect(planSvg(900, rows, 5).source).toContain('error · build.js: 3 META gaps')
   expect(planSvg(480, taskRowsOf(null, [mk({ id: 'g', status: 'failed' })]), 5).source).toContain('>error<')
 })
 
@@ -272,7 +272,7 @@ test('planSvg: control characters in a title are dropped, not drawn', () => {
 test('statusSvg: each usage window is a named meter that turns amber from 70% and red from 90%', () => {
   const at = (pct5: number, pct7: number) => statusSvg(640, [], 0, 'J', 0, [{ kind: 'five_hour', percentUsed: pct5 }, { kind: 'seven_day', percentUsed: pct7 }]).source
   expect(at(10, 10)).toContain('#3FB68B')
-  expect(at(75, 10)).toContain('#F5B44A')
+  expect(at(75, 10)).toContain('#D4A24C')
   expect(at(95, 10)).toContain('#E5484D')
 })
 
@@ -321,7 +321,7 @@ test('planSvg: a looping badge, a collision line and mark, and a pulse on the wo
   expect(source).toContain('looping? same call failed ×3.') // in the hover text of the amber mark under the crab
   expect(source).toContain('↻')
   expect(planSvg(300, taskRowsOf(null, [a]), 5000).source).toContain('looping?')
-  expect(source).toContain('stroke-dasharray="5 4"') // the collision line
+  expect(source).toContain('stroke-dasharray="6 4"') // the collision line
   expect(source).toContain('Two agents touched the same file: build.js')
   expect(source).toContain('Calls in the last 5 minutes')
   const calm = planSvg(480, taskRowsOf(null, [mk({ id: 'c', description: 'Calm', lastAt: 5000 })]), 5000).source

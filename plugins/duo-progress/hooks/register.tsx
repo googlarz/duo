@@ -1566,7 +1566,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     if (!pa || !pb) continue
     hits.set(ia, [...(hits.get(ia) ?? []), c.file])
     hits.set(ib, [...(hits.get(ib) ?? []), c.file])
-    edges.push(`<line x1="${mx(W, pa.x + cw / 2)}" y1="${pa.y + ch / 2}" x2="${mx(W, pb.x + cw / 2)}" y2="${pb.y + ch / 2}" stroke="${C_FAIL}" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.85"/>`)
+    edges.push(`<line x1="${mx(W, pa.x + cw / 2)}" y1="${pa.y + ch / 2}" x2="${mx(W, pb.x + cw / 2)}" y2="${pb.y + ch / 2}" stroke="${C_FAIL}" stroke-width="2.4" stroke-dasharray="6 4" opacity="0.9"/>`)
   }
   rows.forEach((r, i) => {
     const to = place.get(i)
@@ -1591,7 +1591,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const edge = status === 'failed' ? C_FAIL : status === 'running' ? C_RUN : status === 'stalled' ? C_CHECK : status === 'done' ? C_DONE : '#9a9a96'
     const loop = a ? loopOf(a) : null
     const sub = !a
-      ? tierWord(tier)
+      ? r.after.length ? `${s.after} ${r.after.join(', ')}` : ''
       : a.status === 'failed'
         ? a.result ? `${s.failed} · ${a.result}` : s.failed
         : isQuiet
@@ -1615,11 +1615,11 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
       return `<g><title>${xml(s.pulse)}</title><path class="k" d="${off.join('')}"/><path fill="${edge}" d="${on.join('')}"/></g>`
     })()
     const subTail = compact ? ` · ${modelName(a?.model ?? '').split(' ')[0] ?? ''}`.replace(/ · $/, '') : ''
-    const subSvg = T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 10.5, 400, fitText(`${sub}${a ? subTail : ''}`, 10.5, Math.max(30, cw - 50)), 'start')
-    const model = compact ? '' : T(W, 'm', to.x + 44, to.y + (two ? 64 : 51), 10.5, 500, fitText(modelText, 10.5, Math.max(30, cw - 50 - (pulseOn ? 62 : 0))), 'start')
+    const subSvg = T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 11.5, 400, fitText(`${sub}${a ? subTail : ''}`, 11.5, Math.max(30, cw - 50)), 'start')
+    const model = compact ? '' : T(W, 'm', to.x + 44, to.y + (two ? 64 : 51), 11.5, 500, fitText(modelText, 11.5, Math.max(30, cw - 50 - (pulseOn ? 62 : 0))), 'start')
     // A card that may be looping gets an amber mark under its crab; the words are in its hover text.
     const loopMark = loop && !compact
-      ? `<g><title>${xml(`${s.looping} ${loop.kind === 'failed' ? s.sameFailed : s.sameFile} ×${loop.n}. ${s.loopHint}`)}</title><circle cx="${mx(W, to.x + 22, 0)}" cy="${to.y + ch - 12}" r="7" fill="${C_CHECK}"/>${T(W, 't', to.x + 17.5, to.y + ch - 8.5, 11, 800, '↻', 'start', ' style="fill:#1f1f1f"')}</g>`
+      ? `<g><title>${xml(`${s.looping} ${loop.kind === 'failed' ? s.sameFailed : s.sameFile} ×${loop.n}. ${s.loopHint}`)}</title><rect x="${mx(W, to.x + 8, 30)}" y="${to.y + ch - 20}" width="30" height="15" rx="7.5" fill="${C_CHECK}"/>${T(W, 't', to.x + 13, to.y + ch - 8.5, 10.5, 800, `↻${loop.n}`, 'start', ' style="fill:#1f1f1f"')}</g>`
       : ''
     // The bar along the bottom says how far: full when done or failed, partial while the agent reports steps; otherwise nothing to say.
     const pct = !a ? -1 : a.status === 'done' || a.status === 'failed' ? 1 : a.stepTotal ? (progressOf(a) ?? 0) : -1
@@ -1629,7 +1629,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const dim = status === 'planned' ? ' opacity="0.7"' : ''
     const clash = hits.get(i)
     const clashTitle = clash ? `<title>${xml(`${s.collision}: ${[...new Set(clash)].map(f => baseName(f)).join(', ')}`)}</title>` : ''
-    const clashDot = clash ? `<circle cx="${mx(W, to.x + 8, 0)}" cy="${to.y + 8}" r="6" fill="${C_FAIL}"/>${T(W, 't', to.x + 5.5, to.y + 11.5, 9, 800, '!', 'start', ' style="fill:#fff"')}` : ''
+    const clashDot = clash ? `<circle cx="${mx(W, to.x + 8, 0)}" cy="${to.y + 8}" r="7.5" fill="${C_FAIL}"/>${T(W, 't', to.x + 5, to.y + 12, 11, 800, '!', 'start', ' style="fill:#fff"')}` : ''
     seen.add(status)
     if (clash) seen.add('clash')
     if (loop && !compact) seen.add('loop')
@@ -1649,7 +1649,7 @@ ${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' 
   if (seen.has('planned')) legend.push({ icon: mark('planned', '#9a9a96'), text: s.legendWaiting })
   if (seen.has('failed')) legend.push({ icon: mark('failed', C_FAIL), text: s.failed })
   if (seen.has('clash')) legend.push({ icon: `<circle r="6" fill="${C_FAIL}"/><text x="-2.6" y="3.2" font-size="9" font-weight="800" font-family="${FONT}" style="fill:#fff">!</text>`, text: s.legendClash })
-  if (seen.has('loop')) legend.push({ icon: `<circle r="6.5" fill="${C_CHECK}"/><text x="-4" y="3.8" font-size="10.5" font-weight="800" font-family="${FONT}" style="fill:#1f1f1f">↻</text>`, text: s.legendLoop })
+  if (seen.has('loop')) legend.push({ icon: `<rect x="-9" y="-6.5" width="18" height="13" rx="6.5" fill="${C_CHECK}"/><text x="-7" y="3.4" font-size="9.5" font-weight="800" font-family="${FONT}" style="fill:#1f1f1f">↻3</text>`, text: s.legendLoop })
   if (seen.has('pulse')) legend.push({ icon: `<path fill="${C_RUN}" d="M-7 4h2.4v-3h-2.4zM-3.6 4h2.4v-7h-2.4zM-0.2 4h2.4v-5h-2.4zM3.2 4h2.4v-9h-2.4z"/>`, text: s.legendPulse })
   let legendSvg = ''
   let legendH = 0
@@ -1675,7 +1675,8 @@ ${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' 
 // --- desktop drawings of the grouped view.
 
 const C_DONE = '#3FB68B'
-const C_RUN = '#F5B44A'
+// Working is blue; amber is kept for warnings (a usage window past 70%, a stalled or looping agent).
+const C_RUN = '#4F8CF5'
 const C_FAIL = '#E5484D'
 // A checker's FAIL: a finding, not a broken agent.
 const C_CHECK = '#D4A24C'
@@ -1708,7 +1709,7 @@ const limitMeters = (W: number, lim: readonly Limit[], nowMs: number): { source:
     const l = lim.find(x => x.kind === kind)
     if (!l || !Number.isFinite(l.percentUsed)) return []
     const at = l.resetsAt ? Date.parse(l.resetsAt) : Number.NaN
-    const reset = kind === 'five_hour' && nowMs && Number.isFinite(at) && at > nowMs ? `↻ ${timeLeft(at - nowMs)}` : ''
+    const reset = kind === 'five_hour' && nowMs && Number.isFinite(at) && at > nowMs ? `${tr().resetsIn} ${timeLeft(at - nowMs)}` : ''
     return [{ short, pct: Math.max(0, Math.min(100, Math.round(l.percentUsed))), reset }]
   })
   if (!items.length) return { source: '', width: 0 }
@@ -1725,7 +1726,7 @@ const limitMeters = (W: number, lim: readonly Limit[], nowMs: number): { source:
   }
   const x0 = W - GP - x
   const out = placed.map(it => {
-    const color = it.pct >= 90 ? C_FAIL : it.pct >= 70 ? C_RUN : C_DONE
+    const color = it.pct >= 90 ? C_FAIL : it.pct >= 70 ? C_CHECK : C_DONE
     const fill = Math.max(it.pct ? 3 : 0, Math.round((BAR * it.pct) / 100))
     return `${T(W, 's', x0 + it.x, 21, 11.5, 500, it.short, 'start')}<rect class="k" x="${mx(W, x0 + it.barX, BAR)}" y="14" width="${BAR}" height="6" rx="3"/>${fill ? `<rect x="${mx(W, x0 + it.barX, fill)}" y="14" width="${fill}" height="6" rx="3" fill="${color}"/>` : ''}${T(W, 't', x0 + it.pctX, 21, 11.5, 600, it.pctText, 'start', ' font-variant-numeric="tabular-nums"')}${it.reset ? T(W, 'm', x0 + it.resetX, 21, 11, 400, it.reset, 'start', ' font-variant-numeric="tabular-nums"') : ''}`
   })
