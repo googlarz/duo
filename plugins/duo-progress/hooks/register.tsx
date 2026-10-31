@@ -72,6 +72,12 @@ const STRINGS = {
     pane: 'Agents',
     cost: 'Cost',
     limit: 'Usage',
+    stepWord: 'step',
+    legendWorking: 'working',
+    legendWaiting: 'waiting',
+    legendClash: 'two agents, same file',
+    legendLoop: 'repeating?',
+    legendPulse: 'activity, last 5 min',
     pulse: 'Calls in the last 5 minutes, a bar per half minute',
     looping: 'looping?',
     sameFailed: 'same call failed',
@@ -137,6 +143,12 @@ const STRINGS = {
     pane: 'Агенты',
     cost: 'Стоимость',
     limit: 'Расход',
+    stepWord: 'шаг',
+    legendWorking: 'работает',
+    legendWaiting: 'ждёт',
+    legendClash: 'два агента, один файл',
+    legendLoop: 'повторяет?',
+    legendPulse: 'активность, 5 мин',
     pulse: 'Вызовы за последние 5 минут, столбик на полминуты',
     looping: 'зацикливание?',
     sameFailed: 'один вызов не удался',
@@ -202,6 +214,12 @@ const STRINGS = {
     pane: 'סוכנים',
     cost: 'עלות',
     limit: 'שימוש',
+    stepWord: 'שלב',
+    legendWorking: 'עובד',
+    legendWaiting: 'ממתין',
+    legendClash: 'שני סוכנים, אותו קובץ',
+    legendLoop: 'חוזר?',
+    legendPulse: 'פעילות, 5 דקות',
     pulse: 'קריאות ב-5 הדקות האחרונות, עמודה לכל חצי דקה',
     looping: 'לולאה?',
     sameFailed: 'אותה קריאה נכשלה',
@@ -832,17 +850,6 @@ export const stageCostume = (key: string): string => {
   const k = key.toLowerCase()
   return STAGE_COSTUMES.find(([, words]) => words.some(w => k === w || k.startsWith(w)))?.[0] ?? 'other'
 }
-// How hard the model works, as one to five rising bars.
-export const EFFORT_LEVEL: Record<string, number> = { minimal: 1, low: 1, medium: 2, high: 3, xhigh: 4, max: 5 }
-export const effortBars = (x: number, base: number, effort: string | undefined, color: string, W = 0): string => {
-  const level = EFFORT_LEVEL[effort ?? ''] ?? 0
-  if (!level) return ''
-  return `<g><title>${xml(effortWord(effort ?? ''))}</title>${Array.from({ length: 5 }, (_, i) => {
-    const h = 3 + i * 2
-    return `<rect ${i < level ? `fill="${color}"` : 'class="k"'} x="${mx(W, x + i * 5, 3)}" y="${base - h}" width="3" height="${h}" rx="1"/>`
-  }).join('')}</g>`
-}
-
 // A card's crab: the roles keep theirs (reviewer, verifier, advisor, opus); otherwise the label prefix, then the first
 // word of the title that names a costume, then the agent type's own.
 const ROLE_AGENT = /^(?:[^:]*:)?duo-(?:advisor|reviewer|verifier|opus)$/
@@ -1545,7 +1552,8 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     idx.forEach((i, k) => place.set(i, { x: GP + (k % perRow) * (cw + CARD_GAP), y: y + Math.floor(k / perRow) * (ch + CARD_GAP) }))
     y += Math.ceil(idx.length / perRow) * (ch + CARD_GAP) - CARD_GAP + LAYER_GAP
   }
-  const height = Math.ceil(y - LAYER_GAP + 10) + (omitted ? 22 : 0)
+  let height = Math.ceil(y - LAYER_GAP + 10) + (omitted ? 22 : 0)
+  const seen = new Set<string>()
   const edges: string[] = []
   const cards: string[] = []
   // Files two working agents both touched: a red dashed line between their cards and a mark on each.
@@ -1581,19 +1589,23 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const isQuiet = a ? isStalled(a, at) : false
     const status = !a ? 'planned' : isQuiet ? 'stalled' : a.status
     const edge = status === 'failed' ? C_FAIL : status === 'running' ? C_RUN : status === 'stalled' ? C_CHECK : status === 'done' ? C_DONE : '#9a9a96'
-    const pips = a && a.status === 'running' && a.stepTotal && a.stepTotal <= 10 ? a.stepTotal : 0
     const loop = a ? loopOf(a) : null
-    const sub = pips ? '' : !a ? tierWord(tier) : a.status === 'failed' ? (a.result ? `${s.failed} · ${a.result}` : s.failed) : isQuiet ? `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : a.status === 'running' ? (a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : (a.action ?? fmtTime(elapsed(a, at)))) : fmtTime(elapsed(a, at))
-    // Which model does the task: the one that ran it, or the one it is planned for. A dot in its colour; the name when there is room.
+    const sub = !a
+      ? tierWord(tier)
+      : a.status === 'failed'
+        ? a.result ? `${s.failed} · ${a.result}` : s.failed
+        : isQuiet
+          ? `${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}`
+          : a.status === 'running'
+            ? a.stepTotal ? `${s.stepWord} ${stepsDone(a)}/${a.stepTotal}${a.stepNote ? ` · ${a.stepNote}` : ''}` : (a.action ?? fmtTime(elapsed(a, at)))
+            : fmtTime(elapsed(a, at))
+    // Which model does the task: the one that ran it, or the one it is planned for, with its effort ("Sonnet 5.5 · low").
     const modelText = a ? runModel(a) : tierModel(tier)
-    const dotColor = modelColor(a ? modelName(a.model) : modelText)
-    const model = compact
-      ? `<circle cx="${mx(W, to.x + cw - 12, 0)}" cy="${to.y + ch - 15}" r="3.5" fill="${dotColor}"/>`
-      : `<circle cx="${mx(W, to.x + 48, 0)}" cy="${to.y + (two ? 60 : 47)}" r="3.5" fill="${dotColor}"/>${T(W, 'm', to.x + 57, to.y + (two ? 64 : 51), 10.5, 500, fitText(modelText, 10.5, Math.max(30, cw - 63 - 30)), 'start')}${effortBars(to.x + cw - 12 - 22, to.y + (two ? 65 : 52), a ? a.effort : TIER_MODEL[tier]?.[1], dotColor, W)}`
-    // The pulse: calls in the last five minutes, a bar per half minute; a flat line says nothing is happening.
+    // The pulse, on the model line: calls in the last five minutes, a bar per half minute; a flat line says nothing is happening.
+    const pulseOn = !!a && a.status === 'running' && !compact
     const spark = (() => {
-      if (!a || a.status !== 'running' || compact) return ''
-      const base = to.y + (two ? 49 : 36)
+      if (!a || !pulseOn) return ''
+      const base = to.y + (two ? 65 : 52)
       const on: string[] = []
       const off: string[] = []
       pulseOf(a.ticks, at).forEach((n, k) => {
@@ -1602,29 +1614,62 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
       })
       return `<g><title>${xml(s.pulse)}</title><path class="k" d="${off.join('')}"/><path fill="${edge}" d="${on.join('')}"/></g>`
     })()
-    const sparkW = spark ? 56 : 0
-    const subSvg = T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 10.5, 400, fitText(sub, 10.5, Math.max(30, cw - 50 - sparkW)), 'start')
+    const subTail = compact ? ` · ${modelName(a?.model ?? '').split(' ')[0] ?? ''}`.replace(/ · $/, '') : ''
+    const subSvg = T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 10.5, 400, fitText(`${sub}${a ? subTail : ''}`, 10.5, Math.max(30, cw - 50)), 'start')
+    const model = compact ? '' : T(W, 'm', to.x + 44, to.y + (two ? 64 : 51), 10.5, 500, fitText(modelText, 10.5, Math.max(30, cw - 50 - (pulseOn ? 62 : 0))), 'start')
     // A card that may be looping gets an amber mark under its crab; the words are in its hover text.
     const loopMark = loop && !compact
       ? `<g><title>${xml(`${s.looping} ${loop.kind === 'failed' ? s.sameFailed : s.sameFile} ×${loop.n}. ${s.loopHint}`)}</title><circle cx="${mx(W, to.x + 22, 0)}" cy="${to.y + ch - 12}" r="7" fill="${C_CHECK}"/>${T(W, 't', to.x + 17.5, to.y + ch - 8.5, 11, 800, '↻', 'start', ' style="fill:#1f1f1f"')}</g>`
       : ''
-    const pct = !a ? 0 : a.status === 'done' ? 1 : a.status === 'failed' ? 1 : (progressOf(a) ?? 0)
+    // The bar along the bottom says how far: full when done or failed, partial while the agent reports steps; otherwise nothing to say.
+    const pct = !a ? -1 : a.status === 'done' || a.status === 'failed' ? 1 : a.stepTotal ? (progressOf(a) ?? 0) : -1
     const bx = to.x + 8
     const bw = cw - 16
+    const bar = pct < 0 ? '' : `<rect class="k" x="${mx(W, bx, bw)}" y="${to.y + ch - 7}" width="${bw}" height="3" rx="1.5"/><rect x="${mx(W, bx, Math.round(bw * pct))}" y="${to.y + ch - 7}" width="${Math.round(bw * pct)}" height="3" rx="1.5" fill="${edge}"/>`
     const dim = status === 'planned' ? ' opacity="0.7"' : ''
     const clash = hits.get(i)
     const clashTitle = clash ? `<title>${xml(`${s.collision}: ${[...new Set(clash)].map(f => baseName(f)).join(', ')}`)}</title>` : ''
     const clashDot = clash ? `<circle cx="${mx(W, to.x + 8, 0)}" cy="${to.y + 8}" r="6" fill="${C_FAIL}"/>${T(W, 't', to.x + 5.5, to.y + 11.5, 9, 800, '!', 'start', ' style="fill:#fff"')}` : ''
+    seen.add(status)
+    if (clash) seen.add('clash')
+    if (loop && !compact) seen.add('loop')
+    if (pulseOn) seen.add('pulse')
     cards.push(`<g${dim}>${clashTitle}<rect class="tile" x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8"/>
 <rect x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8" fill="none" stroke="${edge}" stroke-width="${status === 'planned' ? 1 : 1.6}"${status === 'planned' ? ' stroke-dasharray="4 3"' : ''}/>
 ${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? cardCostume(r.title, a ? a.type : r.tier, a ? costumeOf(a.type) : tier) : 'other', !a, status === 'running').replaceAll('#D97757', CRAB_TINTS[i % CRAB_TINTS.length])}
 ${(compact ? [fitText(cardLabel(r), 12, Math.max(30, cw - 64))] : titleLines(cardLabel(r), 12, Math.max(30, cw - 64)).slice(0, 2)).map((line, k) => T(W, 't', to.x + 44, to.y + (compact ? 19 : 20) + k * 13, 12, 600, line, 'start')).join('')}
-${subSvg}${spark}${model}${loopMark}${a && pips ? Array.from({ length: pips }, (_, k) => `<circle cx="${mx(W, to.x + 48 + k * 10, 0)}" cy="${to.y + (compact ? 29 : two ? 44 : 31)}" r="2.5" fill="${k < stepsDone(a) ? edge : 'none'}" stroke="${edge}" stroke-width="1.2"/>`).join('') : ''}
-<rect class="k" x="${mx(W, bx, bw)}" y="${to.y + ch - 7}" width="${bw}" height="3" rx="1.5"/><rect x="${mx(W, bx, Math.round(bw * pct))}" y="${to.y + ch - 7}" width="${Math.round(bw * pct)}" height="3" rx="1.5" fill="${edge}"/>
+${subSvg}${model}${spark}${loopMark}${bar}
 ${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' : status, edge)}${clashDot}</g>`)
   })
+  // What the marks on the cards mean: only the ones that are on the screen now.
+  const legend: { icon: string; text: string }[] = []
+  const mark = (status: string, color: string) => statusMark(0, 0, status, color)
+  if (seen.has('running')) legend.push({ icon: mark('running', C_RUN), text: s.legendWorking })
+  if (seen.has('done')) legend.push({ icon: mark('done', C_DONE), text: s.doneN })
+  if (seen.has('planned')) legend.push({ icon: mark('planned', '#9a9a96'), text: s.legendWaiting })
+  if (seen.has('failed')) legend.push({ icon: mark('failed', C_FAIL), text: s.failed })
+  if (seen.has('clash')) legend.push({ icon: `<circle r="6" fill="${C_FAIL}"/><text x="-2.6" y="3.2" font-size="9" font-weight="800" font-family="${FONT}" style="fill:#fff">!</text>`, text: s.legendClash })
+  if (seen.has('loop')) legend.push({ icon: `<circle r="6.5" fill="${C_CHECK}"/><text x="-4" y="3.8" font-size="10.5" font-weight="800" font-family="${FONT}" style="fill:#1f1f1f">↻</text>`, text: s.legendLoop })
+  if (seen.has('pulse')) legend.push({ icon: `<path fill="${C_RUN}" d="M-7 4h2.4v-3h-2.4zM-3.6 4h2.4v-7h-2.4zM-0.2 4h2.4v-5h-2.4zM3.2 4h2.4v-9h-2.4z"/>`, text: s.legendPulse })
+  let legendSvg = ''
+  let legendH = 0
+  if (!compact && legend.length) {
+    let lx = GP
+    let ly = height - (omitted ? 22 : 0) + 4
+    for (const item of legend) {
+      const w = 22 + textWidth(item.text, 10.5) + 16
+      if (lx + w > W - GP && lx > GP) {
+        lx = GP
+        ly += 20
+      }
+      legendSvg += `<g transform="translate(${mx(W, lx + 7, 0)} ${ly + 9})">${item.icon}</g>${T(W, 'm', lx + 18, ly + 13, 10.5, 400, item.text, 'start')}`
+      lx += w
+    }
+    legendH = ly + 22 - (height - (omitted ? 22 : 0))
+  }
+  height += legendH
   const more = omitted ? T(W, 's', GP, height - 8, 12, 400, `+${omitted} ${agentsWord(omitted)}`, 'start') : ''
-  return { source: svg(W, height, `${edges.join('')}${cards.join('\n')}${more}`), height }
+  return { source: svg(W, height, `${edges.join('')}${cards.join('\n')}${legendSvg}${more}`), height }
 }
 
 // --- desktop drawings of the grouped view.

@@ -1,7 +1,7 @@
 # duo: see every AI agent Claude spawns for you
 
 <p align="center">
-  <img src="assets/duo-panel-live.png" alt="The agents panel after a real run: a ten-task audit of duo-progress itself in four stages, every card green and ticked; each card has its own crab, the model that did the task (Sonnet 5.5 at low, medium and high effort, Opus 5.5 for the final review) with its effort as rising bars, and the time it took; arrows show what waited for what; on top, the job's name, the usage meters for the 5-hour and weekly windows, '10/10 done, 7m 8s, this run 5% of the 5-hour window' and a progress bar" width="709">
+  <img src="assets/duo-panel-live.png" alt="The agents panel after a real run: a ten-task audit of duo-progress itself in four stages, every card green and ticked; each card has its own crab, the model that did the task (Sonnet 5.5 at low, medium and high effort, Opus 5.5 for the final review) with its effort, and the time it took; arrows show what waited for what; on top, the job's name, the usage meters for the 5-hour and weekly windows, '10/10 done, 7m 8s, this run 5% of the 5-hour window' and a progress bar" width="709">
 </p>
 
 <p align="center"><em>A real run: ten agents audit the plugin's own code in four stages (Sonnet workers, one Opus review at the end). It took 7 minutes and used 5% of the 5-hour window.</em></p>

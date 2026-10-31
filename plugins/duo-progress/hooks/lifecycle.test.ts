@@ -102,7 +102,7 @@ test('isStalled: only a running agent with no sign of life past the threshold', 
 })
 
 // ---- needs attention ----
-import { cardCostume, collisionsOf, effortBars, jobTitle, loopOf, pulseOf, pushCall, pushTick, shownTitle, signatureOf, layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
+import { cardCostume, collisionsOf, jobTitle, loopOf, pulseOf, pushCall, pushTick, shownTitle, signatureOf, layersOf, needsOf, planSvg, rowSvg, statusSvg, taskRowsOf, titleLines } from './register'
 
 const mk = (o: Partial<AgentRun>): AgentRun =>
   ({ id: 'x', type: 'general-purpose', description: 'Job', model: 'claude-sonnet-5-5', status: 'running', startedAt: 0, lastAt: 0, contextTokens: 0, contextMax: 1, tokens: 0, costUsd: 0, steps: 0, round: 1, ...o }) as AgentRun
@@ -186,22 +186,6 @@ test('planSvg: every card says which model does the task: the one that ran it, o
   const { source } = planSvg(480, rows, 5)
   expect(source).toContain('Opus 5.5 · high') // started: what ran it
   expect(source).toContain('Sonnet · medium') // planned: Build is duo-high, Check is the verifier
-  expect(source).toContain('#8E78FF') // the Opus colour
-})
-
-test('effortBars: one to five rising bars filled up to the level, none when the effort is unknown', () => {
-  const high = effortBars(0, 20, 'high', '#8E78FF')
-  expect((high.match(/fill="#8E78FF"/g) ?? []).length).toBe(3)
-  expect((high.match(/class="k"/g) ?? []).length).toBe(2)
-  expect((effortBars(0, 20, 'max', '#000').match(/fill="#000"/g) ?? []).length).toBe(5)
-  expect(effortBars(0, 20, undefined, '#000')).toBe('')
-  expect(effortBars(0, 20, 'weird', '#000')).toBe('')
-})
-
-test('planSvg: the card shows the effort as bars, from the run or from the plan', () => {
-  const rows = taskRowsOf(PLAN, [mk({ id: 'm', description: 'Map', model: 'claude-opus-5-5', effort: 'xhigh' })])
-  const { source } = planSvg(480, rows, 5)
-  expect(source).toContain('<title>') // a hover name for the effort
 })
 
 test('planSvg: a failed card gives the reason the agent reported, not only "error"', () => {
@@ -343,6 +327,26 @@ test('planSvg: a looping badge, a collision line and mark, and a pulse on the wo
   const calm = planSvg(480, taskRowsOf(null, [mk({ id: 'c', description: 'Calm', lastAt: 5000 })]), 5000).source
   expect(calm).not.toContain('looping?')
   expect(calm).not.toContain('Two agents touched')
+})
+
+test('planSvg: a legend names only the marks that are on the screen', () => {
+  const none = planSvg(900, taskRowsOf(null, [mk({ id: 'd', status: 'done', endedAt: 5 })]), 5).source
+  expect(none).toContain('>done<')
+  expect(none).not.toContain('>working<')
+  expect(none).not.toContain('repeating?')
+  const busy = planSvg(900, taskRowsOf(null, [
+    mk({ id: 'a', description: 'A', files: ['/p/x'], calls: [{ s: 'Bash:x', x: true }, { s: 'Bash:x', x: true }, { s: 'Bash:x', x: true }], lastAt: 5 }),
+    mk({ id: 'b', description: 'B', files: ['/p/x'], lastAt: 5 }),
+    mk({ id: 'c', description: 'C', status: 'failed', endedAt: 5 }),
+  ]), 5).source
+  for (const word of ['>working<', '>error<', '>two agents, same file<', '>repeating?<', '>activity, last 5 min<']) expect(busy).toContain(word)
+})
+
+test('planSvg: the bar along the bottom shows only where it says something', () => {
+  const bar = (a: ReturnType<typeof mk>) => (planSvg(900, taskRowsOf(null, [a]), 5).source.match(/height="3" rx="1.5"/g) ?? []).length
+  expect(bar(mk({ id: 'r', lastAt: 5 }))).toBe(0) // working, no steps reported: nothing to fill
+  expect(bar(mk({ id: 's', lastAt: 5, stepTotal: 4, stepDone: 1 }))).toBe(2) // track and fill
+  expect(bar(mk({ id: 'd', status: 'done', endedAt: 5 }))).toBe(2)
 })
 
 test('titleLines: a title that fits stays on one line, a long one breaks at a space, the second line is cut', () => {
