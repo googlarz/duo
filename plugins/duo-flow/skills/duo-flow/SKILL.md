@@ -11,6 +11,10 @@ You are the **orchestrator**. You think, plan, decide, and review. Workers execu
 
 Task from the user: $ARGUMENTS
 
+## Always in parallel
+
+Invoking `/duo-flow` always means several agents working in parallel, and the panel shows them side by side. Never do the task alone in this session. Split it so at least two independent tasks can start together (by area, file, question or angle). Only when the task truly cannot be split, say so in one line in the plan and run a worker with a checker in parallel on separate parts. Dependent tasks wait; everything else starts in the same message.
+
 ## 0. Preconditions
 
 - The flow is designed for a strong orchestrator model at high effort (Fable high is the reference setup). Do not try to detect or verify the session's model or effort — you cannot see the effort level. Whatever the session runs on is the user's deliberate choice; just orchestrate.
