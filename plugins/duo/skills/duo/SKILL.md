@@ -13,6 +13,10 @@ Task from the user: $ARGUMENTS
 
 If the task above is empty, reply in 2-3 lines with one example (for example `/duo add a dark mode toggle to the settings page`) and stop: spawn nothing.
 
+## Always in parallel
+
+Invoking `/duo` always means several agents working in parallel, and the panel shows them side by side. Never do the task alone in this session. Split it so at least two independent tasks can start together (by area, file, question or angle; a read-only audit splits by what is audited). Only when the task truly cannot be split, say so in one line in the plan and run a worker plus the verifier in parallel with it on separate parts. Dependent tasks wait; everything else starts in the same message.
+
 ## 0. Preconditions
 
 - Agents must exist (listed by the Agent tool, possibly as `duo:duo-low`): `duo-low`, `-medium`, `-high`, `-xhigh`, `-max`, `-opus`, `-advisor`, `-reviewer`, `-verifier`. If one is missing, use `general-purpose` with the `model`/`effort` override of the same tier (Claude Code 2.1.292+, if available), else tell the user to install the plugin and stop.
