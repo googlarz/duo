@@ -41,6 +41,15 @@ Rules in the user's `CLAUDE.md` (global or project) and instructions in the task
 
 Per flow: the advisor at most once; the reviewer at most twice (one early, only for tasks the plan marks risky, and one final); `duo-opus` only with the user's consent. Precedence on Haiku: the mandatory plan gate wins over the fast path and the 80% skip, except at >= 95% (no new tasks at all).
 
+## Which model when
+
+Start with the cheapest model that is enough and move up only when the task needs it.
+- **Haiku**: searching files, simple reads, listing, mechanical changes (through Explore). Nothing where a mistake is costly.
+- **Sonnet** (low or medium by default): all volume work, such as edits, known-cause fixes, tests, drafts. Raise effort to high, then xhigh, only for delicate work with many edge cases.
+- **Opus**: gates, meaning plan critique, the final review, a second opinion. A worker only when Sonnet max failed, with the user's yes.
+- **Fable**: the hardest cases only: a bug that resists ordinary debugging, complex logic, high-stakes decisions (money, security, law), design that needs insight. Only on the user's explicit request or when Sonnet max and Opus failed; never for volume work.
+- Verification always goes to a fresh agent. Fable's cost against Opus is not measured yet, so do not assume it is cheaper.
+
 ## Stages and models
 
 | Stage | Who | Model / effort |
