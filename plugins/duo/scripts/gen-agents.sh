@@ -36,3 +36,5 @@ gen high sonnet high "Duo worker (sonnet, high effort). Delicate but well-unders
 gen xhigh sonnet xhigh "Duo worker (sonnet, xhigh effort). Unfamiliar or messy code, unclear root cause, non-obvious architecture. Spawned only by the /duo orchestrator."
 gen max sonnet max "Duo worker (sonnet, max effort). Hardest Sonnet tier: very complex logic or a bug that survived xhigh. Last stop before Opus. Spawned only by the /duo orchestrator."
 gen opus opus xhigh "Duo worker (opus, xhigh effort). Escalation only: tasks Sonnet max could not solve, or hard design-sensitive logic. Spawned only by the /duo orchestrator."
+gen haiku haiku low "Duo worker (haiku, low effort). Purely mechanical edits: one exact pattern applied in many places, no judgment. Always followed by a verifier. Spawned only by the /duo orchestrator."
+gen fable fable high "Duo worker (fable, high effort). Last resort: tasks Opus xhigh could not solve, or the hardest logic, high-stakes decisions and design that needs insight. Spawned only by the /duo orchestrator."
