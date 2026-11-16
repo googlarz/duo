@@ -20,6 +20,7 @@ The agents stay namespaced (`duo:duo-high`); the skill finds them either way.
 | Plan | the orchestrator | session model |
 | Plan gate (once) | `duo-advisor` | Opus high, no Edit/Write |
 | Implement | `duo-low` ... `duo-max` | Sonnet, effort low to max by difficulty |
+| Purely mechanical edits | `duo-haiku` | Haiku low, always verified |
 | Verify | `duo-verifier` | Sonnet medium, fresh agent, no Edit/Write |
 | Review (on the combined diff) | `duo-reviewer` | Opus high, no Edit/Write |
 | Stuck after Sonnet max | `duo-opus` | Opus xhigh |

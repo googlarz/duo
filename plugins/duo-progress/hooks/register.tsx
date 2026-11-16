@@ -30,7 +30,7 @@ const STEP_BRIEF = `
 Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps), optionally \`plan\` (an array of their titles, a few words each) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
 const PANE = 'duo-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
-const DUO_TIERS = ['duo-low', 'duo-medium', 'duo-high', 'duo-xhigh', 'duo-max', 'duo-opus', 'duo-fable', 'duo-advisor', 'duo-reviewer', 'duo-verifier'] as const
+const DUO_TIERS = ['duo-haiku', 'duo-low', 'duo-medium', 'duo-high', 'duo-xhigh', 'duo-max', 'duo-opus', 'duo-fable', 'duo-advisor', 'duo-reviewer', 'duo-verifier'] as const
 const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light', ...DUO_TIERS]
 // The tools' schemas are advice to the model, not a check: what a call may ask
 // the band and the panel to draw is bounded here.
@@ -136,7 +136,7 @@ const STRINGS = {
     failedN: 'failed',
     shareOn: 'of tokens on',
     apiEq: 'API-equivalent',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-fable': 'duo-fable', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-haiku': 'duo-haiku', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-fable': 'duo-fable', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   ru: {
@@ -207,7 +207,7 @@ const STRINGS = {
     failedN: 'с ошибкой',
     shareOn: 'токенов на',
     apiEq: 'по ценам API',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-fable': 'duo-fable', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-haiku': 'duo-haiku', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-fable': 'duo-fable', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   he: {
@@ -278,7 +278,7 @@ const STRINGS = {
     failedN: 'נכשלו',
     shareOn: 'מהטוקנים ב־',
     apiEq: 'לפי מחירי API',
-    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-fable': 'duo-fable', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'אחר' },
+    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', 'duo-haiku': 'duo-haiku', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-fable': 'duo-fable', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'אחר' },
     effort: { low: 'נמוך', medium: 'בינוני', high: 'גבוה', xhigh: 'גבוה מאוד', max: 'מקסימלי' },
   },
 } as const
@@ -572,6 +572,7 @@ const TIER_COLOR: Record<string, string> = {
   careful: '#BA7517',
   medium: '#378ADD',
   light: '#1D9E75',
+  'duo-haiku': '#8AD9B8',
   'duo-low': '#5DCAA5',
   'duo-medium': '#6AAAE8',
   'duo-high': '#D4A24C',
@@ -594,6 +595,7 @@ const TIER_MODEL: Record<string, [model: string, effort: string]> = {
   careful: ['Opus', 'high'],
   medium: ['Opus', 'medium'],
   light: ['Opus', 'low'],
+  'duo-haiku': ['Haiku', 'low'],
   'duo-low': ['Sonnet', 'low'],
   'duo-medium': ['Sonnet', 'medium'],
   'duo-high': ['Sonnet', 'high'],
@@ -1166,6 +1168,7 @@ export const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
 
 // The duo tiers reuse an existing crab; their own colour still tints it.
 export const COSTUME_ALIAS: Record<string, string> = {
+  'duo-haiku': 'light',
   'duo-low': 'light',
   'duo-medium': 'medium',
   'duo-high': 'careful',

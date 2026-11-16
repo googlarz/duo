@@ -19,6 +19,7 @@ const mount = ($: Engine) => $.ui.mount({ plugin: PLUGIN, surface: 'terminal', c
 // The row's dim line reads "<tier word or raw type> · <model>".
 const TIERS: readonly [type: string, shown: RegExp][] = [
   ['duo:duo-high', /duo-high · /],
+  ['duo-haiku', /duo-haiku · /],
   ['duo-opus', /duo-opus · /],
   ['duo-fable', /duo-fable · /],
   ['duo:duo-reviewer', /duo-reviewer · /],
