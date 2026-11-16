@@ -23,6 +23,7 @@ The agents stay namespaced (`duo:duo-high`); the skill finds them either way.
 | Verify | `duo-verifier` | Sonnet medium, fresh agent, no Edit/Write |
 | Review (on the combined diff) | `duo-reviewer` | Opus high, no Edit/Write |
 | Stuck after Sonnet max | `duo-opus` | Opus xhigh |
+| Last resort or very high stakes | `duo-fable` | Fable high |
 
 ## Rules of thumb
 

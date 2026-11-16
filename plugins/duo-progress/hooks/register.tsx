@@ -30,7 +30,7 @@ const STEP_BRIEF = `
 Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps), optionally \`plan\` (an array of their titles, a few words each) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
 const PANE = 'duo-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
-const DUO_TIERS = ['duo-low', 'duo-medium', 'duo-high', 'duo-xhigh', 'duo-max', 'duo-opus', 'duo-advisor', 'duo-reviewer', 'duo-verifier'] as const
+const DUO_TIERS = ['duo-low', 'duo-medium', 'duo-high', 'duo-xhigh', 'duo-max', 'duo-opus', 'duo-fable', 'duo-advisor', 'duo-reviewer', 'duo-verifier'] as const
 const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light', ...DUO_TIERS]
 // The tools' schemas are advice to the model, not a check: what a call may ask
 // the band and the panel to draw is bounded here.
@@ -136,7 +136,7 @@ const STRINGS = {
     failedN: 'failed',
     shareOn: 'of tokens on',
     apiEq: 'API-equivalent',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-fable': 'duo-fable', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   ru: {
@@ -207,7 +207,7 @@ const STRINGS = {
     failedN: 'с ошибкой',
     shareOn: 'токенов на',
     apiEq: 'по ценам API',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-fable': 'duo-fable', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   he: {
@@ -278,7 +278,7 @@ const STRINGS = {
     failedN: 'נכשלו',
     shareOn: 'מהטוקנים ב־',
     apiEq: 'לפי מחירי API',
-    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'אחר' },
+    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', 'duo-low': 'duo-low', 'duo-medium': 'duo-medium', 'duo-high': 'duo-high', 'duo-xhigh': 'duo-xhigh', 'duo-max': 'duo-max', 'duo-opus': 'duo-opus', 'duo-fable': 'duo-fable', 'duo-advisor': 'duo-advisor', 'duo-reviewer': 'duo-reviewer', 'duo-verifier': 'duo-verifier', other: 'אחר' },
     effort: { low: 'נמוך', medium: 'בינוני', high: 'גבוה', xhigh: 'גבוה מאוד', max: 'מקסימלי' },
   },
 } as const
@@ -578,6 +578,7 @@ const TIER_COLOR: Record<string, string> = {
   'duo-xhigh': '#E8825A',
   'duo-max': '#9D96E8',
   'duo-opus': '#B54FD6',
+  'duo-fable': '#4B3FD1',
   'duo-advisor': '#E05297',
   'duo-reviewer': '#C9444A',
   'duo-verifier': '#3FA6A0',
@@ -599,6 +600,7 @@ const TIER_MODEL: Record<string, [model: string, effort: string]> = {
   'duo-xhigh': ['Sonnet', 'xhigh'],
   'duo-max': ['Sonnet', 'max'],
   'duo-opus': ['Opus', 'xhigh'],
+  'duo-fable': ['Fable', 'high'],
   'duo-advisor': ['Opus', 'high'],
   'duo-reviewer': ['Opus', 'high'],
   'duo-verifier': ['Sonnet', 'medium'],
@@ -1170,6 +1172,7 @@ export const COSTUME_ALIAS: Record<string, string> = {
   'duo-xhigh': 'heavy',
   'duo-max': 'fable',
   'duo-opus': 'crown',
+  'duo-fable': 'crown',
   'duo-advisor': 'wizard',
   'duo-reviewer': 'monocle',
   'duo-verifier': 'detective',

@@ -17,9 +17,11 @@ If the task above is empty, reply in 2-3 lines with one example (for example `/d
 
 Invoking `/duo` always means several agents working in parallel, and the panel shows them side by side. Never do the task alone in this session. Split it so at least two independent tasks can start together (by area, file, question or angle; a read-only audit splits by what is audited). Only when the task truly cannot be split, say so in one line in the plan and run a worker plus the verifier in parallel with it on separate parts. Dependent tasks wait; everything else starts in the same message.
 
+This holds at every stage, not only for implementation: several Explore agents at once when the question spans areas, one verifier or reviewer per independent part instead of one for everything, parallel advisors only when the angles differ. The worker cap in section 4 counts agents that edit files; read-only agents (Explore, verifier, reviewer, advisor) may run alongside them. The usage guard still wins: at 80% or more of a window, go back to one at a time.
+
 ## 0. Preconditions
 
-- Agents must exist (listed by the Agent tool, possibly as `duo:duo-low`): `duo-low`, `-medium`, `-high`, `-xhigh`, `-max`, `-opus`, `-advisor`, `-reviewer`, `-verifier`. If one is missing, use `general-purpose` with the `model`/`effort` override of the same tier (Claude Code 2.1.292+, if available), else tell the user to install the plugin and stop.
+- Agents must exist (listed by the Agent tool, possibly as `duo:duo-low`): `duo-low`, `-medium`, `-high`, `-xhigh`, `-max`, `-opus`, `-fable`, `-advisor`, `-reviewer`, `-verifier`. If one is missing, use `general-purpose` with the `model`/`effort` override of the same tier (Claude Code 2.1.292+, if available), else tell the user to install the plugin and stop.
 - If your system prompt names your model, use that; otherwise treat it as unknown and do not guess (you cannot see the effort). On Opus (from the system prompt, or the user says so): say once "Running on Opus: workers still use Sonnet; /model sonnet before /duo saves limit on planning.", then you review yourself, no advisor and no reviewer unless the user asks; keep the verifier. On Haiku: the plan gate is mandatory (it wins over the fast path and the 80% skip, but not the 95% stop), or tell the user to switch to Sonnet.
 - Prefer picking the tier agent over a `model`/`effort` override.
 
@@ -39,7 +41,7 @@ Rules in the user's `CLAUDE.md` (global or project) and instructions in the task
 
 ## Opus budget
 
-Per flow: the advisor at most once; the reviewer at most twice (one early, only for tasks the plan marks risky, and one final); `duo-opus` only with the user's consent. Precedence on Haiku: the mandatory plan gate wins over the fast path and the 80% skip, except at >= 95% (no new tasks at all).
+Per flow: the advisor at most once; the reviewer at most twice (one early, only for tasks the plan marks risky, and one final); `duo-opus` only with the user's consent; `duo-fable` only as the last resort (see section 5) and at most once per flow, and it counts as pre-approved by the user's standing rule that Fable may be used where necessary. Precedence on Haiku: the mandatory plan gate wins over the fast path and the 80% skip, except at >= 95% (no new tasks at all).
 
 ## Which model when
 
@@ -49,6 +51,7 @@ Start with the cheapest model that is enough and move up only when the task need
 - **Opus**: gates, meaning plan critique, the final review, a second opinion. A worker only when Sonnet max failed, with the user's yes.
 - **Fable**: the hardest cases only: a bug that resists ordinary debugging, complex logic, high-stakes decisions (money, security, law), design that needs insight. Only on the user's explicit request or when Sonnet max and Opus failed; never for volume work.
 - Verification always goes to a fresh agent. Fable's cost against Opus is not measured yet, so do not assume it is cheaper.
+- `CLAUDE_CODE_SUBAGENT_MODEL`, if set, silently overrides every tier's model; check it when a tier seems to run on another model. A Fable session may be switched to Opus by a safety classifier and stay there until `/model fable`; if `duo-fable` reports Opus, say so.
 
 ## Stages and models
 
@@ -61,6 +64,7 @@ Start with the cheapest model that is enough and move up only when the task need
 | 5. Verify | `duo-verifier` | Sonnet medium, fresh agent |
 | 6. Review | `duo-reviewer` | Opus high (read-only) |
 | 7. Stuck | `duo-opus` | Opus xhigh |
+| 8. Still stuck, or very high stakes | `duo-fable` | Fable high |
 
 ## 1. Understand and plan
 
@@ -83,8 +87,9 @@ Pick the cheapest tier likely to be right the first time. Default ceiling is `hi
 | xhigh | `duo-xhigh` | unfamiliar or messy code, unclear root cause (explicitly, not by default) |
 | max | `duo-max` | very complex logic, bugs that survived xhigh |
 | opus | `duo-opus` | escalation only (section 5) |
+| fable | `duo-fable` | last resort only: Opus xhigh failed, or a task where an error is very costly (money, security, law) and insight decides it (section 5) |
 
-- xhigh/max only after a failed attempt or an explicitly unclear root cause. When unsure between two tiers up to `high`, take the higher; `opus` is never a first choice.
+- xhigh/max only after a failed attempt or an explicitly unclear root cause. When unsure between two tiers up to `high`, take the higher; `opus` and `fable` are never a first choice, except `fable` for the very high-stakes case above.
 - Insight needed → xhigh; thoroughness needed → high. Needs both → two tasks: xhigh investigates and writes a precise brief, high implements.
 
 ## 3. Plan gate (Opus, once)
@@ -101,7 +106,7 @@ Skip on the fast path and for trivial plans. Otherwise send the plan and the fil
 
 ## 5. Escalation
 
-Max 2 attempts in total per task. On failure jump straight to the Sonnet tier the defect list implies (not rung by rung), with the defect list in the brief. After the second failure re-plan or ask the user. While the usage cap is active (a window >= 80%), escalation also stops at `medium`; report instead of escalating. `duo-opus` works a task only after asking the user, or when the user pre-approved Opus in the task.
+Max 2 attempts in total per task. On failure jump straight to the Sonnet tier the defect list implies (not rung by rung), with the defect list in the brief. After the second failure re-plan or ask the user. While the usage cap is active (a window >= 80%), escalation also stops at `medium`; report instead of escalating. `duo-opus` works a task only after asking the user, or when the user pre-approved Opus in the task. If `duo-opus` also fails, or the plan marks a task as very high-stakes, `duo-fable` takes it (Fable is enabled where necessary; never for volume work, and never while a window is at 80% or more).
 
 ## History (what past runs cost)
 
