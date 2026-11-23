@@ -29,7 +29,7 @@ const RECEIPT_TOOL = 'mcp__duo-progress__receipt'
 // skip it even with the tool listed; the same request in the brief is followed.
 const STEP_BRIEF = `
 
-Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps), optionally \`plan\` (an array of their titles, a few words each) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
+Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps), optionally \`plan\` (an array of their titles, one short sentence each: what and where) and \`done: 0\`; call it again with \`done\` and a \`note\` as each step finishes: one sentence on what you did or found (file, result), up to about 150 characters. It only draws a progress bar.`
 const PANE = 'duo-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
 const DUO_TIERS = ['duo-haiku', 'duo-low', 'duo-medium', 'duo-high', 'duo-xhigh', 'duo-max', 'duo-opus', 'duo-fable', 'duo-advisor', 'duo-reviewer', 'duo-verifier'] as const
@@ -41,7 +41,7 @@ const MAX_AFTER = 20
 const MAX_TITLE = 120
 const MAX_STEPLOG = 40
 const MAX_PLAN = 30
-const MAX_NOTE = 80
+const MAX_NOTE = 160
 const MAX_WHY = 140
 const MAX_RESULT = 160
 const MAX_FILES = 20
@@ -2155,8 +2155,8 @@ export const register: Register = (on, options) => {
         properties: {
           done: { type: 'integer', minimum: 0, description: 'Steps finished so far.' },
           total: { type: 'integer', minimum: 1, description: 'Steps planned; may change if the plan changes.' },
-          note: { type: 'string', description: 'The step in progress, a few words.' },
-          plan: { type: 'array', items: { type: 'string' }, description: 'Optional, on the first call: the titles of your planned steps, a few words each.' },
+          note: { type: 'string', description: 'What this step did or found, one sentence (file, result), up to about 150 characters.' },
+          plan: { type: 'array', items: { type: 'string' }, description: 'Optional, on the first call: the titles of your planned steps, one short sentence each (what and where).' },
         },
         required: ['done'],
       },
