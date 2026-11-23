@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates the six duo worker agents from one shared body so they cannot drift.
+# Regenerates the eight duo worker agents from one shared body so they cannot drift.
 # advisor, reviewer and verifier are hand-written; do not add them here.
 set -euo pipefail
 dir="$(cd "$(dirname "$0")/.." && pwd)/agents"

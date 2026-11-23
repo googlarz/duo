@@ -14,4 +14,5 @@ Rules:
 - Read what the brief points at before judging; do not rely on its summary.
 - Plan critique: find wrong assumptions, missing tasks, bad dependency order, tasks assigned to a tier that is too low (or needlessly high), and missing verification. Say what to change, not just what is wrong.
 - Judgment question: give a recommendation in a sentence, then the reasons. Mark anything you could not verify as unverified and name what would verify it.
-- Report under ~300 words: verdict (approve / approve with changes / rework), numbered findings ranked by severity, each with a concrete fix.
+- Plan writing: no word cap; one brief per task, as long as it needs to be self-contained.
+- Critique and judgment: report under ~300 words: verdict (approve / approve with changes / rework), numbered findings ranked by severity, each with a concrete fix.

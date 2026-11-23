@@ -269,10 +269,14 @@ test('planSvg: control characters in a title are dropped, not drawn', () => {
   expect(source).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/)
 })
 
-test('statusSvg: each usage window is a named meter that turns amber from 70% and red from 90%', () => {
+test('statusSvg: each usage window is a named meter that turns amber from 80% and red from 95% (where duo\'s guard acts)', () => {
   const at = (pct5: number, pct7: number) => statusSvg(640, [], 0, 'J', 0, [{ kind: 'five_hour', percentUsed: pct5 }, { kind: 'seven_day', percentUsed: pct7 }]).source
   expect(at(10, 10)).toContain('#3FB68B')
-  expect(at(75, 10)).toContain('#D4A24C')
+  expect(at(75, 10)).not.toContain('#D4A24C') // 70-79% is still green
+  expect(at(79, 10)).not.toContain('#D4A24C')
+  expect(at(80, 10)).toContain('#D4A24C')
+  expect(at(94, 10)).toContain('#D4A24C')
+  expect(at(94, 10)).not.toContain('#E5484D')
   expect(at(95, 10)).toContain('#E5484D')
 })
 

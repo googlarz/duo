@@ -8,7 +8,7 @@
 
 On a big job, Claude Code starts helper agents by itself. By default you can't see what they are doing, which model each one runs on, or what they cost you. **duo shows every one of them live**: its task, model, effort, steps and tokens, plus how much of your usage limit you have used. You don't create or steer the agents; you watch.
 
-*An **agent** is a helper Claude starts for one task. The **model** (Haiku, Sonnet or Opus) is the brain it runs on, and **effort** is how hard it thinks. A **token** is a small piece of text the model reads or writes; your limit is counted in them.*
+*An **agent** is a helper Claude starts for one task. The **model** (Haiku, Sonnet, Opus or Fable) is the brain it runs on, and **effort** is how hard it thinks. A **token** is a small piece of text the model reads or writes; your limit is counted in them.*
 
 | | |
 | --- | --- |
@@ -32,13 +32,13 @@ Restart Claude Code, then give it a task:
 /duo:duo add rate limiting to the upload endpoint and cover it with tests
 ```
 
-`duo` is the flow and `duo-progress` is the panel; you need both to see your agents. That is all that is required. duo plans, Claude creates the agents, and you watch them in the panel and in the bar above the prompt. At the end you get a short report with what changed, what was verified, and how much of your limit the run used.
+`duo` is the flow and `duo-progress` is the panel; you need both to see your agents. The panel reads your usage live; `/duo:setup` is only the fallback for the status line. duo plans, Claude creates the agents, and you watch them in the panel and in the bar above the prompt. At the end you get a short report with what changed, what was verified, and how much of your limit the run used.
 
 ## What you see
 
 - **A live panel** with every agent: task, **model and effort**, progress, steps (open *Details* under a task), context, tokens, an estimated cost and time. With many agents at once (more than 8) it groups them by stage and shows the model mix.
 - **Your usage:** the first tile shows how much of your 5-hour and weekly window you have used, and when the 5-hour one resets ("↻ 4h 36m"; hover for both), read from Claude Code itself (no setup). It stays at the top of the grouped view too. When a run ends it says how much that run used.
-- **The plan and the work, as a picture.** One card with a crab per task: green and ticked when done, amber with a pulsing dot while running (with what it is doing), dashed while it waits, red when it broke, asleep when it has shown no sign of life for three minutes, ten while it runs a tool. A bar on each card fills with its progress, and arrows show what waits for what. Above it: the job, your limit, how far it is and what the run took of it. The bar above the prompt shows a count of what broke or went quiet (⚠ 2).
+- **The plan and the work, as a picture.** One card with a crab per task: green and ticked when done, blue with a pulsing dot while running (with what it is doing), dashed while it waits, red when it broke, asleep when it has shown no sign of life for three minutes, ten while it runs a tool. A bar on each card fills with its progress, and arrows show what waits for what. Above it: the job, your limit, how far it is and what the run took of it. The bar above the prompt shows a count of what broke or went quiet (⚠ 2).
 - **What each agent is doing now** ("editing cart.py", "running: python3"), what it returned, whether the checker said PASS or FAIL, which files it edited, and, when the orchestrator says so, why it picked that tier.
 - **A bar above the prompt** that shows the flow's progress and your usage, and appears together with the plan. It also follows agents Claude starts outside a duo flow.
 - **A run receipt:** `/duo:receipt` prints a markdown receipt of the run (every agent, model, steps, tokens, estimated cost, verdicts, files), built by the panel from what the agents did, not written by a model. Paste it into a pull request or keep it; the panel keeps the last ten finished runs.
@@ -52,14 +52,14 @@ Skip it for a one-file fix: the agents add overhead and plain Claude is simpler.
 
 ## What is tested
 
-In our own runs in the desktop app, duo works from the task to the report: Sonnet workers, a fresh checker, the panel with model, effort, steps and usage, and the bar above the prompt. **Not tested live yet:** the Fable plan and review, the 80% and 95% limit behaviour, and the newest additions (the plan picture with its arrows, the run receipt and the "why" line), which have unit tests but have not been seen in a real run.
+In our own runs in the desktop app, duo works from the task to the report: Sonnet workers, a fresh checker, the panel with model, effort, steps and usage, and the bar above the prompt. **Seen once, not tested:** the Fable plan (run once in a self-review) and the final Fable review (ran once). **Not tested live yet:** the 80% and 95% limit behaviour, and the newest additions (the plan picture with its arrows, the run receipt and the "why" line), which have unit tests but have not been seen in a real run.
 
 <details>
 <summary><b>The full list</b></summary>
 
-Tested live (desktop app): the whole `/duo:duo` flow, the panel (model, effort, steps, usage tile), the bar above the prompt, the per-run usage line, the history file, `/duo:setup`. In a terminal the status-line helper wrote the usage file. Automated tests: 119 for the panel (`cd plugins/duo-progress && claude plugin test .`, including the agent lifecycle, the receipt and contrast checks) and 16 for the helper scripts (`plugins/duo/scripts/selftest.sh`); a GitHub Actions workflow runs both and the plugin validation on every push (green on the last two pushes).
+Tested live (desktop app): the whole `/duo:duo` flow, the panel (model, effort, steps, usage tile), the bar above the prompt, the per-run usage line, the history file, `/duo:setup`. In a terminal the status-line helper wrote the usage file. Automated tests: 173 for the panel (`cd plugins/duo-progress && claude plugin test .`, including the agent lifecycle, the receipt and contrast checks) and 16 for the helper scripts (`plugins/duo/scripts/selftest.sh`); a GitHub Actions workflow runs both and the plugin validation on every push (green on the last two pushes).
 
-Not tested live: the Fable plan and review (no run has needed them), the 80% and 95% limit behaviour, the hook for a real limit, the cost forecast beyond tiny tasks, learning from past runs, resuming after a reset, a bare `/duo` (use `/duo:duo`), and narrow terminals. The panel uses Claude Code's early-access hooks and may change between releases.
+Seen once: the Fable plan (once, in a self-review) and the final Fable review (once). Not tested live: the 80% and 95% limit behaviour, the hook for a real limit, the cost forecast beyond tiny tasks, learning from past runs, resuming after a reset, a bare `/duo` (use `/duo:duo`), and narrow terminals. The panel uses Claude Code's early-access hooks and may change between releases.
 
 </details>
 
@@ -72,13 +72,13 @@ duo is a fork of **claude-kit** by JohnnyVizz ([JohnnyVizz/claude-kit](https://g
 | `savvy-flow` (the orchestrated flow, Opus and Fable workers) | [`duo-flow`](plugins/duo-flow), the same flow renamed | nothing; it stays as the original |
 | `savvy-progress` (the agents panel) | [`duo-progress`](plugins/duo-progress), renamed and extended | a picture of the plan and the work (cards, arrows, progress), your limit, per-run usage, more costumes, a bar with usage |
 | `session-band` | [`session-band`](plugins/session-band), unchanged | |
-| | [`duo`](plugins/duo) | the Sonnet-based flow: nine agents (workers by effort, an advisor, a reviewer, a verifier), a usage guard, a run history |
+| | [`duo`](plugins/duo) | the Sonnet-based flow: eleven agents (workers by effort, an advisor, a reviewer, a verifier), a usage guard, a run history |
 
 **Which one to use:** the original claude-kit (savvy-flow) if you want Opus or Fable workers; it works on any plan, including Pro. duo if you want Sonnet workers with Fable only for the plan and the review, tuned for how fast a Pro or Max limit drains. To install the original (these are the steps in his README): `/plugin marketplace add johnnyvizz/claude-kit`, then `/plugin install savvy-flow@claude-kit` and, for the panel, `/plugin install savvy-progress@claude-kit`. You can have both: the commands differ (`/savvy-flow:savvy-flow` there, `/duo-flow:duo-flow` for the same flow here, `/duo:duo` for the Sonnet flow), and `duo-progress` shows agents from either. Install only one panel plugin, not both `savvy-progress` and `duo-progress`.
 
 ## Optional extras
 
-**Usage guard (`/duo:setup`).** Run it once if you want duo to slow down near your limit: at 80% it stops using the Fable plan and caps workers at medium, at 95% it stops starting new work. It asks first, then adds a small helper to your status line (your own status line keeps working) by changing `statusLine` in `~/.claude/settings.json` and keeping a backup as `settings.json.bak-duo`. Designed, not yet tested on a real limit. Details: [usage-limits guide](plugins/duo/docs/usage-limits.md).
+**Usage guard (`/duo:setup`).** The panel reads your usage live; run this only as the fallback if you want the guard through the status line, so duo slows down near your limit: at 80% it stops using the Fable plan and caps workers at medium, at 95% it stops starting new work. It asks first, then adds a small helper to your status line (your own status line keeps working) by changing `statusLine` in `~/.claude/settings.json` and keeping a backup as `settings.json.bak-duo`. Designed, not yet tested on a real limit. Details: [usage-limits guide](plugins/duo/docs/usage-limits.md).
 
 **Your own rules in `CLAUDE.md`.** duo's defaults are plain instructions, so you change them the way you change any Claude Code behaviour: with rules in `CLAUDE.md`, global (`~/.claude/CLAUDE.md`) or per project. For example:
 
@@ -112,7 +112,7 @@ Only if you ran `/duo:setup` (it is what creates the backup), put your status li
 
 **Do I have to create or steer anything?** No. Claude creates the agents and picks models; you watch. Shape duo only with `CLAUDE.md` rules if you want.
 
-**What is an agent? A model? Effort?** An *agent* is a helper Claude starts for one task. The *model* (Haiku, Sonnet, Opus) is the brain it runs on. *Effort* (low to max) is how hard it thinks. duo shows all three for every agent.
+**What is an agent? A model? Effort?** An *agent* is a helper Claude starts for one task. The *model* (Haiku, Sonnet, Opus, Fable) is the brain it runs on. *Effort* (low to max) is how hard it thinks. duo shows all three for every agent.
 
 **What is the "gate"?** Fable is asked to write the plan and to review the finished work; Sonnet does the building. Small jobs skip it.
 
@@ -130,7 +130,7 @@ Every agent in the panel is a small animated pixel crab, and its costume follows
 <summary><b>How the flow works</b></summary>
 
 <p align="center">
-  <img src="assets/duo-stages.svg" alt="The seven duo stages and the model used at each: explore on Haiku or Sonnet, plan on Fable, build on Sonnet from low to max effort, verify on Sonnet, review on Fable, last resort on Opus or Fable" width="100%">
+  <img src="assets/duo-stages.svg" alt="The seven duo stages and the model used at each: explore on Haiku or Sonnet, plan on your session model for small jobs and on Fable for bigger ones, build on Sonnet from low to max effort, verify on Sonnet, review on Fable, last resort on Opus or Fable" width="100%">
 </p>
 
 <p align="center">
@@ -156,12 +156,12 @@ Environment overrides win over duo: if you set `CLAUDE_CODE_SUBAGENT_MODEL` (esp
 
 | Plugin | What it is |
 | --- | --- |
-| [duo](plugins/duo) | The flow and the nine agents: model and effort per stage, a usage guard, a run history |
+| [duo](plugins/duo) | The flow and the eleven agents: model and effort per stage, a usage guard, a run history |
 | [duo-progress](plugins/duo-progress) | The panel and the bar: every agent with model, steps and usage |
 | [duo-flow](plugins/duo-flow) | claude-kit's savvy-flow (Opus and Fable workers), renamed |
 | [session-band](plugins/session-band) | Band above the prompt: turn, speed, cost, cache countdown, context |
 
-Develop: `scripts/check-versions.sh` before pushing (a plugin change needs a version bump, or `update` will not see it), `plugins/duo/scripts/selftest.sh`, `cd plugins/duo-progress && claude plugin test .`, `claude plugin validate .`, and `plugins/duo/scripts/gen-agents.sh` (regenerates the six worker agents from one shared body).
+Develop: `scripts/check-versions.sh` before pushing (a plugin change needs a version bump, or `update` will not see it), `plugins/duo/scripts/selftest.sh`, `cd plugins/duo-progress && claude plugin test .`, `claude plugin validate .`, and `plugins/duo/scripts/gen-agents.sh` (regenerates the eight worker agents from one shared body).
 
 </details>
 
