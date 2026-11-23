@@ -1,6 +1,6 @@
 # duo
 
-Sonnet works, Opus checks. An orchestrated delivery flow for Claude subscriptions, where the usage limit is the budget. `/duo:duo <task>` (or `/duo <task>`, see below): the orchestrator plans, Sonnet workers implement at the effort the task needs, and Opus is consulted only at gates.
+Fable plans and reviews, Sonnet works. An orchestrated delivery flow for Claude subscriptions, where the usage limit is the budget. `/duo:duo <task>` (or `/duo <task>`, see below): Fable writes the plan first, Sonnet workers implement at the effort the task needs, and Fable reviews the result.
 
 ## Trying a bare `/duo`
 
@@ -17,19 +17,18 @@ The agents stay namespaced (`duo:duo-high`); the skill finds them either way.
 | Stage | Agent | Model / effort |
 | --- | --- | --- |
 | Explore | Explore subagent | Haiku / Sonnet low |
-| Plan | the orchestrator | session model |
-| Plan gate (once) | `duo-advisor` | Opus high, no Edit/Write |
+| Plan (once) | `duo-advisor` writes it, the orchestrator checks it | Fable high, no Edit/Write |
 | Implement | `duo-low` ... `duo-max` | Sonnet, effort low to max by difficulty |
 | Purely mechanical edits | `duo-haiku` | Haiku low, always verified |
 | Verify | `duo-verifier` | Sonnet medium, fresh agent, no Edit/Write |
-| Review (on the combined diff) | `duo-reviewer` | Opus high, no Edit/Write |
+| Review (on the combined diff) | `duo-reviewer` | Fable high, no Edit/Write |
 | Stuck after Sonnet max | `duo-opus` | Opus xhigh |
 | Last resort or very high stakes | `duo-fable` | Fable high |
 
 ## Rules of thumb
 
-- **Opus budget:** advisor at most once, reviewer at most twice per flow (one early only for risky tasks, one final), `duo-opus` only with your consent.
-- **Fast path:** <= 2 tasks, none marked risky, skips advisor and reviewer; only the verifier runs. **Lite path:** 3-4 low-risk tasks skip the advisor, keep the verifier and one final review. On Haiku the plan gate is mandatory and wins over the fast path and the 80% skip (except at >= 95%). Default effort ceiling is `high`; xhigh/max only after a failed attempt or an unclear root cause.
+- **Gate budget:** advisor (writes the plan) at most once, reviewer at most twice per flow (one early only for risky tasks, one final), `duo-opus` only with your consent.
+- **Fast path:** <= 2 tasks, none marked risky, skips advisor and reviewer (the orchestrator writes the plan); only the verifier runs. **Lite path:** 3-4 low-risk tasks, the advisor still writes the plan, keep the verifier and one final review. On Haiku the plan gate is mandatory and wins over the fast path and the 80% skip (except at >= 95%). Default effort ceiling is `high`; xhigh/max only after a failed attempt or an unclear root cause.
 - **Escalation cap:** max 2 attempts per task; a failure jumps straight to the Sonnet tier the defect list implies.
 - **Usage limits:** fresh `~/.claude/duo-usage.json` at >= 80% skips the plan gate and early reviewer, caps workers at medium and stops escalation at medium (it reports instead); at >= 95% nothing new starts. A limit marker (`~/.claude/duo-limit-hit.json`) written by the `StopFailure` hook is a hint: it counts only if newer than the flow start and the five-hour window has not reset. If the orchestrator's own turn died, say "continue" and the flow resumes from the report. Details in [docs/usage-limits.md](docs/usage-limits.md).
 - **Small tasks:** use `opusplan` or plain Sonnet instead.

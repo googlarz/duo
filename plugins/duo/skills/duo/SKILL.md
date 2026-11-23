@@ -1,13 +1,13 @@
 ---
 name: duo
-description: Subscription-friendly orchestrated flow. Sonnet does the work (effort low to max, picked per task), Opus is consulted only at gates (plan critique, final review, escalation), Fable only as the last resort. The model changes with the stage of the task. Invoke with /duo <task>.
+description: Subscription-friendly orchestrated flow. Fable writes the plan first and does the final review (the gates), Sonnet does the work (effort low to max, picked per task), Opus is an escalation worker, Haiku does mechanical edits. The model changes with the stage of the task. Invoke with /duo <task>.
 disable-model-invocation: true
 argument-hint: <task description>
 ---
 
 # Duo
 
-You are the **orchestrator**, normally a Sonnet session. You plan, brief, delegate and decide. Subscription limits are the budget: Sonnet does the volume, Opus is a gate, Fable is the last resort.
+You are the **orchestrator**, normally a Sonnet session. You plan, brief, delegate and decide. Subscription limits are the budget: Fable plans and reviews (the gates), Sonnet does the volume, Opus is an escalation worker.
 
 Task from the user: $ARGUMENTS
 
@@ -31,7 +31,7 @@ If `mcp__duo-progress__progress` is among your tools (including deferred; load w
 
 ## User rules
 
-Rules in the user's `CLAUDE.md` (global or project) and instructions in the task itself override the defaults in this file: model and effort preferences, the Opus budget, usage thresholds, fast-path size, review depth. Follow them. Exception: `duo-opus` as a worker still needs the user's explicit yes (a rule that pre-approves Opus counts); `duo-fable` is covered by the standing yes to use Fable where necessary, and a read-only role stays read-only. Environment overrides (`CLAUDE_CODE_SUBAGENT_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`) can silently replace the tier's model or effort; if you suspect that, say so in the report.
+Rules in the user's `CLAUDE.md` (global or project) and instructions in the task itself override the defaults in this file: model and effort preferences, the gate budget, usage thresholds, fast-path size, review depth. Follow them. Exception: `duo-opus` as a worker still needs the user's explicit yes (a rule that pre-approves Opus counts); `duo-fable` is covered by the standing yes to use Fable where necessary, and a read-only role stays read-only. Environment overrides (`CLAUDE_CODE_SUBAGENT_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`) can silently replace the tier's model or effort; if you suspect that, say so in the report.
 
 ## Usage limits
 
@@ -39,18 +39,18 @@ Rules in the user's `CLAUDE.md` (global or project) and instructions in the task
 - Before choosing tiers, and again before each dispatch, get the usage. First choice: the tool `mcp__duo-progress__usage` if it is among your tools (including deferred; load with ToolSearch `select:mcp__duo-progress__usage`): it answers live, with no file and no setup, as `{"five_hour": {"used_percentage", "resets_at"}, "seven_day": {...}}` (either window may be missing) or a sentence saying there is no reading. Otherwise read `~/.claude/duo-usage.json` if it exists and `updated_at` (epoch s) is within 15 minutes (same shape plus `updated_at`). Any window >= 80% (the cap): skip the plan gate and the early reviewer, cap workers at `medium`, keep the verifier and, where the path has one and the session is not Opus or Fable, the single final reviewer. >= 95%: start no new tasks at all (a verifier or reviewer for work already finished may still run), report state. When the history forecast says the run would cross 80% before it ends, say so in the plan and offer a smaller scope. No tool answer and a missing or stale file: proceed, but say once in the plan and once in the final report that the usage guard is off, and that `/duo:setup` turns it on (see docs/usage-limits.md).
 - Limit marker: `~/.claude/duo-limit-hit.json` (`{"at": epoch s, "session_id"}`) is a hint, written when a turn dies from a rate limit. Check it between dispatches. It counts only if its `at` is greater than the baseline, and is ignored when `five_hour.resets_at` from the usage reading you used is already in the past; with no reading, it counts. If it counts, stop dispatching and report: accepted tasks, finished-but-unreviewed tasks, pending tasks, so the user can resume. Also offer, in one line, to resume by itself at the reset time (`resets_at`): if a scheduling tool is among your tools (`CronCreate` or `ScheduleWakeup`, possibly deferred), schedule one wake-up at that time with a prompt that tells you to continue from the report; do it only after the user says yes, and say that the session must stay open for it to fire. If your own turn died, the user simply says continue and the flow resumes from the report. Switching model does not help for session/weekly limits (shared across models); only for a model-specific Opus or Sonnet limit message.
 
-## Opus budget
+## Gate budget
 
-Per flow: the advisor at most once; the reviewer at most twice (one early, only for tasks the plan marks risky, and one final); `duo-opus` only with the user's consent; `duo-fable` only as the last resort (see section 5) and at most once per flow.
+Per flow: the advisor (Fable, writes the plan) at most once; the reviewer at most twice (one early, only for tasks the plan marks risky, and one final); `duo-opus` only with the user's consent; `duo-fable` only as the last resort (see section 5) and at most once per flow.
 
 ## Which model when
 
 Start with the cheapest model that is enough and move up only when the task needs it.
 - **Haiku**: searching files, simple reads, listing (through Explore), and purely mechanical edits through `duo-haiku` (the same exact pattern in many places). Nothing where a mistake is costly; a verifier always follows `duo-haiku`.
 - **Sonnet** (low or medium by default): all volume work, such as edits, known-cause fixes, tests, drafts. Raise effort to high, then xhigh, only for delicate work with many edge cases.
-- **Opus**: gates, meaning plan critique, the final review, a second opinion. A worker only when Sonnet max failed, with the user's yes.
-- **Fable**: the hardest cases only: a bug that resists ordinary debugging, complex logic, high-stakes decisions (money, security, law), design that needs insight. When Sonnet max and Opus failed, or the stakes are very high; never for volume work.
-- Verification always goes to a fresh agent. Fable's cost against Opus is not measured yet, so do not assume it is cheaper.
+- **Opus**: the daily-driver session model, and a worker only when Sonnet max failed, with the user's yes.
+- **Fable**: the gates: it writes the plan first (`duo-advisor`) and does the final review (`duo-reviewer`). As a worker (`duo-fable`) only for the hardest cases: a bug that resists ordinary debugging, complex logic, high-stakes decisions (money, security, law), design that needs insight; never for volume work.
+- Verification always goes to a fresh agent. The user finds Fable cheaper than expected (their observation; duo has not measured it): watch the panel usage and tell the user if a window fills faster than planned.
 - `CLAUDE_CODE_SUBAGENT_MODEL`, if set, silently overrides every tier's model; check it when a tier seems to run on another model. A Fable session may be switched to Opus by a safety classifier and stay there until `/model fable`; if `duo-fable` reports Opus, say so.
 
 ## Stages and models
@@ -58,11 +58,11 @@ Start with the cheapest model that is enough and move up only when the task need
 | Stage | Who | Model / effort |
 |---|---|---|
 | 1. Explore | Explore subagent | Haiku or Sonnet low |
-| 2. Plan | you | session model |
-| 3. Plan gate | `duo-advisor` | Opus high (read-only) |
+| 2. Plan | `duo-advisor` writes it, you check it | Fable high (read-only) |
+| 3. Plan gate | merged into stage 2 | |
 | 4. Implement | `duo-<tier>` | Sonnet low to max |
 | 5. Verify | `duo-verifier` | Sonnet medium, fresh agent |
-| 6. Review | `duo-reviewer` | Opus high (read-only) |
+| 6. Review | `duo-reviewer` | Fable high (read-only) |
 | 7. Stuck | `duo-opus` | Opus xhigh |
 | 8. Still stuck, or very high stakes | `duo-fable` | Fable high |
 
@@ -70,10 +70,10 @@ Start with the cheapest model that is enough and move up only when the task need
 
 1. Read what is needed: relevant files, CLAUDE.md, recent history. Wide searches go to an Explore subagent.
 2. If the task touches visible design (UI, layout, copy, flow), the design decisions are yours (or the user's): write them into the brief as concrete specs, or show a mockup first. Workers never invent UI.
-3. Break the work into tasks, each with a self-contained brief (what, where, constraints, definition of done, how to verify), dependencies, a tier (section 2), and a risk mark where a defect would be costly.
-4. For plans of five or more tasks, also write the plan (tasks, decided specs, dependencies) to a file outside the repo (the scratchpad directory if your system prompt names one, else `~/.claude/duo-plans/<slug>.md`) and point the briefs at it: it survives `/compact`, `/clear` and a resume, and workers inherit the decided specs. Present the plan compactly. End it with one cost line the user can read at a glance, no dollars: task count per tier and the Opus calls planned (for example "about 5 Sonnet tasks, 1 Opus check, 1 Opus review"), and when the history (see **History**) has at least 3 past runs, a forecast in the user's own currency: "about 3-5% of your 5-hour window". With fewer runs say nothing about it; never invent a number. Ask first only if a reading of the request would lead to materially different work.
-5. Fast path: <= 2 tasks and none marked risky: skip advisor and reviewer, keep only the verifier (on Haiku the plan gate stays).
-6. Lite path: 3-4 tasks and none marked risky: skip the advisor, keep the verifier and the single final reviewer (on Haiku the plan gate stays).
+3. Break the work into tasks (on the fast path you do it yourself; otherwise `duo-advisor` writes this plan, see section 3), each with a self-contained brief (what, where, constraints, definition of done, how to verify), dependencies, a tier (section 2), and a risk mark where a defect would be costly.
+4. For plans of five or more tasks, also write the plan (tasks, decided specs, dependencies) to a file outside the repo (the scratchpad directory if your system prompt names one, else `~/.claude/duo-plans/<slug>.md`) and point the briefs at it: it survives `/compact`, `/clear` and a resume, and workers inherit the decided specs. Present the plan compactly. End it with one cost line the user can read at a glance, no dollars: task count per tier and the Opus calls planned (for example "about 5 Sonnet tasks, 1 Fable plan, 1 Fable review"), and when the history (see **History**) has at least 3 past runs, a forecast in the user's own currency: "about 3-5% of your 5-hour window". With fewer runs say nothing about it; never invent a number. Ask first only if a reading of the request would lead to materially different work.
+5. Fast path: <= 2 tasks and none marked risky: you write the plan, skip advisor and reviewer, keep only the verifier (on Haiku the plan gate stays).
+6. Lite path: 3-4 tasks and none marked risky: the advisor still writes the plan, keep the verifier and the single final reviewer (on Haiku the plan gate stays).
 
 ## 2. Tiering (all Sonnet unless noted)
 
@@ -93,14 +93,14 @@ Pick the cheapest tier likely to be right the first time. Default ceiling is `hi
 - xhigh/max only after a failed attempt or an explicitly unclear root cause. When unsure between two tiers up to `high`, take the higher; `opus` and `fable` are never a first choice, except `fable` for the very high-stakes case above.
 - Insight needed → xhigh; thoroughness needed → high. Needs both → two tasks: xhigh investigates and writes a precise brief, high implements.
 
-## 3. Plan gate (Opus, once)
+## 3. Plan (Fable, once)
 
-Skip on the fast path and for trivial plans. Otherwise send the plan and the files it relies on to `duo-advisor`. Apply its changes or write down why not. One round; do not loop. The advisor only recommends; it never routes work to Opus itself.
+Skip on the fast path and for trivial plans, and when a usage window is at 80% or more (then you write the plan). Otherwise send the user's request, your notes, the relevant CLAUDE.md rules and the files involved to `duo-advisor` and ask it to write the plan: tasks, each with a brief, tier, dependencies, risk mark and how to verify. Check the plan against the request, apply changes or write down why not, then dispatch. One round; do not loop. The advisor only plans and recommends; it never routes work to Opus itself.
 
 ## 4. Delegate, verify, review
 
 - Use the Agent tool with the tier agent as `subagent_type`. Run independent tasks in parallel (at most 3 workers at once, 1 while a window is at 80% or more), chain dependent ones. The worker has no access to this chat: brief with paths, decided specs, constraints and the exact verification.
-- Early check: after the first task other tasks depend on, run `duo-verifier` plus your own check before fanning out. Early `duo-reviewer` only for tasks the plan marks risky (see Opus budget).
+- Early check: after the first task other tasks depend on, run `duo-verifier` plus your own check before fanning out. Early `duo-reviewer` only for tasks the plan marks risky (see Gate budget).
 - Verify per dependency wave, not after every task (fresh verifier, never the writer). Skip for pure config/doc edits.
 - Review: you check each report against its brief; then **one** `duo-reviewer` pass over the combined diff before closing. Give it the brief(s), the changed paths and the verifier output.
 - Outcome per task: accept, return with a precise defect list, or escalate.

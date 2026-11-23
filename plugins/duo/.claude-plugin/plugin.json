@@ -1,7 +1,7 @@
 {
   "name": "duo",
-  "version": "0.10.0",
-  "description": "Sonnet works, Opus checks: an orchestrated flow for Claude subscriptions where you see every agent and the model behind it, and your usage limit is respected.",
+  "version": "0.11.0",
+  "description": "Fable plans and reviews, Sonnet works: an orchestrated flow for Claude subscriptions where you see every agent and the model behind it, and your usage limit is respected.",
   "author": {
     "name": "googlarz",
     "url": "https://github.com/googlarz"

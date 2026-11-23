@@ -603,8 +603,8 @@ const TIER_MODEL: Record<string, [model: string, effort: string]> = {
   'duo-max': ['Sonnet', 'max'],
   'duo-opus': ['Opus', 'xhigh'],
   'duo-fable': ['Fable', 'high'],
-  'duo-advisor': ['Opus', 'high'],
-  'duo-reviewer': ['Opus', 'high'],
+  'duo-advisor': ['Fable', 'high'],
+  'duo-reviewer': ['Fable', 'high'],
   'duo-verifier': ['Sonnet', 'medium'],
 }
 

@@ -45,7 +45,7 @@ test('tier: an unknown agent type stays other and shows its raw type', async ($,
 test('tier: a planned duo task shows its tier and model', async ($, on) => {
   on('ui.open', () => ({ value: { isPlaced: true } }))
   await $.tool.call({ tool: PROGRESS, title: 'F', phase: 'delegate', tasks: [{ title: 'Gate', tier: 'duo-reviewer' }] } as never)
-  expect(await (await mount($)).find({ type: 'Text', text: /duo-reviewer · Opus · high/ })).toBeDefined()
+  expect(await (await mount($)).find({ type: 'Text', text: /duo-reviewer · Fable · high/ })).toBeDefined()
 })
 
 test('tier: a plugin-prefixed planned tier is kept; an unknown one stays empty', async ($, on) => {

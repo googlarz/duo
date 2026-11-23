@@ -9,7 +9,7 @@ A Claude Code mod: a progress bar above the prompt and a live panel of subagents
 
 ## Tiers
 
-Besides `fable`, `heavy`, `careful`, `medium` and `light`, the panel knows the [duo](../duo) agents (`duo-<x>`, also as `duo:duo-<x>`): `duo-haiku` (Haiku), `duo-low`, `duo-medium`, `duo-high`, `duo-xhigh`, `duo-max` (Sonnet), `duo-verifier` (Sonnet medium) and the Opus gate agents `duo-opus` (xhigh), `duo-advisor` and `duo-reviewer` (high). Planned tasks take the same names (`tier: "duo-high"`). They reuse the existing crabs (low light, medium medium, high careful, xhigh heavy, max fable; advisor, reviewer, verifier and opus have their own, see below) tinted with the tier colour; advisor, reviewer, verifier and opus have their own costumes, which carry the costume's own tint instead (the tier colour still marks their text and bars). Unknown agent types stay `other`.
+Besides `fable`, `heavy`, `careful`, `medium` and `light`, the panel knows the [duo](../duo) agents (`duo-<x>`, also as `duo:duo-<x>`): `duo-haiku` (Haiku), `duo-low`, `duo-medium`, `duo-high`, `duo-xhigh`, `duo-max` (Sonnet), `duo-verifier` (Sonnet medium) and `duo-opus` (Opus xhigh), `duo-fable` (Fable high) and the Fable gate agents `duo-advisor` and `duo-reviewer` (high). Planned tasks take the same names (`tier: "duo-high"`). They reuse the existing crabs (low light, medium medium, high careful, xhigh heavy, max fable; advisor, reviewer, verifier and opus have their own, see below) tinted with the tier colour; advisor, reviewer, verifier and opus have their own costumes, which carry the costume's own tint instead (the tier colour still marks their text and bars). Unknown agent types stay `other`.
 
 ## Details
 

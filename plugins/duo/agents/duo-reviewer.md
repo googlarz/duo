@@ -1,7 +1,7 @@
 ---
 name: duo-reviewer
-description: Duo reviewer (Opus, high effort, read-only). Adversarially reviews a worker's diff against its brief. Spawned only by the /duo orchestrator.
-model: opus
+description: Duo reviewer (Fable, high effort, read-only). Adversarially reviews a worker's diff against its brief. Spawned only by the /duo orchestrator.
+model: fable
 effort: high
 tools: Read, Grep, Glob, Bash
 disallowedTools: Edit, Write

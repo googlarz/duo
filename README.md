@@ -52,14 +52,14 @@ Skip it for a one-file fix: the agents add overhead and plain Claude is simpler.
 
 ## What is tested
 
-In our own runs in the desktop app, duo works from the task to the report: Sonnet workers, a fresh checker, the panel with model, effort, steps and usage, and the bar above the prompt. **Not tested live yet:** the Opus plan check and review, the 80% and 95% limit behaviour, and the newest additions (the plan picture with its arrows, the run receipt and the "why" line), which have unit tests but have not been seen in a real run.
+In our own runs in the desktop app, duo works from the task to the report: Sonnet workers, a fresh checker, the panel with model, effort, steps and usage, and the bar above the prompt. **Not tested live yet:** the Fable plan and review, the 80% and 95% limit behaviour, and the newest additions (the plan picture with its arrows, the run receipt and the "why" line), which have unit tests but have not been seen in a real run.
 
 <details>
 <summary><b>The full list</b></summary>
 
 Tested live (desktop app): the whole `/duo:duo` flow, the panel (model, effort, steps, usage tile), the bar above the prompt, the per-run usage line, the history file, `/duo:setup`. In a terminal the status-line helper wrote the usage file. Automated tests: 119 for the panel (`cd plugins/duo-progress && claude plugin test .`, including the agent lifecycle, the receipt and contrast checks) and 16 for the helper scripts (`plugins/duo/scripts/selftest.sh`); a GitHub Actions workflow runs both and the plugin validation on every push (green on the last two pushes).
 
-Not tested live: the Opus plan check and review (no run has needed them), the 80% and 95% limit behaviour, the hook for a real limit, the cost forecast beyond tiny tasks, learning from past runs, resuming after a reset, a bare `/duo` (use `/duo:duo`), and narrow terminals. The panel uses Claude Code's early-access hooks and may change between releases.
+Not tested live: the Fable plan and review (no run has needed them), the 80% and 95% limit behaviour, the hook for a real limit, the cost forecast beyond tiny tasks, learning from past runs, resuming after a reset, a bare `/duo` (use `/duo:duo`), and narrow terminals. The panel uses Claude Code's early-access hooks and may change between releases.
 
 </details>
 
@@ -74,17 +74,17 @@ duo is a fork of **claude-kit** by JohnnyVizz ([JohnnyVizz/claude-kit](https://g
 | `session-band` | [`session-band`](plugins/session-band), unchanged | |
 | | [`duo`](plugins/duo) | the Sonnet-based flow: nine agents (workers by effort, an advisor, a reviewer, a verifier), a usage guard, a run history |
 
-**Which one to use:** the original claude-kit (savvy-flow) if you want Opus or Fable workers; it works on any plan, including Pro. duo if you want Sonnet workers with Opus only as a plan check and a review, tuned for how fast a Pro or Max limit drains. To install the original (these are the steps in his README): `/plugin marketplace add johnnyvizz/claude-kit`, then `/plugin install savvy-flow@claude-kit` and, for the panel, `/plugin install savvy-progress@claude-kit`. You can have both: the commands differ (`/savvy-flow:savvy-flow` there, `/duo-flow:duo-flow` for the same flow here, `/duo:duo` for the Sonnet flow), and `duo-progress` shows agents from either. Install only one panel plugin, not both `savvy-progress` and `duo-progress`.
+**Which one to use:** the original claude-kit (savvy-flow) if you want Opus or Fable workers; it works on any plan, including Pro. duo if you want Sonnet workers with Fable only for the plan and the review, tuned for how fast a Pro or Max limit drains. To install the original (these are the steps in his README): `/plugin marketplace add johnnyvizz/claude-kit`, then `/plugin install savvy-flow@claude-kit` and, for the panel, `/plugin install savvy-progress@claude-kit`. You can have both: the commands differ (`/savvy-flow:savvy-flow` there, `/duo-flow:duo-flow` for the same flow here, `/duo:duo` for the Sonnet flow), and `duo-progress` shows agents from either. Install only one panel plugin, not both `savvy-progress` and `duo-progress`.
 
 ## Optional extras
 
-**Usage guard (`/duo:setup`).** Run it once if you want duo to slow down near your limit: at 80% it stops using the Opus plan check and caps workers at medium, at 95% it stops starting new work. It asks first, then adds a small helper to your status line (your own status line keeps working) by changing `statusLine` in `~/.claude/settings.json` and keeping a backup as `settings.json.bak-duo`. Designed, not yet tested on a real limit. Details: [usage-limits guide](plugins/duo/docs/usage-limits.md).
+**Usage guard (`/duo:setup`).** Run it once if you want duo to slow down near your limit: at 80% it stops using the Fable plan and caps workers at medium, at 95% it stops starting new work. It asks first, then adds a small helper to your status line (your own status line keeps working) by changing `statusLine` in `~/.claude/settings.json` and keeping a backup as `settings.json.bak-duo`. Designed, not yet tested on a real limit. Details: [usage-limits guide](plugins/duo/docs/usage-limits.md).
 
 **Your own rules in `CLAUDE.md`.** duo's defaults are plain instructions, so you change them the way you change any Claude Code behaviour: with rules in `CLAUDE.md`, global (`~/.claude/CLAUDE.md`) or per project. For example:
 
 ```markdown
 ## duo
-- Opus only for the plan check and the review, never as a worker.
+- Fable only for the plan and the review (and as a last-resort worker); Opus only as an escalation worker with your approval.
 - Cap effort at medium unless I say otherwise.
 - Always run the final review, even on small jobs.
 ```
@@ -114,11 +114,11 @@ Only if you ran `/duo:setup` (it is what creates the backup), put your status li
 
 **What is an agent? A model? Effort?** An *agent* is a helper Claude starts for one task. The *model* (Haiku, Sonnet, Opus) is the brain it runs on. *Effort* (low to max) is how hard it thinks. duo shows all three for every agent.
 
-**What is the "Opus gate"?** Opus is only asked to check the plan and to review the finished work; Sonnet does the building. Small jobs skip it.
+**What is the "gate"?** Fable is asked to write the plan and to review the finished work; Sonnet does the building. Small jobs skip it.
 
 **Will it use more of my limit?** Possibly, see the box at the top. Each run reports how much it used, so you can judge for yourself.
 
-**Does it change my files?** The builder agents edit your project, as in any Claude Code run. The plan checker (the advisor), reviewer and verifier have no Edit or Write tools (they keep a shell for running checks and are told not to change files).
+**Does it change my files?** The builder agents edit your project, as in any Claude Code run. The planner (the advisor), reviewer and verifier have no Edit or Write tools (they keep a shell for running checks and are told not to change files).
 
 **Something looks off.** Please [open an issue](https://github.com/googlarz/duo/issues) with what you saw.
 
@@ -130,14 +130,14 @@ Every agent in the panel is a small animated pixel crab, and its costume follows
 <summary><b>How the flow works</b></summary>
 
 <p align="center">
-  <img src="assets/duo-stages.svg" alt="The seven duo stages and the model used at each: explore on Haiku or Sonnet, plan on your session model, plan check on Opus, build on Sonnet from low to max effort, verify on Sonnet, review on Opus, last resort on Opus" width="100%">
+  <img src="assets/duo-stages.svg" alt="The seven duo stages and the model used at each: explore on Haiku or Sonnet, plan on Fable, build on Sonnet from low to max effort, verify on Sonnet, review on Fable, last resort on Opus or Fable" width="100%">
 </p>
 
 <p align="center">
-  <img src="assets/duo-task.svg" alt="Each task: brief, built by Sonnet, checked by a fresh checker, reviewed by Opus, accepted. Failures go back with a defect list, max two attempts, Opus as a worker only with your approval" width="100%">
+  <img src="assets/duo-task.svg" alt="Each task: brief, built by Sonnet, checked by a fresh checker, reviewed by Fable, accepted. Failures go back with a defect list, max two attempts, Opus as a worker only with your approval" width="100%">
 </p>
 
-Sonnet does the volume and Opus is a gate. Up to 2 tasks skip both Opus calls; 3 to 4 low-risk tasks skip the plan check and keep one final review. Two attempts per task, a checker that did not write the code, and Opus as a worker only if you say yes.
+Sonnet does the volume and Fable is the gate. Up to 2 tasks skip both Fable calls (you plan them yourself); 3 to 4 low-risk tasks get the Fable plan and one final review. Two attempts per task, a checker that did not write the code, and Opus as a worker only if you say yes.
 
 | Effort | Used for |
 | --- | --- |
