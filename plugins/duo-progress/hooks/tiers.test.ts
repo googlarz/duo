@@ -118,6 +118,29 @@ test('steps: a zero total shows ? not 0', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /Steps: 2\/\?/ })).toBeDefined()
 })
 
+test('steps: with a plan, the note logged when a step finished is shown on that row', async ($, on) => {
+  await spawn($, on, 'duo-high')
+  const call = (x: object) => $.tool.call({ tool: STEP, agentId: 'a1', ...x } as never)
+  await call({ done: 0, plan: ['Read code', 'Write fix', 'Run tests'] })
+  await call({ done: 1, note: 'found the bug in line 40' })
+  await call({ done: 2, note: 'patched register.tsx' })
+  const ui = await press($)
+  expect(await ui.find({ type: 'Text', text: /✓ 1\. Read code — found the bug in line 40/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /✓ 2\. Write fix — patched register\.tsx/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /▸ 3\. Run tests *$/ })).toBeDefined()
+})
+
+test('steps: non-numeric counts never show NaN and an empty call keeps the last note', async ($, on) => {
+  await spawn($, on, 'duo-high')
+  const call = (x: object) => $.tool.call({ tool: STEP, agentId: 'a1', ...x } as never)
+  await call({ done: 1, total: 3, note: 'first done' })
+  expect(await call({ done: 'abc', total: null })).toMatchObject({ result: 'ok' })
+  await call({ done: 1, total: 9999 })
+  const ui = await press($)
+  expect(await ui.find({ type: 'Text', text: /NaN/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Steps: 1\/30 · first done/ })).toBeDefined()
+})
+
 const briefed = async ($: Engine, on: On, subagentType: string) => {
   let seen = ''
   mock.clock(on)

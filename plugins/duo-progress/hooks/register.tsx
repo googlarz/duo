@@ -1508,7 +1508,9 @@ export const detailLines = (a: AgentRun, at: number): string[] => {
   if (a.stepPlan?.length) {
     a.stepPlan.forEach((title, i) => {
       const mark = i < done ? '✓' : i === done && a.status === 'running' ? '▸' : '○'
-      lines.push(`  ${mark} ${i + 1}. ${title}`)
+      // The note logged when step i finished (done went to i + 1) is shown with it.
+      const finished = i < done ? [...log].reverse().find(l => l.n === i + 1 && l.note)?.note : undefined
+      lines.push(`  ${mark} ${i + 1}. ${title}${finished ? ` — ${finished}` : ''}`)
     })
   } else {
     const noted = log.filter(l => l.note)
@@ -2304,13 +2306,16 @@ export const register: Register = (on, options) => {
       list.map(a => {
         if (a.agentId !== agentId) return a
         matched = true
-        const total = Math.max(0, Math.round(input.total ?? a.stepTotal ?? 0))
-        const done = Math.max(0, Math.round(input.done ?? a.stepDone ?? 0))
+        // A model may send a string or null: anything that is not a finite number falls back to the stored value.
+        const count = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : fallback)
+        const total = Math.min(MAX_PLAN, Math.max(0, count(input.total, a.stepTotal ?? 0)))
+        const done = Math.max(0, count(input.done, a.stepDone ?? 0))
         const plan = cleanPlan(input.plan)
         const stepDone = total ? Math.min(total, done) : done
         const note = typeof input.note === 'string' && input.note.trim() ? clip(input.note.trim(), MAX_NOTE) : ''
-        const stepLog = [...(a.stepLog ?? []), { n: stepDone, note, at }].slice(-MAX_STEPLOG)
-        return { ...a, lastAt: at, stepTotal: plan && !input.total && !a.stepTotal ? plan.length : total, stepDone, stepNote: note || undefined, stepPlan: plan ?? a.stepPlan, stepLog }
+        // A call without a note keeps the last note and adds nothing to the log.
+        const stepLog = note ? [...(a.stepLog ?? []), { n: stepDone, note, at }].slice(-MAX_STEPLOG) : a.stepLog
+        return { ...a, lastAt: at, stepTotal: plan && !total && !a.stepTotal ? plan.length : total, stepDone, stepNote: note || a.stepNote, stepPlan: plan ?? a.stepPlan, stepLog }
       }),
     )
     return { result: matched ? 'ok' : `ignored: no panel row for agent ${agentId}` }
