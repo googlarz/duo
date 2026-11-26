@@ -21,6 +21,10 @@ An orchestrated delivery flow for Claude Code. Run `/duo-flow <task>` (`/duo-flo
 
 On a Claude subscription? See [duo](../duo): Sonnet works, Opus checks.
 
+## How it differs from duo
+
+duo-flow is the original flow plus renames and an always-parallel rule, and a small sync of the worker agents with duo's (no `Agent` tool for workers, a "blocked" line, the step-reporting line). It has no usage guard, no verifier agent, no plan file, no run history and no receipt; those are duo's.
+
 ## With duo-progress
 
 The skill and the agents run fine alone. With the [duo-progress](../duo-progress) mod installed, the orchestrator reports the plan and accepted tasks to a progress bar above the prompt, and each worker reports its own steps to the agents panel. Without the mod those calls are skipped.

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Statusline helper: caches subscription rate-limit usage to ~/.claude/duo-usage.json.
-# Usage: usage-cache.sh [next-statusline-command ...]   (reads Claude Code statusline JSON on stdin)
-# Never fails the statusline: always exits 0, errors silent.
+# Usage: usage-cache.sh ['next statusline command' | cmd arg ...]   (reads Claude Code statusline JSON on stdin)
+# One argument is run through bash -c (pipes, quotes, VAR=1 prefix keep working); several are exec'd as argv.
+# Caching never fails the statusline; with a chained command, its stdout, stderr and exit status pass through.
 input=$(cat 2>/dev/null) || input=""
 out="${HOME}/.claude/duo-usage.json"
 now=$(date +%s)
@@ -56,8 +57,15 @@ print(" · ".join("%s %d%%" % (l, o[k]["used_percentage"]) for k, l in (("five_h
   fi
 } 2>/dev/null
 
-if [ "$#" -gt 0 ]; then
-  printf '%s' "$input" | "$@" 2>/dev/null
+if [ "$#" -eq 1 ] && [ -x "$1" ] && [ -f "$1" ]; then
+  printf '%s' "$input" | "$1"
+  exit $?
+elif [ "$#" -eq 1 ]; then
+  printf '%s' "$input" | bash -c "$1"
+  exit $?
+elif [ "$#" -gt 1 ]; then
+  printf '%s' "$input" | "$@"
+  exit $?
 else
   [ -n "$text" ] && printf '%s\n' "$text"
 fi

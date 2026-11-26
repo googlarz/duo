@@ -38,7 +38,7 @@ Restart Claude Code, then give it a task:
 
 - **A live panel** with every agent: task, **model and effort**, progress, steps (open *Details* under a task), context, tokens, an estimated cost and time. With many agents at once (more than 8) it groups them by stage and shows the model mix.
 - **Your usage:** the first tile shows how much of your 5-hour and weekly window you have used, and when the 5-hour one resets ("↻ 4h 36m"; hover for both), read from Claude Code itself (no setup). It stays at the top of the grouped view too. When a run ends it says how much that run used.
-- **The plan and the work, as a picture.** One card with a crab per task: green and ticked when done, blue with a pulsing dot while running (with what it is doing), dashed while it waits, red when it broke, asleep when it has shown no sign of life for three minutes, ten while it runs a tool. A bar on each card fills with its progress, and arrows show what waits for what. Above it: the job, your limit, how far it is and what the run took of it. The bar above the prompt shows a count of what broke or went quiet (⚠ 2).
+- **The plan and the work, as a picture.** One card with a crab per task: green and ticked when done, blue with a pulsing dot while running (with what it is doing), dashed while it waits, red when it broke, asleep when it has shown no sign of life for three minutes (ten for the advisor, reviewer and verifier, and ten while it runs a tool). A bar on each card fills with its progress, and arrows show what waits for what. Above it: the job, your two usage meters (5-hour and weekly), how far it is and what the run took of it. The first tile in the header is a separate, shorter read-out of the same usage. The bar above the prompt shows a count of what broke or went quiet (⚠ 2).
 - **What each agent is doing now** ("editing cart.py", "running: python3"), what it returned, whether the checker said PASS or FAIL, which files it edited, and, when the orchestrator says so, why it picked that tier.
 - **A bar above the prompt** that shows the flow's progress and your usage, and appears together with the plan. It also follows agents Claude starts outside a duo flow.
 - **A run receipt:** `/duo:receipt` prints a markdown receipt of the run (every agent, model, steps, tokens, estimated cost, verdicts, files), built by the panel from what the agents did, not written by a model. Paste it into a pull request or keep it; the panel keeps the last ten finished runs.
@@ -57,7 +57,7 @@ In our own runs in the desktop app, duo works from the task to the report: Sonne
 <details>
 <summary><b>The full list</b></summary>
 
-Tested live (desktop app): the whole `/duo:duo` flow, the panel (model, effort, steps, usage tile), the bar above the prompt, the per-run usage line, the history file, `/duo:setup`. In a terminal the status-line helper wrote the usage file. Automated tests: 173 for the panel (`cd plugins/duo-progress && claude plugin test .`, including the agent lifecycle, the receipt and contrast checks) and 16 for the helper scripts (`plugins/duo/scripts/selftest.sh`); a GitHub Actions workflow runs both and the plugin validation on every push (green on the last two pushes).
+Tested live (desktop app): the whole `/duo:duo` flow, the panel (model, effort, steps, usage tile), the bar above the prompt, the per-run usage line, the history file, `/duo:setup`. In a terminal the status-line helper wrote the usage file. Automated tests: the panel (`cd plugins/duo-progress && claude plugin test .`, including the agent lifecycle, the receipt and contrast checks) and the helper scripts (see `plugins/duo/scripts/selftest.sh`); a GitHub Actions workflow runs both and the plugin validation on every push (green on the last two pushes).
 
 Seen once: the Fable plan (once, in a self-review) and the final Fable review (once). Not tested live: the 80% and 95% limit behaviour, the hook for a real limit, the cost forecast beyond tiny tasks, learning from past runs, resuming after a reset, a bare `/duo` (use `/duo:duo`), and narrow terminals. The panel uses Claude Code's early-access hooks and may change between releases.
 
@@ -69,7 +69,7 @@ duo is a fork of **claude-kit** by JohnnyVizz ([JohnnyVizz/claude-kit](https://g
 
 | In claude-kit | In duo | What is new in duo |
 | --- | --- | --- |
-| `savvy-flow` (the orchestrated flow, Opus and Fable workers) | [`duo-flow`](plugins/duo-flow), the same flow renamed | nothing; it stays as the original |
+| `savvy-flow` (the orchestrated flow, Opus and Fable workers) | [`duo-flow`](plugins/duo-flow), the same flow renamed | nothing of its own beyond the original plus renames and an always-parallel rule |
 | `savvy-progress` (the agents panel) | [`duo-progress`](plugins/duo-progress), renamed and extended | a picture of the plan and the work (cards, arrows, progress), your limit, per-run usage, more costumes, a bar with usage |
 | `session-band` | [`session-band`](plugins/session-band), unchanged | |
 | | [`duo`](plugins/duo) | the Sonnet-based flow: eleven agents (workers by effort, an advisor, a reviewer, a verifier), a usage guard, a run history |
@@ -97,7 +97,7 @@ The one thing a rule cannot quietly switch off is the safety stop: Opus as a wor
 
 ## Requirements and uninstall
 
-A recent Claude Code (we run 2.1.314) on a Pro or Max plan; the usage reading needs a subscription. The panel works in the desktop app.
+A recent Claude Code (tested on 2.1.314, needs 2.1.292 or later) on a Pro or Max plan; the usage reading needs a subscription. The panel works in the desktop app.
 
 To remove duo:
 

@@ -6,6 +6,8 @@ export type PlannedTask = {
   after: number[]
   /** The orchestrator's own reason for this tier, as it wrote it. */
   why?: string
+  /** Set by the orchestrator: true once the task is accepted after review, false when it was returned for rework. */
+  accepted?: boolean
 }
 
 export type Flow = {
@@ -16,6 +18,8 @@ export type Flow = {
   phase: Phase
   isFinished: boolean
   tasks: PlannedTask[]
+  /** The orchestrator's one-sentence remark on the run (a skipped gate and why), shown under the title. */
+  note?: string
   // A flow the panel made itself for agents started outside a duo flow: it counts them.
   isImplicit?: boolean
   // When it began (ms): it counts the agents started since.
@@ -50,8 +54,10 @@ export type AgentRun = {
   stepLog?: { n: number; note: string; at: number }[]
   /** Last sign of life: spawn, a model request, a step report or a tool call. */
   lastAt?: number
-  /** A tool call is running: a long build is not a stall. */
+  /** A tool call is running: a long build is not a stall. Derived from `inFlight > 0`. */
   busy?: boolean
+  /** Tool calls in flight now: parallel calls each add one, so the first to end does not clear `busy`. */
+  inFlight?: number
   /** What the last tool call was doing, in a few words ("editing cart.py"). */
   action?: string
   /** Files the agent edited or wrote, as given. */
@@ -62,6 +68,10 @@ export type AgentRun = {
   calls?: { s: string; x?: boolean }[]
   /** The start of the agent's final answer. */
   result?: string
+  /** The brief the agent was started with, clipped to 600 characters. */
+  prompt?: string
+  /** The agent's answer, clipped to 2000 characters. */
+  answer?: string
   /** For a checker or reviewer: whether its answer opens with PASS or FAIL. */
   verdict?: 'pass' | 'fail'
 }

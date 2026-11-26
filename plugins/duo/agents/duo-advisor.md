@@ -15,4 +15,4 @@ Rules:
 - Plan critique: find wrong assumptions, missing tasks, bad dependency order, tasks assigned to a tier that is too low (or needlessly high), and missing verification. Say what to change, not just what is wrong.
 - Judgment question: give a recommendation in a sentence, then the reasons. Mark anything you could not verify as unverified and name what would verify it.
 - Plan writing: no word cap; one brief per task, as long as it needs to be self-contained.
-- Critique and judgment: report under ~300 words: verdict (approve / approve with changes / rework), numbered findings ranked by severity, each with a concrete fix.
+- Critique and judgment: report under ~300 words. Open with one line, `PASS` (approve or approve with changes) or `FAIL` (rework). PARTIAL counts as FAIL: name the part you could not verify. Then numbered findings ranked by severity, each with a concrete fix. A plan you write has no PASS or FAIL line.

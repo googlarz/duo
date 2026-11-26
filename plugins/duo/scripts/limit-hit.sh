@@ -17,6 +17,8 @@ try:
 except Exception:
     d = {}
 print(json.dumps({"at": int(time.time()), "session_id": str((d or {}).get("session_id", ""))}, separators=(",", ":")))' 2>/dev/null)
+  else
+    json=$(printf '{"at":%s,"session_id":""}' "$now")
   fi
   if [ -n "$json" ]; then
     mkdir -p "$(dirname "$out")"

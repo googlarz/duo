@@ -44,15 +44,23 @@ const MAX_PLAN = 30
 const MAX_NOTE = 160
 const MAX_WHY = 140
 const MAX_RESULT = 160
+const MAX_BRIEF = 600
+const MAX_ANSWER = 2000
+// The receipt goes into the orchestrator's context: it carries less of a brief and an answer than the card's details do.
+const RECEIPT_BRIEF = 300
+const RECEIPT_ANSWER = 800
+const RECEIPT_ALL = 3
 const MAX_FILES = 20
 // An agent with no sign of life for this long is called stalled in the panel; a running tool call (a build, a test run) gets longer.
 const STALL_MS = 3 * 60 * 1000
 const STALL_BUSY_MS = 10 * 60 * 1000
-// The read-only gates (advisor, reviewer, verifier) have no step tool and may think for a long while before they answer.
+// The read-only gates (advisor, reviewer, verifier) and the slow tiers (xhigh, max, Opus, Fable) think long between calls.
 const STALL_GATE_MS = 10 * 60 * 1000
 // The usage meters change colour where duo's guard acts: amber from 80%, red from 95%.
 const LIMIT_WARN_PCT = 80
 const LIMIT_HIGH_PCT = 95
+// A model request this long after an agent ended is the agent resumed; sooner, it is a late report of the run that ended.
+const RESUME_GRACE_MS = 1000
 // Agents started this soon after the last one ended belong to the same run.
 const SAME_JOB_MS = 5 * 60 * 1000
 const MAX_OPEN = 200
@@ -65,7 +73,8 @@ type ProgressInput = {
   done?: number
   phase?: Phase
   finished?: boolean
-  tasks?: { title?: string; tier?: string; after?: number[]; why?: string }[]
+  note?: string
+  tasks?: { title?: string; tier?: string; after?: number[]; why?: string; accepted?: boolean }[]
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +143,12 @@ const STRINGS = {
     noReport: 'no report',
     thinking: 'thinking',
     limitWord: 'limit',
+    stoppedWord: 'stopped',
+    returnedWord: 'returned',
+    ranAs: 'ran as',
+    plannedAs: 'planned',
+    briefWord: 'Brief',
+    answerWord: 'Answer',
     capWord: 'cap',
     capHint: 'Usage at the cap: duo runs one agent at a time and stops escalating at medium',
     role: { 'duo-advisor': 'advisor', 'duo-reviewer': 'reviewer', 'duo-verifier': 'verifier' },
@@ -211,6 +226,12 @@ const STRINGS = {
     noReport: 'нет отчёта',
     thinking: 'думает',
     limitWord: 'лимит',
+    stoppedWord: 'остановлен',
+    returnedWord: 'возвращена',
+    ranAs: 'запущен как',
+    plannedAs: 'план',
+    briefWord: 'Задание',
+    answerWord: 'Ответ',
     capWord: 'порог',
     capHint: 'Расход у порога: duo запускает по одному агенту и не повышает уровень выше medium',
     role: { 'duo-advisor': 'советник', 'duo-reviewer': 'ревьюер', 'duo-verifier': 'проверяющий' },
@@ -288,6 +309,12 @@ const STRINGS = {
     noReport: 'אין דוח',
     thinking: 'חושב',
     limitWord: 'מגבלה',
+    stoppedWord: 'נעצר',
+    returnedWord: 'הוחזרה',
+    ranAs: 'רץ כ־',
+    plannedAs: 'תוכנן',
+    briefWord: 'משימה',
+    answerWord: 'תשובה',
     capWord: 'תקרה',
     capHint: 'השימוש בתקרה: duo מריץ סוכן אחד בכל פעם ולא מעלה מעל medium',
     role: { 'duo-advisor': 'יועץ', 'duo-reviewer': 'סוקר', 'duo-verifier': 'מאמת' },
@@ -395,17 +422,44 @@ const cleanTasks = (tasks: ProgressInput['tasks']): PlannedTask[] | undefined =>
       tier: tierName(t.tier ?? ''),
       after: (t.after ?? []).filter(n => Number.isInteger(n) && n > 0).slice(0, MAX_AFTER),
       ...(typeof t.why === 'string' && t.why.trim() ? { why: clip(t.why.trim(), MAX_WHY) } : {}),
+      ...(typeof t.accepted === 'boolean' ? { accepted: t.accepted } : {}),
     }))
+
+// `tasks` replace the list, but a call that only names tasks already in it and sets `accepted` or `why` (never a tier or
+// an order) is a patch: the model meant "mark this one accepted", not "the plan is now this one task".
+const patchTasks = (current: PlannedTask[], input: ProgressInput['tasks']): PlannedTask[] | undefined => {
+  if (!input?.length || !current.length) return undefined
+  const byTitle = new Map<string, NonNullable<ProgressInput['tasks']>[number]>()
+  for (const t of input) {
+    const key = norm(t.title ?? '')
+    if (!key || t.tier !== undefined || t.after !== undefined || !current.some(c => norm(c.title) === key)) return undefined
+    byTitle.set(key, t)
+  }
+  return current.map(c => {
+    const t = byTitle.get(norm(c.title))
+    if (!t) return c
+    return {
+      ...c,
+      ...(typeof t.why === 'string' && t.why.trim() ? { why: clip(t.why.trim(), MAX_WHY) } : {}),
+      ...(typeof t.accepted === 'boolean' ? { accepted: t.accepted } : {}),
+    }
+  })
+}
 
 const merge = (prev: Flow | null, input: ProgressInput): Flow => {
   // A new title means a new flow: never carry counters over from an earlier one.
-  const base = isNewFlow(prev, input) || !prev ? blank() : { ...blank(), ...prev }
-  const tasks = cleanTasks(input.tasks) ?? base.tasks
+  const isNew = isNewFlow(prev, input) || !prev
+  const base = isNew ? blank() : { ...blank(), ...prev }
+  const tasks = (isNew ? undefined : patchTasks(base.tasks, input.tasks)) ?? cleanTasks(input.tasks) ?? base.tasks
   const total = Math.min(MAX_TASKS, Math.max(0, Math.round(input.total ?? (input.tasks ? tasks.length : base.total))))
   const done = Math.min(total || Infinity, Math.max(0, Math.round(input.done ?? base.done)))
   const phase = input.phase && PHASES.includes(input.phase) ? input.phase : base.phase
+  // Left out keeps the last note; an empty one clears it.
+  const note = typeof input.note === 'string' ? clip(input.note.trim(), MAX_NOTE) : base.note
+  const { note: _old, ...kept } = base
   return {
-    ...base,
+    ...kept,
+    ...(note ? { note } : {}),
     title: clip(input.title?.trim() || base.title, MAX_TITLE),
     total,
     done,
@@ -648,6 +702,17 @@ const cardModel = (a: AgentRun): string => {
   return e ? `${modelName(a.model)} · ${effortWord(e)}` : modelName(a.model)
 }
 
+// What the tier is meant to run on ("Sonnet · medium"), when the host says the run got another model or effort; '' when it matches or is not known.
+const plannedModel = (a: AgentRun): string => {
+  const tier = tierOf(a.type)
+  const plan = TIER_MODEL[tier]
+  if (!plan || !a.model) return ''
+  const family = (modelName(a.model).split(' ')[0] ?? '').toLowerCase()
+  const want = plan[0].toLowerCase()
+  const sameModel = family === want || (want === 'fable' && family === 'mythos')
+  return sameModel && (!a.effort || a.effort === plan[1]) ? '' : tierModel(tier)
+}
+
 // The compact card's short form: "Fable·high".
 const shortModel = (a: AgentRun): string => {
   const m = (a.model ? modelName(a.model) : (TIER_MODEL[tierOf(a.type)]?.[0] ?? '')).split(' ')[0] ?? ''
@@ -715,25 +780,48 @@ const windowOf = (model: string): number => (/haiku-4|claude-3/i.test(model) ? 2
 // `duo-flow-careful`, `duo-flow:duo-flow-careful` (or the legacy `savvy-careful`), `duo-high` or `duo:duo-high` (plugin-prefixed when the agents ship in a plugin).
 const bareType = (type: string): string => type.replace(/^[^:]*:/, '')
 const isPipelineAgent = (type: string): boolean => /^(?:savvy|duo)-/.test(bareType(type))
-// The read-only agents (advisor, reviewer, verifier) have a restricted tool list without `step`.
+// The checkers (advisor, reviewer, verifier): read-only agents that think long between calls and whose answers carry a verdict.
 const isGateType = (type: string): boolean => typeof type === 'string' && /^duo-(?:advisor|reviewer|verifier)$/.test(bareType(type))
+// The advisor and the reviewer have a restricted tool list without `step`; the verifier's has it.
+const hasNoStepTool = (type: string): boolean => typeof type === 'string' && /^duo-(?:advisor|reviewer)$/.test(bareType(type))
+// The host names a run by `agentId`; when it gave none at spawn the row's own id (the tool_use_id) stands in for it.
+const isRun = (a: AgentRun, agentId: string): boolean => a.agentId === agentId || a.id === agentId
 // A worker that ended with reason 'answer' but an empty answer: done, yet it reported nothing. Kept beside AgentRun, not in its type.
-type RunFlags = AgentRun & { noReport?: boolean; limited?: boolean }
+type RunFlags = AgentRun & { noReport?: boolean; limited?: boolean; stopped?: boolean }
 export const hasNoReport = (a: AgentRun): boolean => a.status === 'done' && (a as RunFlags).noReport === true
 // A run that stopped because the subscription limit was reached: it is `failed` for the engine, but not a fault of the agent.
 export const isLimited = (a: AgentRun): boolean => a.status === 'failed' && (a as RunFlags).limited === true
-// What names a usage or rate limit in the words a turn ended with. Plain "limit" is not enough: a turn, context or output
-// limit, a disk quota or a line number is a fault of the run, not of the subscription.
-const LIMIT_WORDS =
-  /rate[\s_-]?limit|usage[\s_-]?limit|(?:hit|reached)\s+(?:your|the)\s+(?:usage|rate|session|weekly|daily|plan|5-hour|five-hour)\s+limit|you(?:(?:'|\u2019)ve|\s+have)\s+(?:hit|reached)\s+your\s+limit|(?:usage|plan|session|weekly)\s+limit\s+reached|limit\s+reached.{0,40}(?:usage|plan|resets?)|\bresets?\s+(?:at|in)\b|too many requests/i
+// A run the user interrupted: `failed` for the engine, but not a fault of the agent, and nothing to retry on its own.
+export const isStopped = (a: AgentRun): boolean => a.status === 'failed' && (a as RunFlags).stopped === true
+// What names a usage limit in the host's own wording. Plain "limit" is not enough: a turn, context or output limit, a disk
+// quota or a line number is a fault of the run, not of the subscription. A reset time counts only beside a usage or limit word.
+const HOST_LIMIT =
+  /usage[\s_-]?limit|(?:hit|reached)\s+(?:your|the)\s+(?:usage|rate|session|weekly|daily|plan|5-hour|five-hour)\s+limit|you(?:(?:'|\u2019)ve|\s+have)\s+(?:hit|reached)\s+your\s+limit|(?:usage|plan|session|weekly)\s+limit\s+reached|limit\s+reached.{0,40}(?:usage|plan|resets?)|\b(?:usage|limit)\b.{0,40}\bresets?\s+(?:at|in)\b/i
+// The API's own words for a rate limit: trusted in the stop reason and the error, but a tool's message may quote them (a fetch hitting a rate limit).
+const API_LIMIT = /rate[\s_-]?limit|too many requests/i
+// Windows named for one model family ("seven_day_opus", an assumed name: nothing in this repo or its types lists the host's kinds) only
+// explain the errors of that family's agents. Any other kind, and a run whose model is not known, takes any full window. The scale is
+// 0-100, as the usage tool and every reading here has it.
+const MODEL_KIND = /^(?:five_hour|seven_day)_(opus|sonnet|haiku|fable|mythos)$/
+const isFull = (l: Limit, nowMs: number, model: string): boolean => {
+  if (!Number.isFinite(l.percentUsed) || l.percentUsed < 100) return false
+  // A window whose reset time has passed is empty again, whatever the last reading said.
+  const resets = l.resetsAt ? Date.parse(l.resetsAt) : Number.NaN
+  if (Number.isFinite(resets) && resets <= nowMs) return false
+  const only = MODEL_KIND.exec(l.kind)?.[1]
+  return !only || !model || new RegExp(only === 'fable' || only === 'mythos' ? 'fable|mythos' : only).test(model.toLowerCase())
+}
 // A turn that did not end with an answer: stopped by a limit when the host's own words (reason, error text; never the
 // answer, which is the agent's prose) name a usage limit, or when it stopped on a bare error while a window is full.
-export const endedByLimit = (e: Record<string, unknown>, lim: readonly Limit[]): boolean => {
+// `nowMs` (0: not known, so no window counts as reset) and the agent's `model` are for the full-window check.
+export const endedByLimit = (e: Record<string, unknown>, lim: readonly Limit[], nowMs = 0, model = ''): boolean => {
   const err = e.error
-  const errors = [e.stopReason, e.message, e.errorMessage, typeof err === 'object' && err ? (err as { message?: unknown }).message : err]
+  const errText = typeof err === 'object' && err ? (err as { message?: unknown }).message : err
+  const errors = [e.stopReason, e.message, e.errorMessage, errText]
   const text = (w: unknown): w is string => typeof w === 'string' && w.trim() !== ''
-  if ([e.reason, ...errors].some(w => typeof w === 'string' && LIMIT_WORDS.test(w))) return true
-  return e.reason === 'error' && !errors.some(text) && lim.some(l => Number.isFinite(l.percentUsed) && l.percentUsed >= 100)
+  const says = (w: unknown, re: RegExp): boolean => typeof w === 'string' && re.test(w)
+  if ([e.reason, e.stopReason, errText].some(w => says(w, HOST_LIMIT) || says(w, API_LIMIT)) || [e.message, e.errorMessage].some(w => says(w, HOST_LIMIT))) return true
+  return e.reason === 'error' && !errors.some(text) && lim.some(l => isFull(l, nowMs, model))
 }
 // The original flow's workers are `duo-flow-<tier>` (formerly `savvy-<tier>`); duo's own are `duo-<tier>`.
 const flowTier = (bare: string): string | null => (bare.startsWith('duo-flow-') ? bare.slice(9) : bare.startsWith('savvy-') ? bare.slice(6) : null)
@@ -800,10 +888,12 @@ export const nextView = (current: 'detail' | 'grouped' | undefined, count: numbe
 }
 
 // A failed run that a later run of the same task (same title) followed has been retried: the cards fade it and
-// leave it out of the legend, so the counts and the warning band leave it out too.
+// leave it out of the legend, so the counts and the warning band leave it out too. A run that started while the
+// failed one was still going is a parallel one, not its retry.
 export const isSuperseded = (a: AgentRun, list: readonly AgentRun[]): boolean => {
   const key = norm(a.description)
-  return a.status === 'failed' && key !== '' && list.some(q => q.id !== a.id && norm(q.description) === key && q.startedAt > a.startedAt)
+  const end = a.endedAt ?? a.startedAt
+  return a.status === 'failed' && key !== '' && list.some(q => q.id !== a.id && norm(q.description) === key && q.startedAt > a.startedAt && q.startedAt >= end)
 }
 
 // The agents that need a look: failed ones first, then running ones with no sign of life, the longest quiet first.
@@ -811,7 +901,7 @@ export const MAX_NEEDS = 3
 export type Need = { a: AgentRun; kind: 'failed' | 'limited' | 'noreport' | 'stalled' }
 export const needsOf = (list: readonly AgentRun[], at: number): Need[] => {
   const quiet = (a: AgentRun): number => at - (a.lastAt ?? a.startedAt)
-  const failed = list.filter(a => a.status === 'failed' && !isSuperseded(a, list)).map((a): Need => ({ a, kind: isLimited(a) ? 'limited' : 'failed' }))
+  const failed = list.filter(a => a.status === 'failed' && !isStopped(a) && !isSuperseded(a, list)).map((a): Need => ({ a, kind: isLimited(a) ? 'limited' : 'failed' }))
   const silent = list.filter(hasNoReport).map((a): Need => ({ a, kind: 'noreport' }))
   const stalled = list.filter(a => isStalled(a, at)).sort((x, y) => quiet(y) - quiet(x)).map((a): Need => ({ a, kind: 'stalled' }))
   return [...failed, ...silent, ...stalled]
@@ -825,7 +915,7 @@ export const groupKey = (description: string): string => {
   return key.length >= 1 && key.length <= 24 ? key : 'other'
 }
 
-export type Group = { key: string; agents: AgentRun[]; done: number; running: number; failed: number; limited: number; fails: number; model: string }
+export type Group = { key: string; agents: AgentRun[]; done: number; running: number; failed: number; limited: number; stopped: number; fails: number; model: string }
 
 const mostCommon = (xs: string[]): string => {
   const n = new Map<string, number>()
@@ -851,8 +941,9 @@ export const groupAgents = (list: AgentRun[]): Group[] => {
       agents,
       done: agents.filter(a => a.status === 'done').length,
       running: agents.filter(a => a.status === 'running').length,
-      failed: agents.filter(a => a.status === 'failed' && !isLimited(a) && !isSuperseded(a, list)).length,
+      failed: agents.filter(a => a.status === 'failed' && !isLimited(a) && !isStopped(a) && !isSuperseded(a, list)).length,
       limited: agents.filter(a => isLimited(a) && !isSuperseded(a, list)).length,
+      stopped: agents.filter(a => isStopped(a) && !isSuperseded(a, list)).length,
       // Finished, but the checker said FAIL: the stage is not green.
       fails: agents.filter(a => a.verdict === 'fail').length,
       model: mostCommon(agents.map(runModel)),
@@ -862,14 +953,17 @@ export const groupAgents = (list: AgentRun[]): Group[] => {
     .map(({ first: _first, ...g }) => g)
 }
 
-// `limited` (stopped by a usage limit) is counted apart from `failed`, and only shown when there is one.
-export const tally = (list: AgentRun[]): { total: number; running: number; failed: number; done: number; finished: number; limited?: number } => {
+// `limited` (stopped by a usage limit) and `stopped` (interrupted by the user) are counted apart from `failed`, and only shown when there is one.
+export const tally = (
+  list: AgentRun[],
+): { total: number; running: number; failed: number; done: number; finished: number; limited?: number; stopped?: number } => {
   const running = list.filter(a => a.status === 'running').length
   // A retried run is faded on its card: it is not counted as a fault or a limit stop any more.
-  const stopped = list.filter(a => a.status === 'failed' && !isSuperseded(a, list))
-  const limited = stopped.filter(isLimited).length
-  const failed = stopped.length - limited
-  return { total: list.length, running, failed, done: list.filter(a => a.status === 'done').length, finished: list.length - running, ...(limited ? { limited } : {}) }
+  const ended = list.filter(a => a.status === 'failed' && !isSuperseded(a, list))
+  const limited = ended.filter(isLimited).length
+  const stopped = ended.filter(isStopped).length
+  const failed = ended.length - limited - stopped
+  return { total: list.length, running, failed, done: list.filter(a => a.status === 'done').length, finished: list.length - running, ...(limited ? { limited } : {}), ...(stopped ? { stopped } : {}) }
 }
 
 // Unknown models get a warm taupe, not the grey of secondary text.
@@ -1283,7 +1377,7 @@ const crab = (x: number, y: number, costume: string, dim = false, isWalking = fa
 const statusMark = (x: number, y: number, status: string, color: string): string => {
   if (status === 'running') return `<circle class="live" cx="${x}" cy="${y}" r="3.5" fill="${color}"/>`
   if (status === 'done') return `<path d="M${x - 5} ${y}l3.5 3.5 6.5-7" fill="none" stroke="#3B9C5F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`
-  if (status === 'limit') return `<path d="M${x - 2.5} ${y - 4}v8M${x + 2.5} ${y - 4}v8" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`
+  if (status === 'limit' || status === 'stopped') return `<path d="M${x - 2.5} ${y - 4}v8M${x + 2.5} ${y - 4}v8" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`
   if (status === 'failed') return `<path d="M${x - 4} ${y - 4}l8 8M${x + 4} ${y - 4}l-8 8" stroke="#D0453F" stroke-width="1.8" stroke-linecap="round"/>`
   return `<circle cx="${x}" cy="${y}" r="5" fill="none" stroke="#9a9a96" stroke-width="1.4"/><path d="M${x} ${y - 2.5}v2.8l1.8 1.2" fill="none" stroke="#9a9a96" stroke-width="1.4" stroke-linecap="round"/>`
 }
@@ -1333,6 +1427,12 @@ export const stepsDone = (a: AgentRun): number => (a.status === 'done' && a.step
 
 const WINDOWS: readonly (readonly [string, string])[] = [['five_hour', '5h'], ['seven_day', '7d']]
 
+// A window whose reset time is behind `nowMs` is empty again: its last reading is old news (no clock, no verdict).
+const hasReset = (l: Limit, nowMs: number): boolean => {
+  const at = l.resetsAt ? Date.parse(l.resetsAt) : Number.NaN
+  return !!nowMs && Number.isFinite(at) && at <= nowMs
+}
+
 // The usage tile: the label names the windows, the value their percentages; null off a
 // subscription or before the host has a reading.
 // "4h 36m", "36m", or "<1m": the time left until `ms`.
@@ -1346,7 +1446,7 @@ export const timeLeft = (left: number): string => {
 export const limitTile = (list: readonly Limit[], nowMs = 0): { label: string; value: string; reset?: string; tip?: string } | null => {
   const rows = WINDOWS.flatMap(([kind, short]) => {
     const l = list.find(x => x.kind === kind)
-    if (!l || !Number.isFinite(l.percentUsed)) return []
+    if (!l || !Number.isFinite(l.percentUsed) || hasReset(l, nowMs)) return []
     const at = l.resetsAt ? Date.parse(l.resetsAt) : Number.NaN
     return [{ short, pct: Math.round(l.percentUsed), left: nowMs && Number.isFinite(at) && at > nowMs ? at - nowMs : 0, at }]
   })
@@ -1450,17 +1550,31 @@ export const collisionsOf = (list: readonly AgentRun[]): Collision[] => {
   return out
 }
 
-// The last line that opens with PASS or FAIL wins, so an agent that corrects itself is read by its final word.
-export const verdictOf = (answer: unknown): 'pass' | 'fail' | undefined => {
+// A line that opens with PASS or FAIL decides, and the last such line wins, so an agent that corrects itself is read by its final word.
+// Only a checker (advisor, reviewer, verifier) is read for more: when no line says PASS or FAIL, the checker's first non-empty line
+// may be a lone verdict word (accept or approve are a pass; return, escalate, rework and partial are a fail), the whole line or
+// the first word followed by punctuation, a dash or a colon. Later prose, bullets and headings never decide: a plan has no verdict.
+const PASS_WORDS = /^(?:pass|accept(?:ed)?|approve[ds]?)$/i
+const CHECKER_WORDS = 'accept(?:ed)?|approve[ds]?|return(?:ed)?|escalate[ds]?|rework|partial'
+// The word closes a bold or code span (`**Approve** with changes`), or ends the line, or is followed by punctuation, a dash or a colon.
+const CHECKER_OPENING = new RegExp(`^[\\s*_>\`"']*(${CHECKER_WORDS})\\b(?:[*_\`]|\\s*$|\\s*[:.,;!?\u2013\u2014]|\\s*-(?:\\s|$))`, 'i')
+export const verdictOf = (answer: unknown, type = ''): 'pass' | 'fail' | undefined => {
   if (typeof answer !== 'string') return undefined
   const all = [...answer.matchAll(/^[\s*_#>`"'-]*(pass|fail)\b/gim)]
   const last = all[all.length - 1]
-  return last ? (last[1].toLowerCase() as 'pass' | 'fail') : undefined
+  if (last) return PASS_WORDS.test(last[1]) ? 'pass' : 'fail'
+  if (!isGateType(type)) return undefined
+  const first = answer.split('\n').find(l => l.trim() !== '')
+  const word = first ? CHECKER_OPENING.exec(first)?.[1] : undefined
+  return word ? (PASS_WORDS.test(word) ? 'pass' : 'fail') : undefined
 }
 
-// Running with no sign of life for STALL_MS.
+// The tiers that think long between calls: a quiet xhigh, max, Opus or Fable run is not a stall at three minutes.
+const SLOW_TIERS: readonly string[] = ['duo-xhigh', 'duo-max', 'duo-opus', 'duo-fable']
+// Running with no sign of life for STALL_MS (longer for a running tool call, a gate or a slow tier).
 export const isStalled = (a: AgentRun, at: number): boolean =>
-  a.status === 'running' && at - (a.lastAt ?? a.startedAt) > (a.busy ? STALL_BUSY_MS : isGateType(a.type) ? STALL_GATE_MS : STALL_MS)
+  a.status === 'running' &&
+  at - (a.lastAt ?? a.startedAt) > (a.busy || (a.inFlight ?? 0) > 0 ? STALL_BUSY_MS : isGateType(a.type) || SLOW_TIERS.includes(tierOf(a.type ?? '')) ? STALL_GATE_MS : STALL_MS)
 
 // What the usage tool answers: the same shape duo's usage file has (percent used, reset as epoch
 // seconds, per window), or a plain sentence when the host has no reading.
@@ -1490,9 +1604,9 @@ const clock = (ms: number): string => new Date(ms).toTimeString().slice(0, 8)
 export const detailLines = (a: AgentRun, at: number): string[] => {
   const s = tr()
   const tier = tierOf(a.type)
-  const state = a.status === 'running' ? s.isRunning : isLimited(a) ? s.limitWord : a.status === 'failed' ? s.failed : s.isFinished
+  const state = a.status === 'running' ? s.isRunning : isLimited(a) ? s.limitWord : isStopped(a) ? s.stoppedWord : a.status === 'failed' ? s.failed : s.isFinished
   const lines = [
-    `${s.model}: ${cardModel(a)}${a.model ? ` (${a.model})` : ''}`,
+    `${s.model}: ${plannedModel(a) ? `${s.ranAs} ` : ''}${cardModel(a)}${a.model ? ` (${a.model})` : ''}${plannedModel(a) ? ` · ${s.plannedAs} ${plannedModel(a)}` : ''}`,
     `${s.agentType}: ${a.type}${tier === 'other' ? '' : ` · ${tierWord(tier)}`}`,
     `${s.task}: ${a.description || a.type}`,
     `${s.status}: ${state}${hasNoReport(a) ? ` · ${s.noReport}` : ''}${a.round > 1 ? ` · ${s.round} ${a.round}` : ''}${isStalled(a, at) ? ` · ${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : ''}`,
@@ -1500,18 +1614,21 @@ export const detailLines = (a: AgentRun, at: number): string[] => {
     `${s.timeWord}: ${clock(a.startedAt)}${a.endedAt ? ` – ${clock(a.endedAt)}` : ''} · ${fmtTime(elapsed(a, at))}`,
   ]
   if (a.why) lines.push(`${s.whyWord}: ${a.why}`)
+  if (a.prompt) lines.push(`${s.briefWord}: ${a.prompt}`)
   if (a.status === 'running' && a.action) lines.push(`${s.nowWord}: ${a.action}`)
   const done = stepsDone(a)
   const log = a.stepLog ?? []
   if (a.stepTotal || log.length) lines.push(`${s.stepsWord}: ${done}/${a.stepTotal || '?'}${a.stepNote ? ` · ${a.stepNote}` : ''}`)
   // With a plan the checklist is its titles; without one, the notes the worker logged, in order.
   if (a.stepPlan?.length) {
-    a.stepPlan.forEach((title, i) => {
+    // As many rows as "done/total" counts: a plan shorter than the total leaves its last steps untitled.
+    for (let i = 0; i < Math.max(a.stepPlan.length, a.stepTotal ?? 0); i++) {
+      const title = a.stepPlan[i]
       const mark = i < done ? '✓' : i === done && a.status === 'running' ? '▸' : '○'
       // The note logged when step i finished (done went to i + 1) is shown with it.
       const finished = i < done ? [...log].reverse().find(l => l.n === i + 1 && l.note)?.note : undefined
-      lines.push(`  ${mark} ${i + 1}. ${title}${finished ? ` — ${finished}` : ''}`)
-    })
+      lines.push(`  ${mark} ${i + 1}.${title ? ` ${title}` : ''}${finished ? ` — ${finished}` : ''}`)
+    }
   } else {
     const noted = log.filter(l => l.note)
     noted.forEach((l, i) => {
@@ -1521,6 +1638,8 @@ export const detailLines = (a: AgentRun, at: number): string[] => {
   }
   if (a.verdict) lines.push(`${s.verdictWord}: ${a.verdict.toUpperCase()}`)
   if (a.result) lines.push(`${s.resultWord}: ${a.result}`)
+  // The card keeps the short result; the whole answer is only worth a line when it says more.
+  if (a.answer && a.answer !== a.result) lines.push(`${s.answerWord}: ${a.answer}`)
   if (a.files?.length) lines.push(`${s.filesWord}: ${a.files.map(baseName).join(', ')}`)
   return lines
 }
@@ -1542,13 +1661,33 @@ const fitCols = (t: string, cols: number): string => {
 }
 // Pads to `cols` display columns: wide characters count two.
 const padCols = (t: string, cols: number): string => t + ' '.repeat(Math.max(0, cols - wideLen(t)))
-const detailLineCount = (a: AgentRun, at: number, cols: number): number =>
-  detailLines(a, at).reduce((n, l) => n + Math.max(1, Math.ceil(wideLen(l) / Math.max(20, cols))), 0)
+// How many lines `text` takes wrapped at spaces in `width` columns; a word wider than a line is broken.
+const wrapCount = (text: string, width: number): number => {
+  let n = 1
+  let used = 0
+  for (const w of text.split(/\s+/).filter(Boolean)) {
+    const len = wideLen(w)
+    if (used === 0) used = len
+    else if (used + 1 + len <= width) used += 1 + len
+    else {
+      n++
+      used = len
+    }
+    while (used > width) {
+      n++
+      used -= width
+    }
+  }
+  return n
+}
+// The details block sits 2 columns in and a checklist line is indented further: both take room from the wrap width.
+export const detailLineCount = (a: AgentRun, at: number, cols: number): number =>
+  detailLines(a, at).reduce((n, l) => n + wrapCount(l, Math.max(10, cols - 2 - (l.length - l.trimStart().length))), 0)
 
 // The plan and the work in one list: a row per planned task in plan order (a task that has not started is
 // waiting, with what it waits for), then the agents that belong to no task. A row keeps its place while its
 // state changes, so nothing jumps.
-export type TaskRow = { n?: number; title: string; tier: string; after: number[]; a?: AgentRun }
+export type TaskRow = { n?: number; title: string; tier: string; after: number[]; a?: AgentRun; accepted?: boolean; why?: string }
 export const taskRowsOf = (f: Flow | null, list: AgentRun[]): TaskRow[] => {
   const tasks = f ? (f.tasks ?? []) : []
   const used = new Set<string>()
@@ -1556,10 +1695,11 @@ export const taskRowsOf = (f: Flow | null, list: AgentRun[]): TaskRow[] => {
   tasks.forEach((t, i) => {
     const mine = list.filter(a => norm(a.description) === norm(t.title))
     // A finished job keeps its plan, minus tasks that never started.
-    if (!mine.length && !f?.isFinished) rows.push({ n: i + 1, title: t.title, tier: t.tier, after: t.after })
+    const accepted = { ...(t.accepted === undefined ? {} : { accepted: t.accepted }), ...(t.why ? { why: t.why } : {}) }
+    if (!mine.length && !f?.isFinished) rows.push({ n: i + 1, title: t.title, tier: t.tier, after: t.after, ...accepted })
     for (const a of mine) {
       used.add(a.id)
-      rows.push({ n: i + 1, title: t.title, tier: t.tier, after: t.after, a })
+      rows.push({ n: i + 1, title: t.title, tier: t.tier, after: t.after, a, ...accepted })
     }
   })
   for (const a of list) if (!used.has(a.id)) rows.push({ title: a.description || a.type, tier: tierOf(a.type), after: [], a })
@@ -1607,6 +1747,12 @@ export const layersOf = (rows: readonly TaskRow[]): number[] => {
 // yet, in plan order) and counts the rest.
 // A costume crab is up to 9 KB of drawing, a plain one under 1 KB: costumes up to FULL_CRABS cards.
 export const MAX_CARDS = 40
+// The rows that get a card, and so a Details button: all of them, or past MAX_CARDS the ones not done yet first, in plan order.
+export const shownRowsOf = (all: readonly TaskRow[]): TaskRow[] => {
+  if (all.length <= MAX_CARDS) return [...all]
+  const keep = new Set([...all.keys()].sort((x, y) => Number(all[x].a?.status === 'done') - Number(all[y].a?.status === 'done') || x - y).slice(0, MAX_CARDS))
+  return all.filter((_, i) => keep.has(i))
+}
 // A title that does not fit on one line takes two, broken at a space; the second line is cut with an ellipsis.
 export const titleLines = (text: string, size: number, maxW: number): string[] => {
   if (textWidth(text, size) <= maxW) return [text]
@@ -1621,8 +1767,7 @@ export const titleLines = (text: string, size: number, maxW: number): string[] =
 export const FULL_CRABS = 9
 export const planSvg = (W: number, all: readonly TaskRow[], at: number): { source: string; height: number } => {
   const s = tr()
-  const keep = all.length <= MAX_CARDS ? null : new Set([...all.keys()].sort((x, y) => Number(all[x].a?.status === 'done') - Number(all[y].a?.status === 'done') || x - y).slice(0, MAX_CARDS))
-  const rows = keep ? all.filter((_, i) => keep.has(i)) : all
+  const rows = shownRowsOf(all)
   const omitted = all.length - rows.length
   const wide = W - GP * 2
   const compact = rows.length > 24
@@ -1637,7 +1782,10 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
   const depth = Math.max(0, ...layers)
   // Cards are taller when some title needs two lines (decided from the titles, so it does not change while the job runs).
   const two = !compact && rows.some(r => textWidth(cardLabel(r), 12) > cw - 64)
-  const ch = compact ? 46 : two ? 82 : 70
+  // The orchestrator's reason for the tier gets a line of its own when any card has one (decided from the plan, so cards do not resize).
+  const whyOf = (r: TaskRow): string => r.a?.why ?? r.why ?? ''
+  const hasWhy = !compact && rows.some(r => whyOf(r))
+  const ch = compact ? 46 : (two ? 82 : 70) + (hasWhy ? 14 : 0)
   const place = new Map<number, { x: number; y: number }>()
   let y = 6
   for (let l = 0; l <= depth; l++) {
@@ -1686,14 +1834,14 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const a = r.a
     const tier = a ? tierOf(a.type) : r.tier in TIER_COLOR ? r.tier : 'other'
     const isQuiet = a ? isStalled(a, at) : false
-    const status = !a ? 'planned' : isQuiet ? 'stalled' : a.status === 'failed' && isLimited(a) ? 'limit' : a.status
+    const status = !a ? 'planned' : isQuiet ? 'stalled' : isLimited(a) ? 'limit' : isStopped(a) ? 'stopped' : a.status
     const superseded = retried(r)
     const silent = !!a && hasNoReport(a)
-    const edge = status === 'failed' ? C_FAIL : status === 'running' ? C_RUN : status === 'stalled' || status === 'limit' || silent ? C_CHECK : status === 'done' ? C_DONE : '#9a9a96'
+    const edge = status === 'failed' ? C_FAIL : status === 'running' ? C_RUN : status === 'stalled' || status === 'limit' || status === 'stopped' || silent ? C_CHECK : status === 'done' ? C_DONE : '#9a9a96'
     const loop = a ? loopOf(a) : null
-    const stopWord = status === 'limit' ? s.limitWord : s.failed
+    const stopWord = status === 'limit' ? s.limitWord : status === 'stopped' ? s.stoppedWord : s.failed
     // A retry says which round it is, in front, where a long status line cannot cut it off.
-    const roundTag = a && a.round >= 2 ? `${s.round} ${a.round} · ` : ''
+    const roundTag = `${a && a.round >= 2 ? `${s.round} ${a.round} · ` : ''}${a?.status === 'done' && r.accepted === false ? `${s.returnedWord} · ` : ''}`
     const subBody = !a
       ? r.after.length ? `${s.after} ${r.after.join(', ')}` : ''
       : a.status === 'failed'
@@ -1707,7 +1855,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
             : silent ? `${s.noReport} · ${fmtTime(elapsed(a, at))}` : fmtTime(elapsed(a, at))
     const sub = `${roundTag}${subBody}`
     // Which model does the task: the one that ran it, or the one it is planned for, with its effort ("Sonnet 5.5 · low").
-    const modelText = a ? cardModel(a) : tierModel(tier)
+    const modelText = a ? `${plannedModel(a) ? `${s.ranAs} ` : ''}${cardModel(a)}` : tierModel(tier)
     // The pulse, on the model line: calls in the last five minutes, a bar per half minute; a flat line says nothing is happening.
     const pulseOn = !!a && a.status === 'running' && !compact
     const spark = (() => {
@@ -1728,6 +1876,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
     const subShown = !subTail ? fitText(sub, 11.5, subRoom) : sub && tailRoom >= 24 ? `${fitText(sub, 11.5, tailRoom)} · ${subTail}` : subTail
     const subSvg = T(W, 'm', to.x + 44, to.y + (compact ? 33 : two ? 48 : 35), 11.5, 400, subShown, 'start')
     const model = compact ? '' : T(W, 'm', to.x + 44, to.y + (two ? 64 : 51), 11.5, 500, fitText(modelText, 11.5, Math.max(30, cw - 50 - (pulseOn ? 62 : 0))), 'start')
+    const why = !compact && whyOf(r) ? T(W, 'm', to.x + 44, to.y + (two ? 77 : 64), 10.5, 400, fitText(whyOf(r), 10.5, Math.max(30, cw - 50)), 'start') : ''
     // A card that may be looping gets an amber mark under its crab; the words are in its hover text.
     const loopMark = loop && !compact
       ? `<g><title>${xml(`${s.looping} ${loop.kind === 'failed' ? s.sameFailed : s.sameFile} ×${loop.n}. ${s.loopHint}`)}</title><rect x="${mx(W, to.x + 8, 30)}" y="${to.y + ch - 20}" width="30" height="15" rx="7.5" fill="${C_CHECK}"/>${T(W, 't', to.x + 13, to.y + ch - 8.5, 10.5, 800, `↻${loop.n}`, 'start', ' style="fill:#1f1f1f"')}</g>`
@@ -1749,7 +1898,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
 <rect x="${mx(W, to.x, cw)}" y="${to.y}" width="${cw}" height="${ch}" rx="8" fill="none" stroke="${edge}" stroke-width="${status === 'planned' ? 1 : 1.6}"${status === 'planned' ? ' stroke-dasharray="4 3"' : ''}/>
 ${rowCrab(W, to.x + 6, to.y + Math.round((ch - 31) / 2) - 2, rich ? cardCostume(r.title, a ? a.type : r.tier, a ? costumeOf(a.type) : tier) : 'other', !a, status === 'running').replaceAll('#D97757', CRAB_TINTS[i % CRAB_TINTS.length])}
 ${(compact ? [fitText(cardLabel(r), 12, Math.max(30, cw - 64))] : titleLines(cardLabel(r), 12, Math.max(30, cw - 64)).slice(0, 2)).map((line, k) => T(W, 't', to.x + 44, to.y + (compact ? 19 : 20) + k * 13, 12, 600, line, 'start')).join('')}
-${subSvg}${model}${spark}${loopMark}${bar}
+${subSvg}${model}${why}${spark}${loopMark}${bar}
 ${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' : status, edge)}${clashDot}</g>`)
   })
   // What the marks on the cards mean: only the ones that are on the screen now.
@@ -1760,6 +1909,7 @@ ${statusMark(mx(W, to.x + cw - 12), to.y + 12, status === 'stalled' ? 'planned' 
   if (seen.has('planned')) legend.push({ icon: mark('planned', '#9a9a96'), text: s.legendWaiting })
   if (seen.has('failed')) legend.push({ icon: mark('failed', C_FAIL), text: s.failed })
   if (seen.has('limit')) legend.push({ icon: mark('limit', C_CHECK), text: s.limitWord })
+  if (seen.has('stopped')) legend.push({ icon: mark('stopped', C_CHECK), text: s.stoppedWord })
   if (seen.has('clash')) legend.push({ icon: `<circle r="6" fill="${C_FAIL}"/><text x="-2.6" y="3.2" font-size="9" font-weight="800" font-family="${FONT}" style="fill:#fff">!</text>`, text: s.legendClash })
   if (seen.has('loop')) legend.push({ icon: `<rect x="-9" y="-6.5" width="18" height="13" rx="6.5" fill="${C_CHECK}"/><text x="-7" y="3.4" font-size="9.5" font-weight="800" font-family="${FONT}" style="fill:#1f1f1f">↻3</text>`, text: s.legendLoop })
   if (seen.has('pulse')) legend.push({ icon: `<path fill="${C_RUN}" d="M-7 4h2.4v-3h-2.4zM-3.6 4h2.4v-7h-2.4zM-0.2 4h2.4v-5h-2.4zM3.2 4h2.4v-9h-2.4z"/>`, text: s.legendPulse })
@@ -1809,9 +1959,9 @@ const T = (W: number, cls: string, x: number, y: number, size: number, weight: n
 const sectionLabel = (W: number, y: number, text: string): string =>
   T(W, 'm', GP, y, 10.5, 700, isRtl() ? text : text.toUpperCase(), 'start', isRtl() ? '' : ' letter-spacing="1.2"')
 
-const countsText = (g: { done: number; running: number; failed: number; limited?: number; fails?: number }): string => {
+const countsText = (g: { done: number; running: number; failed: number; limited?: number; stopped?: number; fails?: number }): string => {
   const s = tr()
-  return [g.done ? `${g.done} ${s.doneN}` : '', g.running ? `${g.running} ${s.isRunning}` : '', g.failed ? `${g.failed} ${s.failedN}` : '', g.limited ? `${g.limited} ${s.limitWord}` : '', g.fails ? `${g.fails} FAIL` : ''].filter(Boolean).join(' · ') || `0 ${s.doneN}`
+  return [g.done ? `${g.done} ${s.doneN}` : '', g.running ? `${g.running} ${s.isRunning}` : '', g.failed ? `${g.failed} ${s.failedN}` : '', g.limited ? `${g.limited} ${s.limitWord}` : '', g.stopped ? `${g.stopped} ${s.stoppedWord}` : '', g.fails ? `${g.fails} FAIL` : ''].filter(Boolean).join(' · ') || `0 ${s.doneN}`
 }
 
 // Your usage as two small meters, each named: "5h ▮▮▯▯ 45% ↻ 27m    7d ▮▯▯▯ 40%". The bar fills with the share used
@@ -1819,10 +1969,11 @@ const countsText = (g: { done: number; running: number; failed: number; limited?
 const limitMeters = (W: number, lim: readonly Limit[], nowMs: number): { source: string; width: number } => {
   const items = WINDOWS.flatMap(([kind, short]) => {
     const l = lim.find(x => x.kind === kind)
-    if (!l || !Number.isFinite(l.percentUsed)) return []
+    if (!l || !Number.isFinite(l.percentUsed) || hasReset(l, nowMs)) return []
     const at = l.resetsAt ? Date.parse(l.resetsAt) : Number.NaN
     const reset = kind === 'five_hour' && nowMs && Number.isFinite(at) && at > nowMs ? `${tr().resetsIn} ${timeLeft(at - nowMs)}` : ''
-    return [{ short, pct: Math.max(0, Math.min(100, Math.round(l.percentUsed))), reset }]
+    // `raw` is what the thresholds read: 79.6% rounds to 80 but is not at the cap yet.
+    return [{ short, pct: Math.max(0, Math.min(100, Math.round(l.percentUsed))), raw: l.percentUsed, reset }]
   })
   if (!items.length) return { source: '', width: 0 }
   const BAR = 34
@@ -1834,14 +1985,14 @@ const limitMeters = (W: number, lim: readonly Limit[], nowMs: number): { source:
     const labelW = textWidth(it.short, 11.5)
     const pctW = textWidth(pctText, 11.5)
     // From 80% a small pill says the window is at its cap: duo's guard is acting.
-    const capW = it.pct >= LIMIT_WARN_PCT ? Math.ceil(textWidth(tr().capWord, 9.5)) + 10 : 0
+    const capW = it.raw >= LIMIT_WARN_PCT ? Math.ceil(textWidth(tr().capWord, 9.5)) + 10 : 0
     const capX = x + labelW + 5 + BAR + 5 + pctW + 5
     placed.push({ ...it, pctText, capW, capX, x, barX: x + labelW + 5, pctX: x + labelW + 5 + BAR + 5, resetX: x + labelW + 5 + BAR + 5 + pctW + (capW ? 5 + capW : 0) + 10 })
     x = (it.reset ? placed[placed.length - 1].resetX + textWidth(it.reset, 11) : placed[placed.length - 1].pctX + pctW + (capW ? 5 + capW : 0))
   }
   const x0 = W - GP - x
   const out = placed.map(it => {
-    const color = it.pct >= LIMIT_HIGH_PCT ? C_FAIL : it.pct >= LIMIT_WARN_PCT ? C_CHECK : C_DONE
+    const color = it.raw >= LIMIT_HIGH_PCT ? C_FAIL : it.raw >= LIMIT_WARN_PCT ? C_CHECK : C_DONE
     const fill = Math.max(it.pct ? 3 : 0, Math.round((BAR * it.pct) / 100))
     return `${T(W, 's', x0 + it.x, 21, 11.5, 500, it.short, 'start')}<rect class="k" x="${mx(W, x0 + it.barX, BAR)}" y="14" width="${BAR}" height="6" rx="3"/>${fill ? `<rect x="${mx(W, x0 + it.barX, fill)}" y="14" width="${fill}" height="6" rx="3" fill="${color}"/>` : ''}${T(W, 't', x0 + it.pctX, 21, 11.5, 600, it.pctText, 'start', ' font-variant-numeric="tabular-nums"')}${it.capW ? `<g><title>${xml(tr().capHint)}</title><rect x="${mx(W, x0 + it.capX, it.capW)}" y="10.5" width="${it.capW}" height="14" rx="7" fill="${color}"/><text x="${mx(W, x0 + it.capX + it.capW / 2)}" y="20.6" text-anchor="middle" font-family="${FONT}" font-size="9.5" font-weight="700" style="fill:${inkOn(color)}">${xml(tr().capWord)}</text></g>` : ''}${it.reset ? T(W, 'm', x0 + it.resetX, 21, 11, 400, it.reset, 'start', ' font-variant-numeric="tabular-nums"') : ''}`
   })
@@ -1858,6 +2009,7 @@ export const statusSvg = (
   lim: readonly Limit[] = [],
   nowMs = 0,
   runUse = '',
+  note = '',
 ): { source: string; height: number } => {
   const s = tr()
   const tl = tally(list)
@@ -1867,21 +2019,23 @@ export const statusSvg = (
   const meters = limitMeters(W, lim, nowMs)
   const cost = `≈${fmtCost(t.cost)}`
   const rightW = meters.width || textWidth(cost, 12)
-  const sub = [`${tl.finished}/${total} ${s.doneN}`, tl.running ? `${tl.running} ${s.isRunning}` : '', tl.failed ? `${tl.failed} ${s.failedN}` : '', tl.limited ? `${tl.limited} ${s.limitWord}` : '', list.length ? fmtSpan(t.time) : '', runUse].filter(Boolean).join(' · ')
-  const height = 60
+  const sub = [`${tl.finished}/${total} ${s.doneN}`, tl.running ? `${tl.running} ${s.isRunning}` : '', tl.failed ? `${tl.failed} ${s.failedN}` : '', tl.limited ? `${tl.limited} ${s.limitWord}` : '', tl.stopped ? `${tl.stopped} ${s.stoppedWord}` : '', list.length ? fmtSpan(t.time) : '', runUse].filter(Boolean).join(' · ')
+  // The orchestrator's note takes a line under the title.
+  const d = note ? 16 : 0
+  const height = 60 + d
   const wd = Math.round((wide * tl.done) / Math.max(1, total))
   const wr = Math.round((wide * tl.running) / Math.max(1, total))
   const wf = Math.round((wide * tl.failed) / Math.max(1, total))
-  const wl = Math.round((wide * (tl.limited ?? 0)) / Math.max(1, total))
-  const seg = (from: number, w: number, color: string) => (w ? `<rect x="${mx(W, GP + from, w)}" y="48" width="${w}" height="6" rx="3" fill="${color}"/>` : '')
+  const wl = Math.round((wide * ((tl.limited ?? 0) + (tl.stopped ?? 0))) / Math.max(1, total))
+  const seg = (from: number, w: number, color: string) => (w ? `<rect x="${mx(W, GP + from, w)}" y="${48 + d}" width="${w}" height="6" rx="3" fill="${color}"/>` : '')
   return {
     source: svg(
       W,
       height,
       `${lt?.tip ? `<title>${xml(lt.tip)}</title>` : ''}${meters.width ? meters.source : T(W, 's', W - GP, 21, 12, 400, cost, 'end', ' font-variant-numeric="tabular-nums"')}
 ${T(W, 't', GP, 22, 16, 700, fitText(title || s.pane, 16, Math.max(60, wide - rightW - 12)), 'start')}
-${T(W, 'm', GP, 42, 12, 400, fitText(sub, 12, wide), 'start')}
-<rect class="k" x="${GP}" y="48" width="${wide}" height="6" rx="3"/>${seg(0, wd, C_DONE)}${seg(wd, wr, C_RUN)}${seg(wd + wr, wf, C_FAIL)}${seg(wd + wr + wf, wl, C_CHECK)}`,
+${note ? T(W, 'm', GP, 40, 12, 400, fitText(note, 12, wide), 'start') : ''}${T(W, 'm', GP, 42 + d, 12, 400, fitText(sub, 12, wide), 'start')}
+<rect class="k" x="${GP}" y="${48 + d}" width="${wide}" height="6" rx="3"/>${seg(0, wd, C_DONE)}${seg(wd, wr, C_RUN)}${seg(wd + wr, wf, C_FAIL)}${seg(wd + wr + wf, wl, C_CHECK)}`,
     ),
     height,
   }
@@ -1949,7 +2103,7 @@ async function currentLimits($: EngineInterface): Promise<Limit[]> {
 // The run receipt: what the agents actually did, built by the panel from what it saw (not
 // written by a model), for the user to keep or paste into a pull request.
 
-export type Receipt = { key?: string; at: number; title: string; used: string; agents: AgentRun[] }
+export type Receipt = { key?: string; at: number; title: string; used: string; agents: AgentRun[]; note?: string }
 
 // Free text from an agent (its task, answer, file names) goes into markdown the user may paste into a pull
 // request: every character that could make a link, an image, a heading or HTML is escaped.
@@ -1962,13 +2116,15 @@ export const mdCell = (t: string): string =>
 export const receiptMarkdown = (r: Receipt): string => {
   const rows = r.agents.map(
     a =>
-      `| ${mdCell(a.description || a.type)} | ${mdCell(runModel(a))} | ${isLimited(a) ? 'limit' : a.status}${a.verdict ? ` (${a.verdict.toUpperCase()})` : hasNoReport(a) ? ' (no report)' : ''} | ${a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : '-'} | ${fmtTokens(a.tokens)} | ≈${fmtCost(a.costUsd)} | ${fmtTime(a.endedAt ? a.endedAt - a.startedAt : 0)} |`,
+      `| ${mdCell(a.description || a.type)} | ${mdCell(runModel(a))} | ${isLimited(a) ? 'limit' : isStopped(a) ? 'stopped' : a.status}${a.verdict ? ` (${a.verdict.toUpperCase()})` : hasNoReport(a) ? ' (no report)' : ''} | ${a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}` : '-'} | ${fmtTokens(a.tokens)} | ≈${fmtCost(a.costUsd)} | ${fmtTime(a.endedAt ? a.endedAt - a.startedAt : 0)} |`,
   )
   const detail = r.agents.flatMap(a => {
     const bits = [
       a.why ? `- Why this tier (the orchestrator's words): ${mdCell(a.why)}` : '',
       a.verdict ? `- Verdict: ${a.verdict.toUpperCase()}` : '',
+      a.prompt ? `- Brief: ${mdCell(clip(a.prompt, RECEIPT_BRIEF))}` : '',
       a.result ? `- Result: ${mdCell(a.result)}` : '',
+      a.answer && a.answer !== a.result ? `- Answer: ${mdCell(clip(a.answer, RECEIPT_ANSWER))}` : '',
       a.files?.length ? `- Files: ${a.files.map(f => mdCell(f)).join(', ')}` : '',
     ].filter(Boolean)
     return bits.length ? [`### ${mdCell(a.description || a.type)} (${mdCell(a.type)})`, ...bits, ''] : []
@@ -1977,6 +2133,7 @@ export const receiptMarkdown = (r: Receipt): string => {
     `# duo run receipt: ${mdCell(r.title)}`,
     '',
     `${new Date(r.at).toISOString().slice(0, 16).replace('T', ' ')} UTC · ${r.agents.length} agent${r.agents.length === 1 ? '' : 's'}${r.used ? ` ·${r.used}` : ''}`,
+    ...(r.note ? ['', `Note: ${mdCell(r.note)}`] : []),
     '',
     '| Agent | Model · effort | Status | Steps | Tokens | Cost (est.) | Time |',
     '| --- | --- | --- | --- | --- | --- | --- |',
@@ -1990,11 +2147,11 @@ export const receiptMarkdown = (r: Receipt): string => {
 async function currentReceipt($: EngineInterface): Promise<Receipt | null> {
   const f = await read($, flow)
   const list = await read($, agents)
-  const mine = f?.isImplicit ? list.filter(a => a.startedAt >= (f.since ?? 0)) : list
+  const mine = inRun(f, list)
   if (!mine.length) return null
   const used = runSentence(runDelta(await read($, runBase), await currentLimits($))).replace(/\.$/, '')
   const key = f?.isImplicit ? `agents:${f.since ?? 0}` : `flow:${f?.title ?? ''}`
-  return { key, at: await $.clock.now(), title: f?.title ?? 'Agents', used, agents: mine.slice(-50) }
+  return { key, at: await $.clock.now(), title: f?.title ?? 'Agents', used, agents: mine.slice(-50), ...(f?.note ? { note: f.note } : {}) }
 }
 
 // Keeps the last ten finished runs between sessions.
@@ -2014,12 +2171,27 @@ async function persistReceipt($: EngineInterface): Promise<void> {
 async function syncImplicit($: EngineInterface): Promise<void> {
   const f = await read($, flow)
   if (!f?.isImplicit) return
-  const mine = (await read($, agents)).filter(a => a.startedAt >= (f.since ?? 0))
-  const running = mine.filter(a => a.status === 'running').length
-  const total = mine.length
-  const isFinished = running === 0 && total > 0
-  const justFinished = isFinished && !f.isFinished
-  await update($, flow, p => (p?.isImplicit ? { ...p, total, done: total - running, running, isFinished, phase: isFinished ? 'close' : 'delegate' } : p))
+  // The counts come from the rows. Several agents may start in one tick and each writes after its own awaits, so a write
+  // can be stale by the time it lands: read again after it and write again until what was written matches the rows.
+  const count = async () => {
+    const mine = inRun(await read($, flow), await read($, agents))
+    const running = mine.filter(a => a.status === 'running').length
+    return { total: mine.length, done: mine.length - running, running, isFinished: running === 0 && mine.length > 0 }
+  }
+  let seen = await count()
+  // The transition is read inside the write: of two agents that end together, the one whose write flips the flow to finished
+  // persists the receipt, whatever the other read before it.
+  let justFinished = false
+  for (let i = 0; i < 4; i++) {
+    const v = seen
+    await update($, flow, p => {
+      if (!p?.isImplicit) return p
+      if (v.isFinished && !p.isFinished) justFinished = true
+      return { ...p, ...v, phase: v.isFinished ? 'close' : 'delegate' }
+    })
+    seen = await count()
+    if (seen.total === v.total && seen.running === v.running) break
+  }
   if (justFinished) await persistReceipt($)
   try {
     $.ui.invalidate('ui.render')
@@ -2036,14 +2208,18 @@ async function syncView($: EngineInterface): Promise<void> {
   })
 }
 
-// The agents of the current run: all of them, but for an implicit flow only those since its window began.
-export const inRun = (f: Flow | null, list: AgentRun[]): AgentRun[] => (f?.isImplicit ? list.filter(a => a.startedAt >= (f.since ?? 0)) : list)
+// The agents of the current run: all of them, but for a flow with a start mark (an implicit one, or a plan that has not come yet) only those since it began.
+export const inRun = (f: Flow | null, list: AgentRun[]): AgentRun[] => (f?.since !== undefined ? list.filter(a => a.startedAt >= f.since!) : list)
 
 // No duo flow is running and an agent started anyway: the bar follows these agents too, from `before`.
 async function ensureImplicit($: EngineInterface, at: number): Promise<void> {
   const prev = await read($, flow)
   // A duo flow in progress, or an implicit one still running, is left as it is.
-  if (prev && !prev.isFinished) return
+  if (prev && !prev.isFinished) {
+    // An agent that began before the flow's mark (a clock read before another agent's write) is still part of it.
+    await update($, flow, p => (p?.isImplicit && p.since !== undefined && at < p.since ? { ...p, since: at } : p))
+    return
+  }
   // An agent that follows within a few minutes of the last one is the same job: the window reopens.
   if (prev?.isImplicit) {
     const mine = (await read($, agents)).filter(a => a.startedAt >= (prev.since ?? 0))
@@ -2054,8 +2230,14 @@ async function ensureImplicit($: EngineInterface, at: number): Promise<void> {
     }
   }
   const base = baseOf(await currentLimits($))
-  await update($, runBase, () => base)
-  await update($, flow, () => ({ ...blank(), title: 'Agents', phase: 'delegate', isImplicit: true, since: at }))
+  // Agents started in the same tick all get here: the first one's flow stays, with the earliest start.
+  let created = false
+  await update($, flow, p => {
+    if (p && !p.isFinished) return p.isImplicit && p.since !== undefined && at < p.since ? { ...p, since: at } : p
+    created = true
+    return { ...blank(), title: 'Agents', phase: 'delegate', isImplicit: true, since: at }
+  })
+  if (created) await update($, runBase, () => base)
 }
 
 // A duo agent (advisor, reviewer) started with no plan yet: its flow is the bare placeholder. Mark where the job began
@@ -2088,6 +2270,21 @@ async function markFirstSpawn($: EngineInterface, at: number, id: string): Promi
   await update($, flow, p => (p && !p.isImplicit && !p.isFinished && p.title === DEFAULT_TITLE && !p.tasks.length ? { ...p, since } : p))
 }
 
+// The task a run was planned as: its title exactly, else one that starts the other (the orchestrator shortened or lengthened the
+// description), at a word boundary. The planned reason follows the run.
+const plannedFor = (f: Flow | null, description: string): PlannedTask | undefined => {
+  const key = norm(description ?? '')
+  if (!key) return undefined
+  const tasks = f?.tasks ?? []
+  return (
+    tasks.find(t => norm(t.title) === key) ??
+    tasks.find(t => {
+      const k = norm(t.title)
+      return k !== '' && (`${key} `.startsWith(`${k} `) || `${k} `.startsWith(`${key} `))
+    })
+  )
+}
+
 // Where the job began when a plan arrives right after agents that ran without one (an implicit flow, or a duo agent
 // started before any plan) and they are still the same job; null when the plan starts a new job.
 const planlessSince = (prev: Flow | null, list: readonly AgentRun[], at: number): number | null => {
@@ -2100,7 +2297,15 @@ const planlessSince = (prev: Flow | null, list: readonly AgentRun[], at: number)
   return mine.some(a => a.status === 'running') || at - lastEnd < SAME_JOB_MS ? since : null
 }
 
+// Over MAX_ROWS the oldest finished rows go first; a running agent is never dropped.
+const MAX_ROWS = 200
+export const capRows = (list: AgentRun[]): AgentRun[] => {
+  let over = list.length - MAX_ROWS
+  return over <= 0 ? list : list.filter(a => (a.status === 'running' || over-- <= 0))
+}
+
 export const register: Register = (on, options) => {
+  let isTicking = false
   on('session.measure', async ($, e, next) => {
     await update($, limits, () => e.rateLimits.map(l => ({ kind: l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt })))
     return next(e)
@@ -2116,7 +2321,7 @@ export const register: Register = (on, options) => {
     await $.tool.register({
       name: 'progress',
       description:
-        'Report /duo-flow progress to the progress bar above the prompt and the agents panel. ' +
+        'Report /duo and /duo-flow progress to the progress bar above the prompt and the agents panel. ' +
         'Call it after presenting the plan (title, total, tasks, phase "delegate"), each time a task is accepted (done), ' +
         'when switching phase or re-planning (tasks), and once at the end with finished: true. Fields left out keep their previous value. ' +
         'For the main session only: a call from a subagent is ignored (workers report with `step`).',
@@ -2128,19 +2333,22 @@ export const register: Register = (on, options) => {
           done: { type: 'integer', minimum: 0, description: 'Number of tasks accepted after review.' },
           phase: { type: 'string', enum: [...PHASES] },
           finished: { type: 'boolean', description: 'True once the flow is closed.' },
+          note: { type: 'string', description: 'One short sentence for the user, shown under the title and in the receipt: e.g. which gate was skipped and why (fast path, 80% cap, Opus/Fable session). Left out keeps the last one; empty clears it.' },
           tasks: {
             type: 'array',
             description:
-              'The planned worker tasks in order, numbered from 1. Each title must equal the Agent tool `description` the task will be delegated with, so the panel can match runs to tasks.',
+              'The planned worker tasks in order, numbered from 1. Each title must equal the Agent tool `description` the task will be delegated with, so the panel can match runs to tasks. ' +
+              'This replaces the whole list: to mark tasks accepted or add a reason without re-sending the plan, send only `title` plus `accepted` or `why` (no `tier`) for tasks already in it, and the others are kept.',
             items: {
               type: 'object',
               properties: {
                 title: { type: 'string', description: 'A few words; reused verbatim as the Agent description.' },
-                tier: { type: 'string', enum: [...TIERS] },
+                tier: { type: 'string', enum: [...TIERS], description: 'Always give it when planning; leave it out only when patching `accepted` or `why`.' },
                 after: { type: 'array', items: { type: 'integer' }, description: 'Numbers of the tasks this one waits for.' },
                 why: { type: 'string', description: 'One short sentence: why this tier fits the task (shown to the user as your reason).' },
+                accepted: { type: 'boolean', description: 'Set true when you accept the task after review, false when you return it for rework. Once any task has it, the bar counts the accepted ones.' },
               },
-              required: ['title', 'tier'],
+              required: ['title'],
             },
           },
         },
@@ -2149,7 +2357,7 @@ export const register: Register = (on, options) => {
     await $.tool.register({
       name: 'step',
       description:
-        'For duo-flow workers: report progress on your own task to the agents panel. ' +
+        'For /duo and /duo-flow workers: report progress on your own task to the agents panel. ' +
         'Right after reading the brief, call it with `total` (your plan in 3-8 steps), `plan` (their titles) and `done: 0`; ' +
         'call it again as each step finishes. Cheap and silent: it only draws a bar.',
       inputSchema: {
@@ -2175,25 +2383,34 @@ export const register: Register = (on, options) => {
     await $.tool.register({
       name: 'receipt',
       description:
-        'A markdown receipt of the current or last run: each agent with its model, effort, status, steps, tokens, estimated cost, time, ' +
+        'A markdown receipt of the current or last run (the last ten are kept; `index` picks an older one, `"all"` returns the newest three): each agent with its model, effort, status, steps, tokens, estimated cost, time, ' +
         'the orchestrator\'s reason for its tier, the checker\'s PASS or FAIL, a start of its answer and the files it edited, plus how much of the usage window the run took. ' +
         'Built by the panel from what the agents did. Show it to the user as is.',
-      inputSchema: { type: 'object', properties: {} },
+      inputSchema: {
+        type: 'object',
+        properties: {
+          index: { anyOf: [{ type: 'integer', minimum: 0 }, { type: 'string', enum: ['all'] }], description: 'Optional: 0 is the newest run (the default), 1 the one before; "all" returns the newest three kept runs.' },
+        },
+      },
     })
     await $.command.register({
       name: 'agents-info',
       description: 'Show or hide the panel of subagents: running, finished and planned, with model, context, cost and time',
     })
 
-    // Ticks the running agents' clocks; quiet when nothing runs.
-    $.clock.every(1000, () => {
-      void (async () => {
-        const list = await read($, agents)
-        if (!list.some(a => a.status === 'running')) return
-        const at = await $.clock.now()
-        await update($, now, () => at)
-      })()
-    })
+    // Ticks the running agents' clocks; quiet when nothing runs. session.start fires again on resume and clear:
+    // one ticker per registration, or the redraws stack up.
+    if (!isTicking) {
+      isTicking = true
+      $.clock.every(1000, () => {
+        void (async () => {
+          const list = await read($, agents)
+          if (!list.some(a => a.status === 'running')) return
+          const at = await $.clock.now()
+          await update($, now, () => at)
+        })()
+      })
+    }
     return started
   })
 
@@ -2215,6 +2432,8 @@ export const register: Register = (on, options) => {
     if (e.agentId) return { result: 'ignored: only the main session reports the flow' }
     const input = e as unknown as ProgressInput
     const prev = await read($, flow)
+    // A closed job stays closed: a bare call (a late `done`, a second `finished`, even one that repeats the title) must not blank it or reset the usage baseline.
+    if (prev?.isFinished && !input.tasks?.length && (input.title === undefined || clip(input.title.trim(), MAX_TITLE) === prev.title)) return { result: `ok: ${label(prev)}` }
     if (isNewFlow(prev, input) && input.title !== undefined) {
       // A new flow starts with a clean list; agents still running stay. A plan that follows agents that ran without one
       // (an Explore, an advisor) is the same job: those agents stay, finished or not, and the usage baseline stays at their start.
@@ -2243,14 +2462,22 @@ export const register: Register = (on, options) => {
     return { result: `ok: ${label(next ?? blank())}${note}` }
   })
 
-  // A worker's own progress: the call runs in the worker's loop, so agentId names it.
   on('tool.call', { tool: USAGE_TOOL }, async $ => ({ result: usageReport(await currentLimits($)) }))
 
-  on('tool.call', { tool: RECEIPT_TOOL }, async $ => {
+  // The run in progress (or just closed) first, then the kept ones, newest first; `index` picks one, "all" returns them all.
+  on('tool.call', { tool: RECEIPT_TOOL }, async ($, e) => {
     const live = await currentReceipt($)
-    if (live) return { result: receiptMarkdown(live) }
     const old = (await $.store.get('receipts').catch(() => undefined)) as Receipt[] | undefined
-    return { result: Array.isArray(old) && old[0] ? receiptMarkdown(old[0]) : 'No run to report yet.' }
+    const all = [...(live ? [live] : []), ...(Array.isArray(old) ? old : []).filter(x => !live || x.key !== live.key)]
+    if (!all.length) return { result: 'No run to report yet.' }
+    const pick = (e as unknown as { index?: unknown }).index
+    if (pick === 'all') {
+      const shown = all.slice(0, RECEIPT_ALL).map(receiptMarkdown).join('\n\n---\n\n')
+      const left = all.length - RECEIPT_ALL
+      return { result: left > 0 ? `${shown}\n\n_${left} older run${left === 1 ? '' : 's'} left out: pass \`index\` ${RECEIPT_ALL} or higher to read ${left === 1 ? 'it' : 'one'}._` : shown }
+    }
+    const i = typeof pick === 'number' && Number.isInteger(pick) ? pick : typeof pick === 'string' && /^\d+$/.test(pick.trim()) ? Number(pick.trim()) : 0
+    return { result: all[i] ? receiptMarkdown(all[i]) : `No run at index ${i}: ${all.length} kept, newest first (0 to ${all.length - 1}).` }
   })
 
   // A sign of life and a one-line status from every tool call a subagent makes; edited files are kept for the receipt.
@@ -2264,11 +2491,12 @@ export const register: Register = (on, options) => {
         const path = EDIT_TOOLS.has(tool) && typeof input.file_path === 'string' ? (input.file_path as string) : ''
         await update($, agents, list =>
           list.map(a =>
-            a.agentId !== agentId
+            !isRun(a, agentId)
               ? a
               : {
                   ...a,
                   lastAt: at,
+                  inFlight: (a.inFlight ?? 0) + 1,
                   busy: true,
                   ticks: pushTick(a.ticks, at),
                   action: describeAction(tool, input),
@@ -2290,12 +2518,20 @@ export const register: Register = (on, options) => {
         try {
           const done = await $.clock.now()
           const sig = signatureOf(String((e as unknown as { tool?: string }).tool ?? ''), e as unknown as Record<string, unknown>)
-          await update($, agents, list => list.map(a => (a.agentId === agentId ? { ...a, busy: false, lastAt: done, calls: pushCall(a.calls, sig, failed) } : a)))
+          await update($, agents, list =>
+            list.map(a => {
+              if (!isRun(a, agentId)) return a
+              // Parallel calls each count: `busy` holds until the last one ends.
+              const inFlight = Math.max(0, (a.inFlight ?? 1) - 1)
+              return { ...a, inFlight, busy: inFlight > 0, lastAt: done, calls: pushCall(a.calls, sig, failed) }
+            }),
+          )
         } catch {}
       }
     }
   })
 
+  // A worker's own progress: the call runs in the worker's loop, so agentId names it.
   on('tool.call', { tool: STEP_TOOL }, async ($, e) => {
     const input = e as unknown as { done?: number; total?: number; note?: string; plan?: unknown }
     const agentId = e.agentId
@@ -2304,7 +2540,7 @@ export const register: Register = (on, options) => {
     let matched = false
     await update($, agents, list =>
       list.map(a => {
-        if (a.agentId !== agentId) return a
+        if (!isRun(a, agentId)) return a
         matched = true
         // A model may send a string or null: anything that is not a finite number falls back to the stored value.
         const count = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : fallback)
@@ -2312,10 +2548,14 @@ export const register: Register = (on, options) => {
         const done = Math.max(0, count(input.done, a.stepDone ?? 0))
         const plan = cleanPlan(input.plan)
         const stepDone = total ? Math.min(total, done) : done
+        const stepTotal = plan && !total && !a.stepTotal ? plan.length : total
+        // The checklist and "done/total" agree: a longer plan is cut to the total (a shorter one is drawn with untitled rows).
+        const kept = plan ?? a.stepPlan
+        const stepPlan = kept && stepTotal && kept.length > stepTotal ? kept.slice(0, stepTotal) : kept
         const note = typeof input.note === 'string' && input.note.trim() ? clip(input.note.trim(), MAX_NOTE) : ''
         // A call without a note keeps the last note and adds nothing to the log.
         const stepLog = note ? [...(a.stepLog ?? []), { n: stepDone, note, at }].slice(-MAX_STEPLOG) : a.stepLog
-        return { ...a, lastAt: at, stepTotal: plan && !total && !a.stepTotal ? plan.length : total, stepDone, stepNote: note || a.stepNote, stepPlan: plan ?? a.stepPlan, stepLog }
+        return { ...a, lastAt: at, stepTotal, stepDone, stepNote: note || a.stepNote, stepPlan, stepLog }
       }),
     )
     return { result: matched ? 'ok' : `ignored: no panel row for agent ${agentId}` }
@@ -2338,16 +2578,19 @@ export const register: Register = (on, options) => {
   })
 
   on('agent.spawn', async ($, e, next) => {
-    // The read-only agents (advisor, reviewer, verifier) have a restricted tool list without `step`.
-    const isGate = isGateType(e.subagentType)
-    const isUnbriefed = isPipelineAgent(e.subagentType) && !isGate && !e.prompt.includes(STEP_TOOL)
+    // The advisor and the reviewer have a restricted tool list without `step`; every other pipeline agent, the verifier too, is asked to use it.
+    const isUnbriefed = isPipelineAgent(e.subagentType) && !hasNoStepTool(e.subagentType) && !e.prompt.includes(STEP_BRIEF)
     const started = await next(isUnbriefed ? { ...e, prompt: e.prompt + STEP_BRIEF } : e)
     if (started.deny !== undefined) return started
 
     const at = await $.clock.now()
-    const planned = (await read($, flow))?.tasks.find(t => norm(t.title) === norm(e.description) && e.description)
+    const current = await read($, flow)
+    const planned = plannedFor(current, e.description)
+    const brief = typeof e.prompt === 'string' && e.prompt.trim() ? clip(e.prompt.trim().replace(/\s+/g, ' '), MAX_BRIEF) : ''
+    // The round is how many earlier tries of this task failed in this job: not a parallel run, not an earlier job's.
+    const jobFrom = current && !current.isFinished ? (current.since ?? 0) : at - SAME_JOB_MS
     await update($, agents, list => {
-      const round = 1 + list.filter(a => norm(a.description) === norm(e.description) && e.description).length
+      const round = 1 + list.filter(a => a.status === 'failed' && e.description && norm(a.description) === norm(e.description) && (a.endedAt ?? a.startedAt) >= jobFrom).length
       const run: AgentRun = {
         id: started.agentId ?? e.tool_use_id,
         agentId: started.agentId,
@@ -2364,8 +2607,9 @@ export const register: Register = (on, options) => {
         round,
         lastAt: at,
         ...(planned?.why ? { why: planned.why } : {}),
+        ...(brief ? { prompt: brief } : {}),
       }
-      return [...list.filter(a => a.id !== run.id), run].slice(-200)
+      return capRows([...list.filter(a => a.id !== run.id), run])
     })
     await update($, now, () => at)
     if (!isPipelineAgent(e.subagentType)) await ensureImplicit($, at)
@@ -2390,35 +2634,41 @@ export const register: Register = (on, options) => {
 
     const model = usage.model || e.model
     const stepAt = await $.clock.now().catch(() => 0)
+    let revived = false
     await update($, agents, list =>
-      list.map((a): AgentRun =>
-        a.agentId !== agentId
-          ? a
-          : {
-              ...a,
-              lastAt: stepAt || a.lastAt,
-              ticks: stepAt ? pushTick(a.ticks, stepAt) : a.ticks,
-              model,
-              effort: typeof e.effort === 'string' ? e.effort : a.effort,
-              status: 'running',
-              endedAt: undefined,
-              contextTokens:
-                (usage.input_tokens || 0) +
-                (usage.cache_read_input_tokens || 0) +
-                (usage.cache_creation_input_tokens || 0) +
-                (usage.output_tokens || 0),
-              contextMax: windowOf(model),
-              tokens:
-                a.tokens +
-                (usage.input_tokens || 0) +
-                (usage.output_tokens || 0) +
-                (usage.cache_read_input_tokens || 0) +
-                (usage.cache_creation_input_tokens || 0),
-              costUsd: a.costUsd + costOf(model, usage, true),
-              steps: a.steps + 1,
-            },
-      ),
+      list.map((a): AgentRun => {
+        if (!isRun(a, agentId)) return a
+        // A request that follows the end by more than a moment resumes the agent; a straggler of the run that just
+        // ended only adds its tokens and leaves the finished row finished.
+        const resumed = a.status === 'running' || (stepAt > 0 && a.endedAt !== undefined && stepAt > a.endedAt + RESUME_GRACE_MS)
+        if (a.status !== 'running' && resumed) revived = true
+        const flags: Partial<RunFlags> = resumed && a.status !== 'running' ? { noReport: undefined, limited: undefined, stopped: undefined, verdict: undefined, result: undefined, answer: undefined } : {}
+        return {
+          ...a,
+          ...flags,
+          lastAt: stepAt || a.lastAt,
+          ticks: stepAt ? pushTick(a.ticks, stepAt) : a.ticks,
+          model,
+          effort: typeof e.effort === 'string' ? e.effort : a.effort,
+          ...(resumed ? { status: 'running' as const, endedAt: undefined } : {}),
+          contextTokens:
+            (usage.input_tokens || 0) +
+            (usage.cache_read_input_tokens || 0) +
+            (usage.cache_creation_input_tokens || 0) +
+            (usage.output_tokens || 0),
+          contextMax: windowOf(model),
+          tokens:
+            a.tokens +
+            (usage.input_tokens || 0) +
+            (usage.output_tokens || 0) +
+            (usage.cache_read_input_tokens || 0) +
+            (usage.cache_creation_input_tokens || 0),
+          costUsd: a.costUsd + costOf(model, usage, true),
+          steps: a.steps + 1,
+        }
+      }),
     )
+    if (revived) await syncImplicit($)
     return result
   })
 
@@ -2427,23 +2677,32 @@ export const register: Register = (on, options) => {
     if (agentId) {
       const at = await $.clock.now()
       // A turn that did not answer and named a usage limit (or ran while a window was full) stopped at the limit, not by a fault.
-      const limited = e.reason !== 'answer' && endedByLimit(e as unknown as Record<string, unknown>, await freshLimits($))
+      const model = (await read($, agents)).find(a => isRun(a, agentId))?.model ?? ''
+      const limited = e.reason !== 'answer' && endedByLimit(e as unknown as Record<string, unknown>, await freshLimits($), at, model)
+      // The user pressed stop: not a fault, shown as "stopped". A run that hit max_turns or errored stays failed.
+      const stopped = !limited && (e.reason as string) === 'interrupted'
       await update($, agents, list =>
         list.map((a): RunFlags => {
-          if (a.agentId !== agentId) return a
+          if (!isRun(a, agentId)) return a
           // A run whose steps went unseen still gets the turn's own sum.
           const fallback = a.steps === 0 && e.usage
           // An answer with nothing in it is a finished run that reported nothing.
           const empty = e.reason === 'answer' && !(typeof e.answer === 'string' && e.answer.trim())
+          const verdict = verdictOf(e.answer, a.type)
           return {
             ...a,
             noReport: empty || undefined,
             limited: limited || undefined,
+            stopped: stopped || undefined,
             status: e.reason === 'answer' ? 'done' : 'failed',
             endedAt: at,
             lastAt: at,
+            // The turn is over: a call that never reported its end (an interrupted tool) must not keep the row busy.
+            inFlight: 0,
+            busy: false,
             ...(typeof e.answer === 'string' && e.answer.trim() ? { result: clip(e.answer.trim().replace(/\s+/g, ' '), MAX_RESULT) } : {}),
-            ...(verdictOf(e.answer) ? { verdict: verdictOf(e.answer) } : {}),
+            ...(typeof e.answer === 'string' && e.answer.trim() ? { answer: clip(e.answer.trim().replace(/\s+/g, ' '), MAX_ANSWER) } : {}),
+            ...(verdict ? { verdict } : {}),
             ...(fallback && e.usage
               ? {
                   model: e.usage.model || a.model,
@@ -2512,7 +2771,7 @@ export const register: Register = (on, options) => {
       const a = r.a as AgentRun
       return (
         <Box key={`cardbox-${a.id}`} flexDirection="column" alignItems={isRtl() ? 'flex-end' : undefined}>
-          <Button key={`card-${a.id}`} label={`${arrow(a)} ${s.details} · ${r.n ? `${r.n}. ` : ''}${clip(r.title, 36)}`} plain onPress={() => toggleOpen(a)} />
+          <Button key={`card-${a.id}`} label={`${arrow(a)} ${s.details} · ${r.n ? `${r.n}. ` : ''}${clip(r.title, 36)}${a.round > 1 ? ` · ${s.round} ${a.round}` : ''}`} plain onPress={() => toggleOpen(a)} />
           {detailsBlock(a)}
         </Box>
       )
@@ -2536,10 +2795,10 @@ export const register: Register = (on, options) => {
       // In Hebrew the column hugs the right edge: buttons right-aligned.
       const align = isRtl() ? 'flex-end' : undefined
       // The plan and the work as one picture: a card per task with arrows from what it waits for.
-      const top = statusSvg(W, list, at, title, taskRows.length, lim, nowMs, runUse)
+      const top = statusSvg(W, list, at, title, taskRows.length, lim, nowMs, runUse, f?.note ?? '')
       const plan = taskRows.length ? planSvg(W, taskRows, at) : null
       // The Details buttons and the open blocks are under the picture: the grid grows with them.
-      const cardRows = detailRowsOf(taskRows, openOf(p))
+      const cardRows = detailRowsOf(shownRowsOf(taskRows), openOf(p))
       const detailsH = cardRows.reduce((h, r) => h + LINE_H + (r.a && isOpen(p, r.a) ? detailLineCount(r.a, at, e.props.bodyColumns || 40) * LINE_H : 0), 0)
       const gridH = top.height + (isEmpty ? LINE_H : 0) + (plan?.height ?? 0) + detailsH
       return (
@@ -2555,7 +2814,7 @@ export const register: Register = (on, options) => {
             {plan && (
               <Svg
                 source={plan.source}
-                alt={taskRows.map(r => `${r.n ? `${r.n}. ` : ''}${r.title}: ${r.a ? (r.a.status === 'running' ? s.isRunning : r.a.status === 'failed' ? (isLimited(r.a) ? s.limitWord : s.failed) : s.isFinished) : s.isPlanned}`).join('; ')}
+                alt={taskRows.map(r => `${r.n ? `${r.n}. ` : ''}${r.title}: ${r.a ? (r.a.status === 'running' ? s.isRunning : r.a.status === 'failed' ? (isLimited(r.a) ? s.limitWord : isStopped(r.a) ? s.stoppedWord : s.failed) : s.isFinished) : s.isPlanned}`).join('; ')}
                 width={W}
                 height={plan.height}
               />
@@ -2583,7 +2842,7 @@ export const register: Register = (on, options) => {
             <Text bold wrap="truncate-end">
               {a.description || a.type}
             </Text>
-            <Text color={isLimited(a) ? '#D4A24C' : a.status === 'failed' ? 'red' : a.status === 'done' ? 'green' : color}>{isLimited(a) ? '⏸' : STATUS_GLYPH[a.status]}</Text>
+            <Text color={isLimited(a) || isStopped(a) ? '#D4A24C' : a.status === 'failed' ? 'red' : a.status === 'done' ? 'green' : color}>{isLimited(a) || isStopped(a) ? '⏸' : STATUS_GLYPH[a.status]}</Text>
           </Box>
           <Text dimColor wrap="truncate-end">
             {'  '}
@@ -2615,7 +2874,7 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column" marginTop={1}>
           <Text wrap="truncate-end">
-            {cut(`${tl.running} ${s.isRunning} · ${tl.done} ${s.doneN}${tl.failed ? ` · ${tl.failed} ${s.failedN}` : ''}${tl.limited ? ` · ${tl.limited} ${s.limitWord}` : ''} · ${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`)}
+            {cut(`${tl.running} ${s.isRunning} · ${tl.done} ${s.doneN}${tl.failed ? ` · ${tl.failed} ${s.failedN}` : ''}${tl.limited ? ` · ${tl.limited} ${s.limitWord}` : ''}${tl.stopped ? ` · ${tl.stopped} ${s.stoppedWord}` : ''} · ${tl.total} ${s.startedSoFar}, ${tl.finished} ${s.nFinished}`)}
           </Text>
           {needsOf(list, at).slice(0, MAX_NEEDS).map(n => (
             <Text key={`att-${n.a.id}`} color={n.kind === 'failed' ? '#E5484D' : '#D4A24C'} wrap="truncate-end">
@@ -2628,7 +2887,7 @@ export const register: Register = (on, options) => {
           {stages.map(g => {
             const name = g.key === 'other' ? tierWord('other') : g.key
             const counts = countsText(g)
-            const glyph = g.running ? '●' : g.failed ? '✗' : g.limited ? '⏸' : '✓'
+            const glyph = g.running ? '●' : g.failed ? '✗' : g.limited || g.stopped ? '⏸' : '✓'
             const used = 2 + nameW + 1 + 1 + wideLen(counts)
             const bw = Math.max(0, Math.min(16, cols - used - 1))
             const filled = Math.round((bw * (g.agents.length - g.running)) / g.agents.length)
@@ -2641,7 +2900,7 @@ export const register: Register = (on, options) => {
           })}
           {running.slice(0, 4).map(a => (
             <Text key={a.id} wrap="truncate-end">
-              {cut(`● ${a.description || a.type}  ${fmtTokens(a.tokens)} · ${fmtTime(elapsed(a, at))}`)}
+              {cut(`● ${a.description || a.type}  ${cardModel(a)} · ${fmtTokens(a.tokens)} · ${fmtTime(elapsed(a, at))}`)}
             </Text>
           ))}
           {running.length > 4 && <Text dimColor>{cut(`+${running.length - 4} ${s.moreRunning}`)}</Text>}
@@ -2649,7 +2908,7 @@ export const register: Register = (on, options) => {
           {!finClosed &&
             finishedRows(finished).map(a => (
               <Text key={a.id} dimColor wrap="truncate-end">
-                {cut(`${isLimited(a) ? '⏸' : a.status === 'failed' ? '✗' : '✓'} ${a.description || a.type}  ${modelName(a.model)} · ${fmtTokens(a.tokens)} · ${fmtTime(elapsed(a, at))}`)}
+                {cut(`${isLimited(a) || isStopped(a) ? '⏸' : a.status === 'failed' ? '✗' : '✓'} ${a.description || a.type}  ${cardModel(a)} · ${fmtTokens(a.tokens)} · ${fmtTime(elapsed(a, at))}`)}
               </Text>
             ))}
           {!finClosed && finished.length > finishedRows(finished).length && <Text dimColor>+{finished.length - finishedRows(finished).length}</Text>}
@@ -2670,6 +2929,7 @@ export const register: Register = (on, options) => {
             {title}
           </Text>
         </Box>
+        {f?.note ? <Text dimColor wrap="truncate-end">{f.note}</Text> : null}
         <Text dimColor>
           ≈{fmtCost(t.cost)} · {fmtTokens(t.tokens)} {s.tokensWord} · {fmtTime(t.time)}
         </Text>
@@ -2721,8 +2981,10 @@ export const register: Register = (on, options) => {
     const named = { ...f, title: jobTitle(f, list, await projectName($)) || tr().pane }
     // The bar counts what the agents really did (the same as the panel), not only what the orchestrator reported.
     const rows = taskRowsOf(f, list)
+    // When the orchestrator marks tasks accepted or returned, only the accepted ones count as done.
+    const marked = (f.tasks ?? []).some(t => t.accepted !== undefined)
     const live: Flow = list.length
-      ? { ...named, done: rows.filter(r => r.a?.status === 'done').length, running: rows.filter(r => r.a?.status === 'running').length, total: Math.max(f.total, rows.length) }
+      ? { ...named, done: marked ? (f.tasks ?? []).filter(t => t.accepted === true).length : rows.filter(r => r.a?.status === 'done').length, running: rows.filter(r => r.a?.status === 'running').length, total: Math.max(f.total, rows.length) }
       : named
     const percent = `${Math.round(ratio(live) * 100)}%`
     const usage = usageShort(await freshLimits($), f.isFinished ? await read($, runBase) : null)

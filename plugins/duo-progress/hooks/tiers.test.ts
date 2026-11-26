@@ -162,6 +162,9 @@ test('brief: advisor (plugin-prefixed) gets no step request', async ($, on) => {
 test('brief: bare reviewer gets no step request', async ($, on) => {
   expect(await briefed($, on, 'duo-reviewer')).not.toContain(STEP)
 })
-test('brief: verifier (no step tool) gets no step request', async ($, on) => {
-  expect(await briefed($, on, 'duo-verifier')).not.toContain(STEP)
+test('brief: the verifier has the step tool in its allowlist and gets the step request', async ($, on) => {
+  expect(await briefed($, on, 'duo-verifier')).toContain(STEP)
+})
+test('brief: the plugin-prefixed verifier gets the step request too', async ($, on) => {
+  expect(await briefed($, on, 'duo:duo-verifier')).toContain(STEP)
 })
