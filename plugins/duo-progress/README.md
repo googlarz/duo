@@ -6,6 +6,7 @@ A Claude Code mod: a progress bar above the prompt and a live panel of subagents
 
 - **Progress bar**: the flow's title, phase, accepted tasks out of planned, and a button with the crew size that opens the panel. It appears once something reports progress (duo-flow does) or a `duo-flow-*` or `duo-*` worker (or a legacy `savvy-*` one) starts.
 - **Agents panel** (`/agents-info` toggles it; `/agents-info open` opens it or brings it forward without toggling): running, finished and planned subagents with model, effort, task progress, context, estimated cost and time. Working crabs walk, and each duo-flow tier animates its prop: the astronaut floats, the detective sweeps the magnifier, the engineer turns the wrench, the chef tosses the omelette, the racer runs with a fluttering flag. `prefers-reduced-motion` stops them.
+- **"main model, none passed"**: an agent outside the duo and savvy pipelines that was started without a model (or is a fork) and runs on the main session's model says so on its card, terminal row and Details (its definition may pin that same model; the host does not tell the two apart).
 
 ## Tiers
 

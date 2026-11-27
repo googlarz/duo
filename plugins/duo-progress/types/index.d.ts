@@ -34,6 +34,8 @@ export type AgentRun = {
   type: string
   description: string
   model: string
+  /** The main session's model, kept for a non-pipeline run that was given no model of its own (a fork too): the card says so. Dropped for good once the run reports another model. */
+  mainModel?: string
   effort?: string
   status: AgentStatus
   startedAt: number

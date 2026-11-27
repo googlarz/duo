@@ -147,6 +147,7 @@ const STRINGS = {
     returnedWord: 'returned',
     ranAs: 'ran as',
     plannedAs: 'planned',
+    mainModel: 'main model, none passed',
     briefWord: 'Brief',
     answerWord: 'Answer',
     capWord: 'cap',
@@ -230,6 +231,7 @@ const STRINGS = {
     returnedWord: 'возвращена',
     ranAs: 'запущен как',
     plannedAs: 'план',
+    mainModel: 'основная модель, не передана',
     briefWord: 'Задание',
     answerWord: 'Ответ',
     capWord: 'порог',
@@ -313,6 +315,7 @@ const STRINGS = {
     returnedWord: 'הוחזרה',
     ranAs: 'רץ כ־',
     plannedAs: 'תוכנן',
+    mainModel: 'המודל הראשי, לא הועבר מודל',
     briefWord: 'משימה',
     answerWord: 'תשובה',
     capWord: 'תקרה',
@@ -712,6 +715,11 @@ const plannedModel = (a: AgentRun): string => {
   const sameModel = family === want || (want === 'fable' && family === 'mythos')
   return sameModel && (!a.effort || a.effort === plan[1]) ? '' : tierModel(tier)
 }
+
+// "main model, none passed · " before the model of a run that was given no model and runs on the main session's; else ''.
+const mainMark = (a: AgentRun): string => (a.mainModel ? `${tr().mainModel} · ` : '')
+// Dropped for good once the run reports another model: it does not come back if the run returns to the main one.
+const keptMain = (main: string | undefined, model: string): string | undefined => (main && modelName(model) === modelName(main) ? main : undefined)
 
 // The compact card's short form: "Fable·high".
 const shortModel = (a: AgentRun): string => {
@@ -1606,7 +1614,7 @@ export const detailLines = (a: AgentRun, at: number): string[] => {
   const tier = tierOf(a.type)
   const state = a.status === 'running' ? s.isRunning : isLimited(a) ? s.limitWord : isStopped(a) ? s.stoppedWord : a.status === 'failed' ? s.failed : s.isFinished
   const lines = [
-    `${s.model}: ${plannedModel(a) ? `${s.ranAs} ` : ''}${cardModel(a)}${a.model ? ` (${a.model})` : ''}${plannedModel(a) ? ` · ${s.plannedAs} ${plannedModel(a)}` : ''}`,
+    `${s.model}: ${mainMark(a)}${plannedModel(a) ? `${s.ranAs} ` : ''}${cardModel(a)}${a.model ? ` (${a.model})` : ''}${plannedModel(a) ? ` · ${s.plannedAs} ${plannedModel(a)}` : ''}`,
     `${s.agentType}: ${a.type}${tier === 'other' ? '' : ` · ${tierWord(tier)}`}`,
     `${s.task}: ${a.description || a.type}`,
     `${s.status}: ${state}${hasNoReport(a) ? ` · ${s.noReport}` : ''}${a.round > 1 ? ` · ${s.round} ${a.round}` : ''}${isStalled(a, at) ? ` · ${s.stalled} ${fmtTime(at - (a.lastAt ?? a.startedAt))}` : ''}`,
@@ -1855,7 +1863,7 @@ export const planSvg = (W: number, all: readonly TaskRow[], at: number): { sourc
             : silent ? `${s.noReport} · ${fmtTime(elapsed(a, at))}` : fmtTime(elapsed(a, at))
     const sub = `${roundTag}${subBody}`
     // Which model does the task: the one that ran it, or the one it is planned for, with its effort ("Sonnet 5.5 · low").
-    const modelText = a ? `${plannedModel(a) ? `${s.ranAs} ` : ''}${cardModel(a)}` : tierModel(tier)
+    const modelText = a ? `${mainMark(a)}${plannedModel(a) ? `${s.ranAs} ` : ''}${cardModel(a)}` : tierModel(tier)
     // The pulse, on the model line: calls in the last five minutes, a bar per half minute; a flat line says nothing is happening.
     const pulseOn = !!a && a.status === 'running' && !compact
     const spark = (() => {
@@ -2606,6 +2614,8 @@ export const register: Register = (on, options) => {
         steps: 0,
         round,
         lastAt: at,
+        // A fork ignores the model parameter. A resumed run is left unmarked: what its first call passed is not known.
+        ...(!isPipelineAgent(e.subagentType) && !e.resume && (e.fork || e.model === undefined) ? { mainModel: keptMain(e.parentModel, started.model) } : {}),
         ...(planned?.why ? { why: planned.why } : {}),
         ...(brief ? { prompt: brief } : {}),
       }
@@ -2649,6 +2659,7 @@ export const register: Register = (on, options) => {
           lastAt: stepAt || a.lastAt,
           ticks: stepAt ? pushTick(a.ticks, stepAt) : a.ticks,
           model,
+          mainModel: keptMain(a.mainModel, model),
           effort: typeof e.effort === 'string' ? e.effort : a.effort,
           ...(resumed ? { status: 'running' as const, endedAt: undefined } : {}),
           contextTokens:
@@ -2706,6 +2717,7 @@ export const register: Register = (on, options) => {
             ...(fallback && e.usage
               ? {
                   model: e.usage.model || a.model,
+                  mainModel: keptMain(a.mainModel, e.usage.model || a.model),
                   tokens:
                     e.usage.input_tokens +
                     e.usage.output_tokens +
@@ -2833,7 +2845,7 @@ export const register: Register = (on, options) => {
       const color = colorOf(tier)
       const ctx = ctxOf(a)
       const progress = progressOf(a)
-      const model = cardModel(a)
+      const model = `${mainMark(a)}${cardModel(a)}`
       const steps = a.stepTotal ? `${stepsDone(a)}/${a.stepTotal}${a.stepNote ? ' ' + a.stepNote : ''} · ` : ''
       return (
         <Box key={a.id} flexDirection="column" marginBottom={1}>

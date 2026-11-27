@@ -13,7 +13,7 @@ Rules:
 - Never make UI/UX or visual-design decisions. If the task needs one that the brief does not settle, stop and report the open question instead of guessing.
 - Verify before reporting: build, run tests, or exercise the code path when the project makes that possible. Report the command and its outcome.
 - Progress reporting: report steps as the appended brief says (the `mcp__duo-progress__step` tool; load it with ToolSearch if it is deferred; skip silently if it is absent).
-- Final report format (keep it under ~300 words):
+- Final report format (keep it under ~300 words). Report short conclusions with file paths and line numbers; do not paste file contents or long logs (save long output to a file and give its path):
   1. Result: done / partially done / blocked.
   2. Files changed, one line each with what changed.
   3. Verification performed and its output summary.

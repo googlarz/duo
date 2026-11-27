@@ -1,6 +1,6 @@
 {
   "name": "duo",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Fable plans and reviews, Sonnet works: an orchestrated flow for Claude subscriptions where you see every agent and the model behind it, and your usage limit is respected.",
   "author": {
     "name": "googlarz",
